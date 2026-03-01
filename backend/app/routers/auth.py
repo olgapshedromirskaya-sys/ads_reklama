@@ -9,10 +9,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_scope_user_id, require_admin_or_director, require_director
 from app.core.security import create_access_token, validate_telegram_init_data
-from app.models.entities import MPAccount, User
-from app.schemas.auth import AccountCreate, AccountOut, AuthResponse, TelegramLoginRequest, TelegramUserOut
+from app.models.entities import MPAccount, User, UserRole
+from app.schemas.auth import (
+    AccountCreate,
+    AccountOut,
+    AuthResponse,
+    TeamMemberCreate,
+    TeamMemberOut,
+    TelegramLoginRequest,
+    TelegramUserOut,
+)
 from app.services.sync import refresh_user_data, run_async
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -70,6 +78,8 @@ def _serialize_auth_user(user: User) -> dict[str, Any]:
         "id": int(user.id),
         "telegram_id": int(user.telegram_id),
         "username": user.username,
+        "role": user.role.value,
+        "owner_id": user.owner_id,
     }
 
 
@@ -119,15 +129,16 @@ def me(current_user: User = Depends(get_current_user)) -> TelegramUserOut:
 
 
 @router.get("/accounts", response_model=list[AccountOut])
-def list_accounts(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[MPAccount]:
-    accounts = db.execute(select(MPAccount).where(MPAccount.user_id == current_user.id)).scalars().all()
+def list_accounts(current_user: User = Depends(require_admin_or_director), db: Session = Depends(get_db)) -> list[MPAccount]:
+    scope_user_id = get_scope_user_id(current_user)
+    accounts = db.execute(select(MPAccount).where(MPAccount.user_id == scope_user_id)).scalars().all()
     return accounts
 
 
 @router.post("/accounts", response_model=AccountOut)
 def connect_account(
     payload: AccountCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> MPAccount:
     if payload.marketplace.value == "wb" and not payload.api_token:
@@ -135,8 +146,9 @@ def connect_account(
     if payload.marketplace.value == "ozon" and (not payload.client_id or not payload.api_key):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ozon account requires client_id and api_key")
 
+    scope_user_id = get_scope_user_id(current_user)
     account = MPAccount(
-        user_id=current_user.id,
+        user_id=scope_user_id,
         marketplace=payload.marketplace,
         name=payload.name,
         api_token=payload.api_token,
@@ -152,14 +164,82 @@ def connect_account(
 @router.post("/accounts/{account_id}/refresh")
 def refresh_data(
     account_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> dict[str, int]:
+    scope_user_id = get_scope_user_id(current_user)
     account = db.execute(
-        select(MPAccount).where(MPAccount.id == account_id, MPAccount.user_id == current_user.id)
+        select(MPAccount).where(MPAccount.id == account_id, MPAccount.user_id == scope_user_id)
     ).scalar_one_or_none()
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
-    result = run_async(refresh_user_data(current_user.id, db))
+    result = run_async(refresh_user_data(scope_user_id, db))
     return result
+
+
+@router.get("/team/members", response_model=list[TeamMemberOut])
+def list_team_members(
+    current_user: User = Depends(require_admin_or_director),
+    db: Session = Depends(get_db),
+) -> list[User]:
+    scope_user_id = get_scope_user_id(current_user)
+    return db.execute(select(User).where(User.owner_id == scope_user_id).order_by(User.created_at.asc())).scalars().all()
+
+
+@router.post("/team/members", response_model=TeamMemberOut)
+def add_team_member(
+    payload: TeamMemberCreate,
+    current_user: User = Depends(require_director),
+    db: Session = Depends(get_db),
+) -> User:
+    if payload.role == UserRole.DIRECTOR:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Для сотрудника выберите admin или manager")
+    if payload.telegram_id == current_user.telegram_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя назначить себя сотрудником")
+
+    member = db.execute(select(User).where(User.telegram_id == payload.telegram_id)).scalar_one_or_none()
+    if member is None:
+        member = User(
+            telegram_id=payload.telegram_id,
+            username=payload.username,
+            role=payload.role,
+            owner_id=current_user.id,
+        )
+        db.add(member)
+        db.commit()
+        db.refresh(member)
+        return member
+
+    if member.owner_id is not None and member.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Сотрудник уже привязан к другому руководителю",
+        )
+    member.owner_id = current_user.id
+    member.role = payload.role
+    if payload.username:
+        member.username = payload.username
+    db.commit()
+    db.refresh(member)
+    return member
+
+
+@router.delete("/team/members/{member_id}")
+def remove_team_member(
+    member_id: int,
+    current_user: User = Depends(require_director),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    member = db.execute(
+        select(User).where(
+            User.id == member_id,
+            User.owner_id == current_user.id,
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Сотрудник не найден")
+    member.owner_id = None
+    member.role = UserRole.DIRECTOR
+    db.commit()
+    return {"removed": 1}

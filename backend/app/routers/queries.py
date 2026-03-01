@@ -9,7 +9,7 @@ from sqlalchemy import and_, asc, desc, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_scope_user_id, require_admin_or_director
 from app.models.entities import Campaign, CampaignStat, MPAccount, Marketplace, MinusWord, QueryLabel, QueryLabelStatus, SearchQuery, User
 from app.schemas.queries import (
     AutoCleanupAllOut,
@@ -133,16 +133,17 @@ def list_queries(
     sort_by: str = Query(default="date"),
     sort_dir: str = Query(default="desc"),
     limit: int = Query(default=500, ge=1, le=5000),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> list[SearchQueryOut]:
+    scope_user_id = get_scope_user_id(current_user)
     label_join = and_(QueryLabel.campaign_id == SearchQuery.campaign_id, QueryLabel.query == SearchQuery.query)
     stmt = (
         select(SearchQuery, QueryLabel.label, Campaign.name, MPAccount.marketplace)
         .join(Campaign, Campaign.id == SearchQuery.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
         .outerjoin(QueryLabel, label_join)
-        .where(MPAccount.user_id == current_user.id)
+        .where(MPAccount.user_id == scope_user_id)
     )
 
     if q:
@@ -235,10 +236,11 @@ def list_queries(
 @router.post("/labels/bulk", response_model=BulkLabelUpdateResponse)
 def update_labels_bulk(
     payload: BulkLabelUpdateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> BulkLabelUpdateResponse:
-    _assert_campaign_access(db, current_user.id, payload.campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    _assert_campaign_access(db, scope_user_id, payload.campaign_id)
     generated_source_queries: list[str] = []
 
     for item in payload.updates:
@@ -263,10 +265,11 @@ def update_labels_bulk(
 @router.post("/minus-words/generate", response_model=list[str])
 def generate_minus_words_for_campaign(
     payload: MinusWordsGenerateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> list[str]:
-    _assert_campaign_access(db, current_user.id, payload.campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    _assert_campaign_access(db, scope_user_id, payload.campaign_id)
     selected_queries = payload.queries
     if not selected_queries:
         auto_classify_campaign_queries(db, payload.campaign_id)
@@ -277,10 +280,11 @@ def generate_minus_words_for_campaign(
 @router.post("/minus-words/{campaign_id}/apply", response_model=MinusWordsApplyResponse)
 async def apply_minus_words(
     campaign_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> MinusWordsApplyResponse:
-    campaign = _assert_campaign_access(db, current_user.id, campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    campaign = _assert_campaign_access(db, scope_user_id, campaign_id)
     auto_classify_campaign_queries(db, campaign.id)
     generated_minus_words = regenerate_minus_words_for_campaign(db, campaign.id)
     saved_budget_estimate = estimate_not_relevant_daily_spend(db, campaign.id)
@@ -326,10 +330,11 @@ def run_auto_cleanup_for_campaign(
     campaign_id: int,
     days: int = Query(default=7, ge=1, le=60),
     apply_now: bool = Query(default=False),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> AutoCleanupResultOut:
-    campaign = _assert_campaign_access(db, current_user.id, campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    campaign = _assert_campaign_access(db, scope_user_id, campaign_id)
     result = run_async(auto_cleanup_campaign(db, campaign, days=days, force_auto_apply=apply_now))
     return _to_auto_cleanup_response(result)
 
@@ -339,13 +344,14 @@ def run_auto_cleanup_for_all_campaigns(
     days: int = Query(default=7, ge=1, le=60),
     apply_now: bool = Query(default=False),
     only_auto_enabled: bool = Query(default=False),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> AutoCleanupAllOut:
+    scope_user_id = get_scope_user_id(current_user)
     results = run_async(
         auto_cleanup_user_campaigns(
             db,
-            current_user.id,
+            scope_user_id,
             days=days,
             only_auto_minus_enabled=only_auto_enabled,
             force_auto_apply=apply_now,
@@ -364,10 +370,11 @@ def run_auto_cleanup_for_all_campaigns(
 @router.get("/minus-words/{campaign_id}", response_model=list[MinusWordOut])
 def list_minus_words(
     campaign_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> list[MinusWord]:
-    _assert_campaign_access(db, current_user.id, campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    _assert_campaign_access(db, scope_user_id, campaign_id)
     return db.execute(select(MinusWord).where(MinusWord.campaign_id == campaign_id).order_by(MinusWord.word_root)).scalars().all()
 
 
@@ -375,9 +382,10 @@ def list_minus_words(
 def query_trends(
     query: str,
     days: int = Query(default=30, ge=1, le=180),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> list[QueryTrendPoint]:
+    scope_user_id = get_scope_user_id(current_user)
     date_from = date.today() - timedelta(days=days - 1)
     rows = db.execute(
         select(
@@ -389,7 +397,7 @@ def query_trends(
         .join(Campaign, Campaign.id == SearchQuery.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
         .where(
-            MPAccount.user_id == current_user.id,
+            MPAccount.user_id == scope_user_id,
             SearchQuery.date >= date_from,
             SearchQuery.query.ilike(f"%{query}%"),
         )
@@ -406,15 +414,16 @@ def query_trends(
 @router.get("/export.xlsx")
 def export_queries_xlsx(
     campaign_id: int | None = Query(default=None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> Response:
+    scope_user_id = get_scope_user_id(current_user)
     stmt = (
         select(SearchQuery, Campaign.name, MPAccount.marketplace, QueryLabel.label)
         .join(Campaign, Campaign.id == SearchQuery.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
         .outerjoin(QueryLabel, and_(QueryLabel.campaign_id == SearchQuery.campaign_id, QueryLabel.query == SearchQuery.query))
-        .where(MPAccount.user_id == current_user.id)
+        .where(MPAccount.user_id == scope_user_id)
         .order_by(SearchQuery.date.desc())
     )
     if campaign_id:

@@ -50,17 +50,36 @@ class BudgetAction(str, enum.Enum):
     PAUSE_CAMPAIGN = "pause_campaign"
 
 
+class UserRole(str, enum.Enum):
+    DIRECTOR = "director"
+    ADMIN = "admin"
+    MANAGER = "manager"
+
+
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True, nullable=False)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role_enum"), default=UserRole.DIRECTOR, nullable=False)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     accounts: Mapped[list[MPAccount]] = relationship(back_populates="user", cascade="all, delete-orphan")
     alerts: Mapped[list[Alert]] = relationship(back_populates="user", cascade="all, delete-orphan")
     labels: Mapped[list[QueryLabel]] = relationship(back_populates="labeled_by_user")
+    owner: Mapped[User | None] = relationship(
+        "User",
+        remote_side=[id],
+        back_populates="team_members",
+        foreign_keys=[owner_id],
+    )
+    team_members: Mapped[list[User]] = relationship(
+        "User",
+        back_populates="owner",
+        foreign_keys=[owner_id],
+    )
 
 
 class MPAccount(Base):

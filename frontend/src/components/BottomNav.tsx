@@ -1,25 +1,39 @@
 import { BarChart3, Bell, CircleDollarSign, Megaphone, Search, Settings, Target } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
-import { listQueries } from "@/api/endpoints";
+import { type UserRole, listQueries } from "@/api/endpoints";
+import { canAccessExtendedFeatures, resolveUserRole } from "@/auth/roles";
+import { useAuthStore } from "@/store/auth";
 
-const items = [
-  { to: "/dashboard", label: "Дашборд", icon: BarChart3 },
-  { to: "/campaigns", label: "Кампании", icon: Megaphone },
-  { to: "/queries", label: "Запросы", icon: Search },
-  { to: "/keywords", label: "Ключевые слова", icon: Target },
-  { to: "/budget", label: "Бюджет", icon: CircleDollarSign },
-  { to: "/alerts", label: "Уведомления", icon: Bell },
-  { to: "/settings", label: "Настройки", icon: Settings }
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof BarChart3;
+  roles: UserRole[];
+};
+
+const items: NavItem[] = [
+  { to: "/dashboard", label: "Дашборд", icon: BarChart3, roles: ["director", "admin", "manager"] },
+  { to: "/campaigns", label: "Кампании", icon: Megaphone, roles: ["director", "admin", "manager"] },
+  { to: "/queries", label: "Запросы", icon: Search, roles: ["director", "admin"] },
+  { to: "/keywords", label: "Ключевые слова", icon: Target, roles: ["director", "admin"] },
+  { to: "/budget", label: "Бюджет", icon: CircleDollarSign, roles: ["director", "admin"] },
+  { to: "/alerts", label: "Уведомления", icon: Bell, roles: ["director", "admin", "manager"] },
+  { to: "/settings", label: "Настройки", icon: Settings, roles: ["director", "admin"] }
 ];
 
 export function BottomNav() {
+  const user = useAuthStore((state) => state.user);
+  const role = resolveUserRole(user);
+  const extendedAccess = canAccessExtendedFeatures(user);
+  const visibleItems = items.filter((item) => item.roles.includes(role));
   const badgeQuery = useQuery({
     queryKey: ["queries-badge"],
     queryFn: () => listQueries({ limit: 2000, sort_by: "date", sort_dir: "desc" }),
-    refetchInterval: 2 * 60_000
+    refetchInterval: 2 * 60_000,
+    enabled: extendedAccess
   });
-  const irrelevantCount = (badgeQuery.data || []).filter(
+  const irrelevantCount = ((badgeQuery.data || []) as Array<{ label?: string; relevance_hint?: string }>).filter(
     (row) => (row.label || row.relevance_hint || "pending") === "not_relevant"
   ).length;
 
@@ -30,8 +44,11 @@ export function BottomNav() {
           🔴 {irrelevantCount} нерелевантных запросов
         </div>
       )}
-      <div className="mx-auto grid max-w-3xl grid-cols-7 gap-1 px-2 py-2">
-        {items.map((item) => {
+      <div
+        className="mx-auto grid max-w-3xl gap-1 px-2 py-2"
+        style={{ gridTemplateColumns: `repeat(${Math.max(visibleItems.length, 1)}, minmax(0, 1fr))` }}
+      >
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink

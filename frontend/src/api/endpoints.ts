@@ -2,10 +2,14 @@ import { apiClient } from "./client";
 import { isDemoMode } from "@/demo/mode";
 import * as demoApi from "@/demo/mockApi";
 
+export type UserRole = "director" | "admin" | "manager";
+
 export type TelegramUser = {
   id: number;
   telegram_id: number;
   username?: string | null;
+  role: UserRole;
+  owner_id?: number | null;
 };
 
 export type AuthResponse = {
@@ -86,6 +90,13 @@ export type DashboardSummary = {
   };
 };
 
+export type DashboardSummaryParams = {
+  marketplace?: "wb" | "ozon";
+  period?: "day" | "month" | "custom";
+  date_from?: string;
+  date_to?: string;
+};
+
 export type QueryRow = {
   id: number;
   campaign_id: number;
@@ -160,6 +171,15 @@ export type Account = {
   created_at: string;
 };
 
+export type TeamMember = {
+  id: number;
+  telegram_id: number;
+  username?: string | null;
+  role: UserRole;
+  owner_id?: number | null;
+  created_at: string;
+};
+
 export type BudgetRule = {
   id: number;
   campaign_id: number;
@@ -204,11 +224,11 @@ export async function telegramLogin(initData: string): Promise<AuthResponse> {
   return response;
 }
 
-export async function getDashboardSummary() {
+export async function getDashboardSummary(params?: DashboardSummaryParams) {
   if (isDemoMode()) {
-    return demoApi.getDemoDashboardSummary();
+    return demoApi.getDemoDashboardSummary(params);
   }
-  const { data } = await apiClient.get<DashboardSummary>("/campaigns/dashboard/summary");
+  const { data } = await apiClient.get<DashboardSummary>("/campaigns/dashboard/summary", { params });
   return data;
 }
 
@@ -355,6 +375,34 @@ export async function listAccounts() {
     return demoApi.listAccounts();
   }
   const { data } = await apiClient.get<Account[]>("/auth/accounts");
+  return data;
+}
+
+export async function listTeamMembers() {
+  if (isDemoMode()) {
+    return demoApi.listTeamMembers();
+  }
+  const { data } = await apiClient.get<TeamMember[]>("/auth/team/members");
+  return data;
+}
+
+export async function addTeamMember(payload: {
+  telegram_id: number;
+  username?: string;
+  role: Exclude<UserRole, "director">;
+}) {
+  if (isDemoMode()) {
+    return demoApi.addTeamMember(payload);
+  }
+  const { data } = await apiClient.post<TeamMember>("/auth/team/members", payload);
+  return data;
+}
+
+export async function removeTeamMember(memberId: number) {
+  if (isDemoMode()) {
+    return demoApi.removeTeamMember(memberId);
+  }
+  const { data } = await apiClient.delete<{ removed: number }>(`/auth/team/members/${memberId}`);
   return data;
 }
 
