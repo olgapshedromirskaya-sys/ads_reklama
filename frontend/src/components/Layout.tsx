@@ -4,21 +4,21 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
 
 const titleMap: Record<string, string> = {
-  "/": "Dashboard",
-  "/dashboard": "Dashboard",
-  "/campaigns": "Campaigns",
-  "/queries": "Search Queries",
-  "/keywords": "Keyword Positions",
-  "/budget": "Budget Rules",
-  "/alerts": "Alerts",
-  "/settings": "Settings"
+  "/": "Дашборд",
+  "/dashboard": "Дашборд",
+  "/campaigns": "Кампании",
+  "/queries": "Поисковые запросы",
+  "/keywords": "Ключевые слова",
+  "/budget": "Правила бюджета",
+  "/alerts": "Уведомления",
+  "/settings": "Настройки"
 };
 
 function resolveTitle(pathname: string) {
   if (pathname.startsWith("/campaigns/")) {
-    return "Campaign Detail";
+    return "Кампания";
   }
-  return titleMap[pathname] || "MP Ads Manager";
+  return titleMap[pathname] || "Управление рекламой";
 }
 
 function shouldShowBack(pathname: string) {
@@ -61,7 +61,7 @@ export function Layout({
       {demoMode && (
         <div className="pointer-events-none fixed right-3 top-3 z-50 flex flex-col items-end gap-2">
           <span className="pointer-events-auto rounded-full bg-yellow-300 px-3 py-1 text-[10px] font-extrabold tracking-wide text-yellow-900 shadow">
-            DEMO MODE
+            ДЕМО РЕЖИМ
           </span>
           <button
             onClick={onExitDemo}

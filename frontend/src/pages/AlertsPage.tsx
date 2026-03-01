@@ -30,7 +30,7 @@ export function AlertsPage() {
   );
 
   if (alertsQuery.isLoading) {
-    return <LoadingScreen text="Loading alerts..." />;
+    return <LoadingScreen text="Загрузка уведомлений..." />;
   }
 
   return (
@@ -40,14 +40,14 @@ export function AlertsPage() {
           onClick={() => setUnreadOnly((prev) => !prev)}
           className="rounded-md border border-slate-300/30 px-3 py-2 text-xs"
         >
-          {unreadOnly ? "Show all" : "Show unread only"}
+          {unreadOnly ? "Показать все" : "Только непрочитанные"}
         </button>
         <button
           onClick={() => markReadMutation.mutate(selectedIds)}
           className="rounded-md bg-[color:var(--tg-button-color)] px-3 py-2 text-xs text-white"
           disabled={!selectedIds.length}
         >
-          Mark selected read
+          Отметить прочитанным
         </button>
       </div>
 
@@ -66,7 +66,7 @@ export function AlertsPage() {
             />
             <div>
               <div className="text-sm font-semibold">
-                [{alert.type}] {alert.is_read ? "read" : "active"}
+                [{alert.type}] {alert.is_read ? "прочитано" : "новое"}
               </div>
               <div className="text-sm">{alert.message}</div>
               <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">
@@ -78,7 +78,7 @@ export function AlertsPage() {
       ))}
 
       {!alertsQuery.data?.length && (
-        <div className="text-sm text-[color:var(--tg-hint-color)]">No alerts.</div>
+        <div className="text-sm text-[color:var(--tg-hint-color)]">Уведомлений нет</div>
       )}
     </div>
   );

@@ -10,8 +10,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
-from app.models.entities import Campaign, MPAccount, Marketplace, MinusWord, QueryLabel, QueryLabelStatus, SearchQuery, User
+from app.models.entities import Campaign, CampaignStat, MPAccount, Marketplace, MinusWord, QueryLabel, QueryLabelStatus, SearchQuery, User
 from app.schemas.queries import (
+    AutoCleanupAllOut,
+    AutoCleanupQueryOut,
+    AutoCleanupResultOut,
     BulkLabelUpdateRequest,
     BulkLabelUpdateResponse,
     MinusWordsApplyResponse,
@@ -20,6 +23,7 @@ from app.schemas.queries import (
     QueryTrendPoint,
     SearchQueryOut,
 )
+from app.services.auto_cleanup import AutoCleanupResult, auto_cleanup_campaign, auto_cleanup_user_campaigns
 from app.services.morphology import (
     auto_classify_campaign_queries,
     estimate_not_relevant_daily_spend,
@@ -28,9 +32,16 @@ from app.services.morphology import (
 )
 from app.services.ozon_api import OzonApiClient
 from app.services.relevancy import classify_query_default
+from app.services.sync import run_async
 from app.services.wb_api import WBApiClient
 
 router = APIRouter(prefix="/queries", tags=["queries"])
+
+
+def _calc_rate(numerator: float, denominator: float) -> float:
+    if denominator <= 0:
+        return 0.0
+    return numerator / denominator
 
 
 def _assert_campaign_access(db: Session, user_id: int, campaign_id: int) -> Campaign:
@@ -54,6 +65,57 @@ def _format_rub(amount: float) -> str:
     if rounded.is_integer():
         return f"{int(rounded):,}".replace(",", " ") + "₽"
     return f"{rounded:,.2f}".replace(",", " ") + "₽"
+
+
+def _campaign_avg_order_values(db: Session, campaign_ids: list[int]) -> dict[int, float]:
+    if not campaign_ids:
+        return {}
+    rows = db.execute(
+        select(
+            CampaignStat.campaign_id,
+            func.coalesce(func.sum(CampaignStat.revenue), 0),
+            func.coalesce(func.sum(CampaignStat.orders), 0),
+        )
+        .where(CampaignStat.campaign_id.in_(campaign_ids))
+        .group_by(CampaignStat.campaign_id)
+    ).all()
+    result: dict[int, float] = {}
+    for campaign_id, revenue, orders in rows:
+        orders_int = int(orders or 0)
+        if orders_int > 0:
+            result[int(campaign_id)] = float(revenue or 0.0) / orders_int
+        else:
+            result[int(campaign_id)] = 0.0
+    return result
+
+
+def _to_auto_cleanup_response(result: AutoCleanupResult) -> AutoCleanupResultOut:
+    return AutoCleanupResultOut(
+        campaign_id=result.campaign_id,
+        campaign_name=result.campaign_name,
+        auto_minus_enabled=result.auto_minus_enabled,
+        irrelevant_found=result.irrelevant_found,
+        minus_words=result.minus_words,
+        budget_wasted=result.budget_wasted,
+        budget_saved=result.budget_saved,
+        auto_applied=result.auto_applied,
+        apply_failed=result.apply_failed,
+        queries=[
+            AutoCleanupQueryOut(
+                query=item.query,
+                impressions=item.impressions,
+                clicks=item.clicks,
+                ctr=item.ctr,
+                cpc=item.cpc,
+                orders=item.orders,
+                spend=item.spend,
+                revenue=item.revenue,
+                drr=item.drr,
+                rules_triggered=item.rules_triggered,
+            )
+            for item in result.queries
+        ],
+    )
 
 
 @router.get("/", response_model=list[SearchQueryOut])
@@ -111,22 +173,34 @@ def list_queries(
         "impressions": SearchQuery.impressions,
         "clicks": SearchQuery.clicks,
         "ctr": SearchQuery.ctr,
+        "cpc": SearchQuery.cpc,
         "spend": SearchQuery.spend,
         "orders": SearchQuery.orders,
         "cpo": SearchQuery.cpo,
         "date": SearchQuery.date,
     }
+    computed_sort_fields = {"cr", "revenue", "drr"}
     sort_column = sort_map.get(sort_by, SearchQuery.date)
-    stmt = stmt.order_by(desc(sort_column) if sort_dir == "desc" else asc(sort_column)).limit(limit)
+    stmt = stmt.order_by(desc(sort_column) if sort_dir == "desc" else asc(sort_column))
+    if sort_by not in computed_sort_fields:
+        stmt = stmt.limit(limit)
 
     rows = db.execute(stmt).all()
+    campaign_ids = sorted({int(row_query.campaign_id) for row_query, *_ in rows})
+    avg_order_values = _campaign_avg_order_values(db, campaign_ids)
+
     result: list[SearchQueryOut] = []
     for row_query, row_label, campaign_name, row_marketplace in rows:
+        avg_order_value = avg_order_values.get(int(row_query.campaign_id), 0.0)
+        cr = _calc_rate(row_query.orders * 100, row_query.clicks)
+        revenue = avg_order_value * row_query.orders
+        drr = _calc_rate(float(row_query.spend) * 100, revenue) if revenue > 0 else (999.0 if float(row_query.spend) > 0 else 0.0)
         hint = classify_query_default(
             ctr=row_query.ctr,
             impressions=row_query.impressions,
             orders=row_query.orders,
             spend=float(row_query.spend),
+            clicks=row_query.clicks,
         )
         result.append(
             SearchQueryOut(
@@ -141,12 +215,20 @@ def list_queries(
                 ctr=row_query.ctr,
                 cpc=row_query.cpc,
                 cpo=row_query.cpo,
+                cr=cr,
+                revenue=revenue,
+                drr=drr,
                 relevance_hint=hint,
                 label=row_label or hint,
                 campaign_name=campaign_name,
                 marketplace=row_marketplace.value if row_marketplace else None,
             )
         )
+
+    if sort_by in computed_sort_fields:
+        reverse = sort_dir != "asc"
+        result.sort(key=lambda item: getattr(item, sort_by), reverse=reverse)
+        result = result[:limit]
     return result
 
 
@@ -239,6 +321,46 @@ async def apply_minus_words(
     )
 
 
+@router.post("/auto-cleanup/{campaign_id}", response_model=AutoCleanupResultOut)
+def run_auto_cleanup_for_campaign(
+    campaign_id: int,
+    days: int = Query(default=7, ge=1, le=60),
+    apply_now: bool = Query(default=False),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AutoCleanupResultOut:
+    campaign = _assert_campaign_access(db, current_user.id, campaign_id)
+    result = run_async(auto_cleanup_campaign(db, campaign, days=days, force_auto_apply=apply_now))
+    return _to_auto_cleanup_response(result)
+
+
+@router.post("/auto-cleanup/all", response_model=AutoCleanupAllOut)
+def run_auto_cleanup_for_all_campaigns(
+    days: int = Query(default=7, ge=1, le=60),
+    apply_now: bool = Query(default=False),
+    only_auto_enabled: bool = Query(default=False),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AutoCleanupAllOut:
+    results = run_async(
+        auto_cleanup_user_campaigns(
+            db,
+            current_user.id,
+            days=days,
+            only_auto_minus_enabled=only_auto_enabled,
+            force_auto_apply=apply_now,
+        )
+    )
+    response_items = [_to_auto_cleanup_response(item) for item in results]
+    return AutoCleanupAllOut(
+        campaigns_processed=len(response_items),
+        irrelevant_found=sum(item.irrelevant_found for item in response_items),
+        budget_wasted=round(sum(item.budget_wasted for item in response_items), 2),
+        budget_saved=round(sum(item.budget_saved for item in response_items), 2),
+        results=response_items,
+    )
+
+
 @router.get("/minus-words/{campaign_id}", response_model=list[MinusWordOut])
 def list_minus_words(
     campaign_id: int,
@@ -298,27 +420,36 @@ def export_queries_xlsx(
     if campaign_id:
         stmt = stmt.where(SearchQuery.campaign_id == campaign_id)
     rows = db.execute(stmt).all()
+    campaign_ids = sorted({int(search_query.campaign_id) for search_query, *_ in rows})
+    avg_order_values = _campaign_avg_order_values(db, campaign_ids)
 
     workbook = Workbook()
     worksheet = workbook.active
-    worksheet.title = "Queries"
+    worksheet.title = "Запросы"
     worksheet.append(
         [
-            "Date",
-            "Marketplace",
-            "Campaign",
-            "Query",
-            "Impressions",
-            "Clicks",
+            "Дата",
+            "Маркетплейс",
+            "Кампания",
+            "Запрос",
+            "Показы",
+            "Клики",
             "CTR",
-            "Spend",
-            "Orders",
             "CPC",
+            "Заказы",
+            "CR",
+            "Расход",
+            "Выручка",
+            "ДРР",
             "CPO",
-            "Label",
+            "Метка",
         ]
     )
     for search_query, campaign_name, row_marketplace, row_label in rows:
+        avg_order_value = avg_order_values.get(int(search_query.campaign_id), 0.0)
+        revenue = avg_order_value * search_query.orders
+        drr = _calc_rate(float(search_query.spend) * 100, revenue) if revenue > 0 else (999.0 if float(search_query.spend) > 0 else 0.0)
+        cr = _calc_rate(search_query.orders * 100, search_query.clicks)
         worksheet.append(
             [
                 search_query.date.isoformat(),
@@ -328,9 +459,12 @@ def export_queries_xlsx(
                 search_query.impressions,
                 search_query.clicks,
                 round(search_query.ctr, 4),
-                float(search_query.spend),
-                search_query.orders,
                 round(search_query.cpc, 4),
+                search_query.orders,
+                round(cr, 4),
+                float(search_query.spend),
+                round(revenue, 2),
+                round(drr, 4),
                 round(search_query.cpo, 4),
                 (
                     row_label.value
@@ -340,6 +474,7 @@ def export_queries_xlsx(
                         search_query.impressions,
                         search_query.orders,
                         float(search_query.spend),
+                        search_query.clicks,
                     ).value
                 ),
             ]

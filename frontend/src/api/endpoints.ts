@@ -22,8 +22,17 @@ export type Campaign = {
   type?: string | null;
   status?: string | null;
   daily_budget?: number | null;
+  auto_minus_enabled: boolean;
   marketplace?: "wb" | "ozon" | null;
-  avg_drr?: number | null;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  orders: number;
+  cr: number;
+  revenue: number;
+  drr: number;
+  spend: number;
   created_at: string;
   updated_at: string;
 };
@@ -39,6 +48,7 @@ export type CampaignStat = {
   cpc: number;
   cpo: number;
   drr: number;
+  cr: number;
 };
 
 export type DashboardSummary = {
@@ -50,6 +60,30 @@ export type DashboardSummary = {
   wb_spend: number;
   ozon_spend: number;
   last_synced_at?: string | null;
+  totals: {
+    impressions: number;
+    clicks: number;
+    ctr: number;
+    cpc: number;
+    orders: number;
+    cr: number;
+    revenue: number;
+    drr: number;
+    spend: number;
+  };
+  trend: Array<{
+    date: string;
+    impressions: number;
+    clicks: number;
+    orders: number;
+    spend: number;
+  }>;
+  diagnostics: string[];
+  irrelevant_alert: {
+    count: number;
+    wasted_per_day: number;
+    wasted_per_month: number;
+  };
 };
 
 export type QueryRow = {
@@ -64,10 +98,47 @@ export type QueryRow = {
   ctr: number;
   cpc: number;
   cpo: number;
+  cr: number;
+  revenue: number;
+  drr: number;
   relevance_hint?: "relevant" | "not_relevant" | "pending";
   label?: "relevant" | "not_relevant" | "pending";
   campaign_name?: string;
   marketplace?: "wb" | "ozon";
+};
+
+export type AutoCleanupQuery = {
+  query: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  orders: number;
+  spend: number;
+  revenue: number;
+  drr: number;
+  rules_triggered: string[];
+};
+
+export type AutoCleanupResult = {
+  campaign_id: number;
+  campaign_name: string;
+  auto_minus_enabled: boolean;
+  irrelevant_found: number;
+  minus_words: string[];
+  budget_wasted: number;
+  budget_saved: number;
+  auto_applied: boolean;
+  apply_failed: number;
+  queries: AutoCleanupQuery[];
+};
+
+export type AutoCleanupAllResult = {
+  campaigns_processed: number;
+  irrelevant_found: number;
+  budget_wasted: number;
+  budget_saved: number;
+  results: AutoCleanupResult[];
 };
 
 export type AlertRow = {
@@ -141,19 +212,19 @@ export async function getDashboardSummary() {
   return data;
 }
 
-export async function listCampaigns() {
+export async function listCampaigns(days = 30) {
   if (isDemoMode()) {
-    return demoApi.listCampaigns();
+    return demoApi.listCampaigns(days);
   }
-  const { data } = await apiClient.get<Campaign[]>("/campaigns");
+  const { data } = await apiClient.get<Campaign[]>("/campaigns", { params: { days } });
   return data;
 }
 
-export async function getCampaign(campaignId: number) {
+export async function getCampaign(campaignId: number, days = 30) {
   if (isDemoMode()) {
-    return demoApi.getCampaign(campaignId);
+    return demoApi.getCampaign(campaignId, days);
   }
-  const { data } = await apiClient.get<Campaign>(`/campaigns/${campaignId}`);
+  const { data } = await apiClient.get<Campaign>(`/campaigns/${campaignId}`, { params: { days } });
   return data;
 }
 
@@ -178,6 +249,17 @@ export async function resumeCampaign(campaignId: number) {
     return demoApi.resumeCampaign(campaignId);
   }
   const { data } = await apiClient.post(`/campaigns/${campaignId}/resume`);
+  return data;
+}
+
+export async function setCampaignAutoMinus(campaignId: number, enabled: boolean) {
+  if (isDemoMode()) {
+    return demoApi.setCampaignAutoMinus(campaignId, enabled);
+  }
+  const { data } = await apiClient.post<{ campaign_id: number; auto_minus_enabled: boolean }>(
+    `/campaigns/${campaignId}/auto-minus`,
+    { enabled }
+  );
   return data;
 }
 
@@ -226,6 +308,24 @@ export async function applyMinusWords(campaignId: number) {
     return demoApi.applyMinusWords(campaignId);
   }
   const { data } = await apiClient.post<MinusWordsApplyResult>(`/queries/minus-words/${campaignId}/apply`);
+  return data;
+}
+
+export async function runAutoCleanupCampaign(campaignId: number, params?: { days?: number; apply_now?: boolean }) {
+  if (isDemoMode()) {
+    return demoApi.runAutoCleanupCampaign(campaignId, params);
+  }
+  const { data } = await apiClient.post<AutoCleanupResult>(`/queries/auto-cleanup/${campaignId}`, undefined, {
+    params
+  });
+  return data;
+}
+
+export async function runAutoCleanupAll(params?: { days?: number; apply_now?: boolean; only_auto_enabled?: boolean }) {
+  if (isDemoMode()) {
+    return demoApi.runAutoCleanupAll(params);
+  }
+  const { data } = await apiClient.post<AutoCleanupAllResult>("/queries/auto-cleanup/all", undefined, { params });
   return data;
 }
 

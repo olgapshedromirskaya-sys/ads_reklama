@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { connectAccount, listAccounts, refreshAccount } from "@/api/endpoints";
+import { connectAccount, listAccounts, listCampaigns, refreshAccount, setCampaignAutoMinus } from "@/api/endpoints";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
 type Marketplace = "wb" | "ozon";
@@ -14,6 +14,7 @@ export function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
 
   const accountsQuery = useQuery({ queryKey: ["accounts"], queryFn: listAccounts });
+  const campaignsQuery = useQuery({ queryKey: ["campaigns"], queryFn: () => listCampaigns() });
 
   const connectMutation = useMutation({
     mutationFn: connectAccount,
@@ -31,14 +32,23 @@ export function SettingsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["accounts"] })
   });
 
-  if (accountsQuery.isLoading) {
-    return <LoadingScreen text="Loading settings..." />;
+  const toggleAutoMinusMutation = useMutation({
+    mutationFn: ({ campaignId, enabled }: { campaignId: number; enabled: boolean }) =>
+      setCampaignAutoMinus(campaignId, enabled),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["campaign"] });
+    }
+  });
+
+  if (accountsQuery.isLoading || campaignsQuery.isLoading) {
+    return <LoadingScreen text="Загрузка настроек..." />;
   }
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 text-sm font-semibold">Connect marketplace account</div>
+        <div className="mb-2 text-sm font-semibold">Подключить аккаунт</div>
         <div className="space-y-2">
           <select
             value={marketplace}
@@ -51,7 +61,7 @@ export function SettingsPage() {
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Account name"
+            placeholder="Название аккаунта"
             className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
           />
 
@@ -59,7 +69,7 @@ export function SettingsPage() {
             <input
               value={apiToken}
               onChange={(event) => setApiToken(event.target.value)}
-              placeholder="WB API token"
+              placeholder="API Token"
               className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
             />
           ) : (
@@ -67,13 +77,13 @@ export function SettingsPage() {
               <input
                 value={clientId}
                 onChange={(event) => setClientId(event.target.value)}
-                placeholder="Ozon Client-ID"
+                placeholder="Client-ID"
                 className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
               />
               <input
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder="Ozon API-Key"
+                placeholder="API Key"
                 className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
               />
             </>
@@ -91,7 +101,7 @@ export function SettingsPage() {
             }
             className="rounded-md bg-[color:var(--tg-button-color)] px-3 py-2 text-xs text-white"
           >
-            Connect account
+            Сохранить
           </button>
         </div>
       </div>
@@ -103,24 +113,53 @@ export function SettingsPage() {
               <div>
                 <div className="text-sm font-semibold">{account.name}</div>
                 <div className="text-xs text-[color:var(--tg-hint-color)]">
-                  {account.marketplace} • {account.is_active ? "active" : "inactive"}
+                  Маркетплейс: {account.marketplace.toUpperCase()} • {account.is_active ? "Включена" : "Выключена"}
                 </div>
                 <div className="text-xs text-[color:var(--tg-hint-color)]">
-                  Last synced: {account.last_synced_at ? new Date(account.last_synced_at).toLocaleString() : "n/a"}
+                  Последняя синхронизация: {account.last_synced_at ? new Date(account.last_synced_at).toLocaleString() : "—"}
                 </div>
                 {account.needs_reconnection && (
-                  <div className="mt-1 text-xs text-rose-500">Credentials invalid. Reconnect is required.</div>
+                  <div className="mt-1 text-xs text-rose-500">Требуется переподключение аккаунта.</div>
                 )}
               </div>
               <button
                 onClick={() => refreshMutation.mutate(account.id)}
                 className="rounded-md border border-slate-300/30 px-2 py-1 text-xs"
               >
-                Refresh
+                Обновить
               </button>
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="rounded-xl border border-slate-300/30 p-3">
+        <div className="mb-2 text-sm font-semibold">Настройки кампаний</div>
+        <div className="space-y-2">
+          {campaignsQuery.data?.map((campaign) => (
+            <div key={campaign.id} className="flex items-center justify-between rounded-md border border-slate-300/30 px-3 py-2">
+              <div>
+                <div className="text-sm font-semibold">{campaign.name}</div>
+                <div className="text-xs text-[color:var(--tg-hint-color)]">
+                  Авто-минусовка: {campaign.auto_minus_enabled ? "Включена" : "Выключена"}
+                </div>
+              </div>
+              <button
+                onClick={() =>
+                  toggleAutoMinusMutation.mutate({
+                    campaignId: campaign.id,
+                    enabled: !campaign.auto_minus_enabled
+                  })
+                }
+                className={`rounded-md px-3 py-1 text-xs font-semibold ${
+                  campaign.auto_minus_enabled ? "bg-emerald-600 text-white" : "border border-slate-300/30"
+                }`}
+              >
+                {campaign.auto_minus_enabled ? "ВЫКЛ" : "ВКЛ"}
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

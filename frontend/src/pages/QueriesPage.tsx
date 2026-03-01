@@ -10,14 +10,32 @@ import {
   listCampaigns,
   listMinusWords,
   listQueries,
+  runAutoCleanupAll,
+  runAutoCleanupCampaign,
   type QueryRow,
   updateQueryLabelsBulk
 } from "@/api/endpoints";
+import { crColorClass, ctrColorClass, drrColorClass, formatCurrency, formatInteger, formatPercent } from "@/components/metricUtils";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { isDemoMode } from "@/demo/mode";
 import { DEMO_MINUS_PHRASES, DEMO_MINUS_WORDS } from "@/demo/mockApi";
 
 type LabelValue = "relevant" | "not_relevant" | "pending";
+type CleanupQueryView = {
+  query: string;
+  campaignName: string;
+  spend: number;
+  orders: number;
+  rules: string[];
+};
+type CleanupState = {
+  campaignIds: number[];
+  irrelevantFound: number;
+  budgetWasted: number;
+  budgetSaved: number;
+  minusWords: string[];
+  queries: CleanupQueryView[];
+};
 
 function resolveRowLabel(row: QueryRow): LabelValue {
   return (row.label || row.relevance_hint || "pending") as LabelValue;
@@ -31,7 +49,7 @@ function rowClassName(row: QueryRow) {
 }
 
 function formatRub(amount: number) {
-  return `${Math.round(amount).toLocaleString("en-US")}₽`;
+  return `${Math.round(amount).toLocaleString("ru-RU")}₽`;
 }
 
 function parseRubAmount(value: string) {
@@ -51,9 +69,20 @@ function labelBadgeClass(label: LabelValue) {
 }
 
 function labelTitle(label: LabelValue) {
-  if (label === "relevant") return "Релевантный";
-  if (label === "not_relevant") return "Нерелевантный";
+  if (label === "relevant") return "Релевантные";
+  if (label === "not_relevant") return "Нерелевантные";
   return "На проверке";
+}
+
+function formatCleanupRule(rule: string) {
+  const map: Record<string, string> = {
+    rule_1: "правило 1",
+    rule_2: "правило 2",
+    rule_3: "правило 3",
+    rule_4: "правило 4",
+    rule_5: "правило 5"
+  };
+  return map[rule] || rule;
 }
 
 export function QueriesPage() {
@@ -68,6 +97,8 @@ export function QueriesPage() {
   const [selected, setSelected] = useState<Record<number, QueryRow>>({});
   const [minusWords, setMinusWords] = useState<string[] | null>(null);
   const [applySummary, setApplySummary] = useState<{ applied: number; failed: number; savings: number } | null>(null);
+  const [cleanupState, setCleanupState] = useState<CleanupState | null>(null);
+  const [showCleanupQueries, setShowCleanupQueries] = useState(false);
   const [trendKeyword, setTrendKeyword] = useState("");
 
   const params = useMemo(
@@ -85,7 +116,7 @@ export function QueriesPage() {
 
   const campaignsQuery = useQuery({
     queryKey: ["campaigns"],
-    queryFn: listCampaigns
+    queryFn: () => listCampaigns()
   });
   const queriesQuery = useQuery({
     queryKey: ["queries", params],
@@ -174,6 +205,58 @@ export function QueriesPage() {
     }
   });
 
+  const cleanupMutation = useMutation({
+    mutationFn: async () => {
+      if (campaignId) {
+        const result = await runAutoCleanupCampaign(Number(campaignId), { days: 7, apply_now: false });
+        return {
+          campaignIds: [result.campaign_id],
+          irrelevantFound: result.irrelevant_found,
+          budgetWasted: result.budget_wasted,
+          budgetSaved: result.budget_saved,
+          minusWords: result.minus_words,
+          queries: result.queries.map((item) => ({
+            query: item.query,
+            campaignName: result.campaign_name,
+            spend: item.spend,
+            orders: item.orders,
+            rules: item.rules_triggered
+          }))
+        } satisfies CleanupState;
+      }
+      const result = await runAutoCleanupAll({ days: 7, apply_now: false });
+      const minusWords = new Set<string>();
+      const cleanupQueries: CleanupQueryView[] = [];
+      result.results.forEach((campaignResult) => {
+        campaignResult.minus_words.forEach((word) => minusWords.add(word));
+        campaignResult.queries.forEach((item) => {
+          cleanupQueries.push({
+            query: item.query,
+            campaignName: campaignResult.campaign_name,
+            spend: item.spend,
+            orders: item.orders,
+            rules: item.rules_triggered
+          });
+        });
+      });
+      return {
+        campaignIds: result.results.map((item) => item.campaign_id),
+        irrelevantFound: result.irrelevant_found,
+        budgetWasted: result.budget_wasted,
+        budgetSaved: result.budget_saved,
+        minusWords: [...minusWords],
+        queries: cleanupQueries.sort((a, b) => b.spend - a.spend)
+      } satisfies CleanupState;
+    },
+    onSuccess: (result) => {
+      setCleanupState(result);
+      setApplySummary(null);
+      setShowCleanupQueries(false);
+      queryClient.invalidateQueries({ queryKey: ["queries"] });
+      queryClient.invalidateQueries({ queryKey: ["queries-badge"] });
+    }
+  });
+
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;
     if (!webApp) {
@@ -187,7 +270,7 @@ export function QueriesPage() {
 
     if (selectedRows.length > 0) {
       webApp.MainButton.setParams({
-        text: `Mark not relevant (${selectedRows.length})`,
+        text: `Нерелевантные (${selectedRows.length})`,
         is_visible: true
       });
       webApp.MainButton.show();
@@ -245,6 +328,12 @@ export function QueriesPage() {
   );
   const defaultSavingsPerDay = querySummary.notRelevantSpend;
   const savingsPerDay = applySummary?.savings || defaultSavingsPerDay;
+  const cleanupAppliedMessage =
+    cleanupState && applySummary
+      ? `✅ Удалено ${cleanupState.irrelevantFound} ключей, экономия ${formatRub(cleanupState.budgetSaved)}/день (${formatRub(
+          cleanupState.budgetSaved * 30
+        )}/месяц)`
+      : null;
 
   async function applyLabel(rowsToUpdate: QueryRow[], label: LabelValue) {
     if (!rowsToUpdate.length) return;
@@ -277,6 +366,16 @@ export function QueriesPage() {
     if (!campaignIdsInScope.length) return;
     setApplySummary(null);
     applyMinusWordsMutation.mutate(campaignIdsInScope);
+  }
+
+  function runAutoCleanup() {
+    cleanupMutation.mutate();
+  }
+
+  function applyCleanupResult() {
+    if (!cleanupState || !cleanupState.campaignIds.length) return;
+    setApplySummary(null);
+    applyMinusWordsMutation.mutate(cleanupState.campaignIds);
   }
 
   function applyAllMinusWordsBulk() {
@@ -326,7 +425,7 @@ export function QueriesPage() {
   }
 
   if (loading) {
-    return <LoadingScreen text="Loading queries..." />;
+    return <LoadingScreen text="Загрузка запросов..." />;
   }
 
   return (
@@ -337,7 +436,7 @@ export function QueriesPage() {
           <input
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
-            placeholder="Search query text..."
+            placeholder="Поиск по запросу..."
             className="w-full rounded-md border border-slate-300/30 bg-transparent px-3 py-2 text-sm outline-none"
           />
         </div>
@@ -348,7 +447,7 @@ export function QueriesPage() {
             onChange={(event) => setMarketplace(event.target.value as "" | "wb" | "ozon")}
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2"
           >
-            <option value="">All MP</option>
+            <option value="">Все МП</option>
             <option value="wb">WB</option>
             <option value="ozon">Ozon</option>
           </select>
@@ -358,7 +457,7 @@ export function QueriesPage() {
             onChange={(event) => setCampaignId(event.target.value ? Number(event.target.value) : "")}
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2"
           >
-            <option value="">All campaigns</option>
+            <option value="">Все кампании</option>
             {campaignsQuery.data?.map((campaign) => (
               <option key={campaign.id} value={campaign.id}>
                 {campaign.name}
@@ -367,7 +466,7 @@ export function QueriesPage() {
           </select>
 
           <div className="rounded-md border border-slate-300/30 px-2 py-2">
-            <div className="text-[10px] text-[color:var(--tg-hint-color)]">CTR max (%)</div>
+            <div className="text-[10px] text-[color:var(--tg-hint-color)]">CTR макс (%)</div>
             <input
               type="range"
               min={1}
@@ -380,26 +479,30 @@ export function QueriesPage() {
           </div>
 
           <div className="rounded-md border border-slate-300/30 px-2 py-2">
-            <div className="text-[10px] text-[color:var(--tg-hint-color)]">Sort</div>
+            <div className="text-[10px] text-[color:var(--tg-hint-color)]">Сортировка</div>
             <div className="mt-1 flex gap-1">
               <select
                 value={sortBy}
                 onChange={(event) => setSortBy(event.target.value)}
                 className="w-full rounded-md border border-slate-300/30 bg-transparent px-1 py-1 text-xs"
               >
-                <option value="date">Date</option>
-                <option value="impressions">Impr.</option>
-                <option value="clicks">Clicks</option>
+                <option value="date">Дата</option>
+                <option value="impressions">Показы</option>
+                <option value="clicks">Клики</option>
                 <option value="ctr">CTR</option>
-                <option value="spend">Spend</option>
-                <option value="orders">Orders</option>
+                <option value="cpc">CPC</option>
+                <option value="spend">Расход</option>
+                <option value="revenue">Выручка</option>
+                <option value="orders">Заказы</option>
+                <option value="cr">CR</option>
+                <option value="drr">ДРР</option>
                 <option value="cpo">CPO</option>
               </select>
               <button
                 onClick={() => setSortDir((prev) => (prev === "asc" ? "desc" : "asc"))}
                 className="rounded-md border border-slate-300/30 px-2"
               >
-                {sortDir}
+                {sortDir === "asc" ? "возр" : "убыв"}
               </button>
             </div>
           </div>
@@ -418,28 +521,35 @@ export function QueriesPage() {
           className="rounded-md bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-50"
           disabled={!selectedRows.length}
         >
-          Mark relevant
+          Релевантный
         </button>
         <button
           onClick={() => applyLabel(selectedRows, "not_relevant")}
           className="rounded-md bg-rose-600 px-3 py-2 text-xs text-white disabled:opacity-50"
           disabled={!selectedRows.length}
         >
-          Mark not relevant
+          Нерелевантный
         </button>
         <button
           onClick={() => applyLabel(selectedRows, "pending")}
           className="rounded-md bg-yellow-500 px-3 py-2 text-xs text-black disabled:opacity-50"
           disabled={!selectedRows.length}
         >
-          Mark pending
+          На проверке
         </button>
         <button
           onClick={() => generateMinusMutation.mutate(selectedRows)}
           className="rounded-md bg-[color:var(--tg-button-color)] px-3 py-2 text-xs text-white disabled:opacity-50"
           disabled={!selectedRows.length}
         >
-          Generate minus-words
+          Генерировать минус-слова
+        </button>
+        <button
+          onClick={runAutoCleanup}
+          className="rounded-md bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+          disabled={cleanupMutation.isPending}
+        >
+          Авто-очистка
         </button>
         <button
           onClick={runAutoMinusPipeline}
@@ -464,23 +574,66 @@ export function QueriesPage() {
           className="rounded-md border border-slate-300/30 px-3 py-2 text-xs"
         >
           <RefreshCw size={14} className="mr-1 inline" />
-          Refresh
+          Обновить
         </button>
       </div>
 
+      {cleanupState && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3">
+          <div className="text-sm font-semibold">Найдено {formatInteger(cleanupState.irrelevantFound)} нерелевантных запросов</div>
+          <div className="text-xs text-[color:var(--tg-hint-color)]">Они сливали {formatRub(cleanupState.budgetWasted)} за 7 дней</div>
+          <div className="text-xs text-[color:var(--tg-hint-color)]">
+            Сгенерировано минус-слов: {formatInteger(cleanupState.minusWords.length)}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={applyCleanupResult}
+              className="rounded-md bg-rose-600 px-3 py-2 text-xs font-semibold text-white"
+            >
+              Применить
+            </button>
+            <button
+              onClick={() => setShowCleanupQueries((prev) => !prev)}
+              className="rounded-md border border-rose-500/60 px-3 py-2 text-xs font-semibold text-rose-700"
+            >
+              Посмотреть список
+            </button>
+          </div>
+          {cleanupAppliedMessage && <div className="mt-2 text-xs">{cleanupAppliedMessage}</div>}
+        </div>
+      )}
+
+      {showCleanupQueries && cleanupState && (
+        <div className="rounded-xl border border-slate-300/30 p-3">
+          <div className="mb-2 text-sm font-semibold">Список нерелевантных запросов</div>
+          <div className="max-h-52 space-y-1 overflow-auto text-xs">
+            {cleanupState.queries.map((item) => (
+              <div key={`${item.campaignName}-${item.query}`} className="rounded-md border border-slate-300/30 px-2 py-1">
+                <div className="font-semibold">{item.query}</div>
+                <div className="text-[color:var(--tg-hint-color)]">
+                  {item.campaignName} • {formatRub(item.spend)} • заказов: {item.orders} •{" "}
+                  {item.rules.map((rule) => formatCleanupRule(rule)).join(", ")}
+                </div>
+              </div>
+            ))}
+            {cleanupState.queries.length === 0 && <div className="text-[color:var(--tg-hint-color)]">Нет данных</div>}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-2 md:grid-cols-3">
         <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3">
-          <div className="text-[11px] text-emerald-700">Relevant</div>
+          <div className="text-[11px] text-emerald-700">Релевантные</div>
           <div className="text-lg font-semibold">{querySummary.relevant}</div>
           <div className="text-xs text-[color:var(--tg-hint-color)]">{formatRub(querySummary.relevantSpend)}/день</div>
         </div>
         <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-3">
-          <div className="text-[11px] text-yellow-800">Pending</div>
+          <div className="text-[11px] text-yellow-800">На проверке</div>
           <div className="text-lg font-semibold">{querySummary.pending}</div>
           <div className="text-xs text-[color:var(--tg-hint-color)]">{formatRub(querySummary.pendingSpend)}/день</div>
         </div>
         <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3">
-          <div className="text-[11px] text-rose-700">Not relevant</div>
+          <div className="text-[11px] text-rose-700">Нерелевантные</div>
           <div className="text-lg font-semibold">{querySummary.notRelevant}</div>
           <div className="text-xs text-[color:var(--tg-hint-color)]">{formatRub(querySummary.notRelevantSpend)}/день</div>
         </div>
@@ -499,8 +652,8 @@ export function QueriesPage() {
 
       {demoMode && (
         <div className="rounded-xl border border-yellow-400/50 bg-yellow-100/30 p-3">
-          <div className="text-sm font-semibold">Demo minus-words generator</div>
-          <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">Detected irrelevant words:</div>
+          <div className="text-sm font-semibold">Генератор минус-слов</div>
+          <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">Обнаруженные нерелевантные слова:</div>
           <div className="mt-2 flex flex-wrap gap-1">
             {DEMO_MINUS_WORDS.map((word) => (
               <span
@@ -511,7 +664,7 @@ export function QueriesPage() {
               </span>
             ))}
           </div>
-          <div className="mt-3 text-xs text-[color:var(--tg-hint-color)]">Generated minus-phrases (ready to copy):</div>
+          <div className="mt-3 text-xs text-[color:var(--tg-hint-color)]">Минус-фразы для копирования:</div>
           <textarea
             readOnly
             value={buildDemoMinusPhraseList().join("\n")}
@@ -522,7 +675,7 @@ export function QueriesPage() {
               onClick={() => navigator.clipboard.writeText(buildDemoMinusPhraseList().join("\n"))}
               className="rounded-md bg-yellow-500 px-3 py-2 text-xs font-semibold text-yellow-950"
             >
-              Copy minus-phrases
+              Скопировать минус-фразы
             </button>
           </div>
         </div>
@@ -532,36 +685,39 @@ export function QueriesPage() {
         <table className="min-w-[980px] table-auto border-collapse text-xs">
           <thead>
             <tr className="bg-slate-500/10">
-              <th className="sticky left-0 z-10 bg-slate-500/20 px-2 py-2 text-left">Query</th>
-              <th className="px-2 py-2">Select</th>
-              <th className="px-2 py-2">Impr.</th>
-              <th className="px-2 py-2">Clicks</th>
+              <th className="sticky left-0 z-10 bg-slate-500/20 px-2 py-2 text-left">Запрос</th>
+              <th className="px-2 py-2">Выбор</th>
+              <th className="px-2 py-2">Показы</th>
+              <th className="px-2 py-2">Клики</th>
               <th className="px-2 py-2">CTR</th>
-              <th className="px-2 py-2">Spend</th>
-              <th className="px-2 py-2">Orders</th>
+              <th className="px-2 py-2">CPC</th>
+              <th className="px-2 py-2">Заказы</th>
               <th className="px-2 py-2">CR</th>
-              <th className="px-2 py-2">CPO</th>
-              <th className="px-2 py-2">Status</th>
-              <th className="px-2 py-2">Actions</th>
+              <th className="px-2 py-2">Расход</th>
+              <th className="px-2 py-2">Выручка</th>
+              <th className="px-2 py-2">ДРР</th>
+              <th className="px-2 py-2">Статус</th>
+              <th className="px-2 py-2">Действия</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
               const label = resolveRowLabel(row);
-              const cr = row.clicks > 0 ? (row.orders / row.clicks) * 100 : 0;
               return (
                 <tr key={row.id} className={rowClassName(row)}>
                   <td className="sticky left-0 bg-inherit px-2 py-2 font-medium">{row.query}</td>
                   <td className="px-2 py-2 text-center">
                     <input type="checkbox" checked={Boolean(selected[row.id])} onChange={() => toggleSelection(row)} />
                   </td>
-                  <td className="px-2 py-2 text-center">{row.impressions}</td>
-                  <td className="px-2 py-2 text-center">{row.clicks}</td>
-                  <td className="px-2 py-2 text-center">{row.ctr.toFixed(2)}%</td>
-                  <td className="px-2 py-2 text-center">{row.spend.toFixed(2)}</td>
-                  <td className="px-2 py-2 text-center">{row.orders}</td>
-                  <td className="px-2 py-2 text-center">{cr.toFixed(2)}%</td>
-                  <td className="px-2 py-2 text-center">{row.cpo.toFixed(2)}</td>
+                  <td className="px-2 py-2 text-center">{formatInteger(row.impressions)}</td>
+                  <td className="px-2 py-2 text-center">{formatInteger(row.clicks)}</td>
+                  <td className={`px-2 py-2 text-center font-semibold ${ctrColorClass(row.ctr)}`}>{formatPercent(row.ctr, 1)}</td>
+                  <td className="px-2 py-2 text-center">{formatCurrency(row.cpc)}</td>
+                  <td className="px-2 py-2 text-center">{formatInteger(row.orders)}</td>
+                  <td className={`px-2 py-2 text-center font-semibold ${crColorClass(row.cr)}`}>{formatPercent(row.cr, 1)}</td>
+                  <td className="px-2 py-2 text-center">{formatCurrency(row.spend)}</td>
+                  <td className="px-2 py-2 text-center">{formatCurrency(row.revenue)}</td>
+                  <td className={`px-2 py-2 text-center font-semibold ${drrColorClass(row.drr)}`}>{formatPercent(row.drr, 1)}</td>
                   <td className="px-2 py-2 text-center">
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${labelBadgeClass(label)}`}>
                       {labelTitle(label)}
@@ -572,21 +728,21 @@ export function QueriesPage() {
                       <button
                         onClick={() => applyLabel([row], "relevant")}
                         className="rounded border border-emerald-500 px-1 py-0.5"
-                        title="Relevant"
+                        title="Релевантный"
                       >
                         ✅
                       </button>
                       <button
                         onClick={() => applyLabel([row], "not_relevant")}
                         className="rounded border border-rose-500 px-1 py-0.5"
-                        title="Not relevant"
+                        title="Нерелевантный"
                       >
                         ❌
                       </button>
                       <button
                         onClick={() => applyLabel([row], "pending")}
                         className="rounded border border-yellow-500 px-1 py-0.5"
-                        title="Pending"
+                        title="На проверке"
                       >
                         📌
                       </button>
@@ -597,8 +753,8 @@ export function QueriesPage() {
             })}
             {!rows.length && (
               <tr>
-                <td colSpan={11} className="px-3 py-6 text-center text-[color:var(--tg-hint-color)]">
-                  No queries found for selected filters.
+                <td colSpan={13} className="px-3 py-6 text-center text-[color:var(--tg-hint-color)]">
+                  Нет данных
                 </td>
               </tr>
             )}
@@ -607,12 +763,12 @@ export function QueriesPage() {
       </div>
 
       <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 text-sm font-semibold">Keyword trend (30d)</div>
+        <div className="mb-2 text-sm font-semibold">Тренд запроса (30 дней)</div>
         <div className="mb-2 flex gap-2">
           <input
             value={trendKeyword}
             onChange={(event) => setTrendKeyword(event.target.value)}
-            placeholder="Keyword for trend chart"
+            placeholder="Ключевое слово для графика"
             className="w-full rounded-md border border-slate-300/30 bg-transparent px-3 py-2 text-sm"
           />
         </div>
@@ -631,7 +787,7 @@ export function QueriesPage() {
             </ResponsiveContainer>
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-[color:var(--tg-hint-color)]">
-              Enter a keyword to view trend.
+              Введите ключевое слово для отображения тренда.
             </div>
           )}
         </div>
@@ -671,7 +827,7 @@ function MinusWordsModal({
     <div className="fixed inset-0 z-50 flex items-end bg-black/50 p-3 sm:items-center sm:justify-center">
       <div className="w-full max-w-lg rounded-xl bg-[color:var(--tg-bg-color)] p-4">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Generated minus-words</h3>
+          <h3 className="text-sm font-semibold">Сгенерированные минус-слова</h3>
           <button className="rounded-md p-1" onClick={onClose}>
             <X size={16} />
           </button>
@@ -683,13 +839,13 @@ function MinusWordsModal({
         />
         <div className="mt-3 flex justify-end gap-2">
           <button onClick={onClose} className="rounded-md border border-slate-300/30 px-3 py-2 text-xs">
-            Close
+            Закрыть
           </button>
           <button
             onClick={onCopy}
             className="rounded-md bg-[color:var(--tg-button-color)] px-3 py-2 text-xs text-[color:var(--tg-button-text-color)]"
           >
-            Copy list
+            Скопировать список
           </button>
         </div>
       </div>

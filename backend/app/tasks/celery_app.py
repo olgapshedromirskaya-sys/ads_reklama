@@ -30,6 +30,10 @@ celery_app.conf.update(
             "task": "app.tasks.jobs.sync_keyword_positions_task",
             "schedule": crontab(minute=0, hour=6),
         },
+        "auto-cleanup-queries-6am": {
+            "task": "app.tasks.jobs.auto_cleanup_task",
+            "schedule": crontab(minute=0, hour=6),
+        },
         "send-daily-summary-9am": {
             "task": "app.tasks.jobs.send_daily_summary_task",
             "schedule": crontab(minute=0, hour=9),

@@ -96,6 +96,7 @@ class Campaign(Base):
     type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     daily_budget: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    auto_minus_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

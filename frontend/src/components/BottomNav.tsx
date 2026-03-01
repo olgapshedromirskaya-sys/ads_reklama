@@ -4,13 +4,13 @@ import { NavLink } from "react-router-dom";
 import { listQueries } from "@/api/endpoints";
 
 const items = [
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { to: "/campaigns", label: "Campaigns", icon: Megaphone },
-  { to: "/queries", label: "Queries", icon: Search },
-  { to: "/keywords", label: "Keywords", icon: Target },
-  { to: "/budget", label: "Budget", icon: CircleDollarSign },
-  { to: "/alerts", label: "Alerts", icon: Bell },
-  { to: "/settings", label: "Settings", icon: Settings }
+  { to: "/dashboard", label: "Дашборд", icon: BarChart3 },
+  { to: "/campaigns", label: "Кампании", icon: Megaphone },
+  { to: "/queries", label: "Запросы", icon: Search },
+  { to: "/keywords", label: "Ключевые слова", icon: Target },
+  { to: "/budget", label: "Бюджет", icon: CircleDollarSign },
+  { to: "/alerts", label: "Уведомления", icon: Bell },
+  { to: "/settings", label: "Настройки", icon: Settings }
 ];
 
 export function BottomNav() {
