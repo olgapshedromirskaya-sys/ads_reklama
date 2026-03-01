@@ -55,6 +55,12 @@ class MinusWordOut(BaseModel):
     added_at: datetime
 
 
+class MinusWordsApplyResponse(BaseModel):
+    applied: int
+    failed: int
+    saved_budget_estimate: str
+
+
 class QueryTrendPoint(BaseModel):
     date: date
     impressions: int

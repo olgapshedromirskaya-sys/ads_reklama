@@ -64,8 +64,8 @@ export type QueryRow = {
   ctr: number;
   cpc: number;
   cpo: number;
-  relevance_hint: "relevant" | "not_relevant" | "pending";
-  label: "relevant" | "not_relevant" | "pending";
+  relevance_hint?: "relevant" | "not_relevant" | "pending";
+  label?: "relevant" | "not_relevant" | "pending";
   campaign_name?: string;
   marketplace?: "wb" | "ozon";
 };
@@ -117,6 +117,12 @@ export type QueryTrendPoint = {
   impressions: number;
   clicks: number;
   spend: number;
+};
+
+export type MinusWordsApplyResult = {
+  applied: number;
+  failed: number;
+  saved_budget_estimate: string;
 };
 
 export async function telegramLogin(initData: string): Promise<AuthResponse> {
@@ -212,6 +218,14 @@ export async function listMinusWords(campaignId: number) {
   const { data } = await apiClient.get<Array<{ id: number; word_root: string; source_queries: string[] }>>(
     `/queries/minus-words/${campaignId}`
   );
+  return data;
+}
+
+export async function applyMinusWords(campaignId: number) {
+  if (isDemoMode()) {
+    return demoApi.applyMinusWords(campaignId);
+  }
+  const { data } = await apiClient.post<MinusWordsApplyResult>(`/queries/minus-words/${campaignId}/apply`);
   return data;
 }
 

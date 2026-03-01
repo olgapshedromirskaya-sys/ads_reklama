@@ -4,9 +4,11 @@ import { Download, RefreshCw, Search, X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { apiClient } from "@/api/client";
 import {
+  applyMinusWords,
   getQueryTrends,
   generateMinusWords,
   listCampaigns,
+  listMinusWords,
   listQueries,
   type QueryRow,
   updateQueryLabelsBulk
@@ -17,11 +19,41 @@ import { DEMO_MINUS_PHRASES, DEMO_MINUS_WORDS } from "@/demo/mockApi";
 
 type LabelValue = "relevant" | "not_relevant" | "pending";
 
+function resolveRowLabel(row: QueryRow): LabelValue {
+  return (row.label || row.relevance_hint || "pending") as LabelValue;
+}
+
 function rowClassName(row: QueryRow) {
-  const label = row.label || row.relevance_hint;
+  const label = resolveRowLabel(row);
   if (label === "relevant") return "bg-emerald-500/10";
   if (label === "not_relevant") return "bg-rose-500/10";
   return "bg-yellow-500/10";
+}
+
+function formatRub(amount: number) {
+  return `${Math.round(amount).toLocaleString("en-US")}₽`;
+}
+
+function parseRubAmount(value: string) {
+  const normalized = value.replace(/[^\d.,-]/g, "").replace(/,/g, "");
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function labelBadgeClass(label: LabelValue) {
+  if (label === "relevant") {
+    return "border-emerald-500/50 bg-emerald-500/15 text-emerald-700";
+  }
+  if (label === "not_relevant") {
+    return "border-rose-500/50 bg-rose-500/15 text-rose-700";
+  }
+  return "border-yellow-500/50 bg-yellow-500/20 text-yellow-800";
+}
+
+function labelTitle(label: LabelValue) {
+  if (label === "relevant") return "Релевантный";
+  if (label === "not_relevant") return "Нерелевантный";
+  return "На проверке";
 }
 
 export function QueriesPage() {
@@ -35,6 +67,7 @@ export function QueriesPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<Record<number, QueryRow>>({});
   const [minusWords, setMinusWords] = useState<string[] | null>(null);
+  const [applySummary, setApplySummary] = useState<{ applied: number; failed: number; savings: number } | null>(null);
   const [trendKeyword, setTrendKeyword] = useState("");
 
   const params = useMemo(
@@ -86,8 +119,9 @@ export function QueriesPage() {
     },
     onSuccess: (roots) => {
       queryClient.invalidateQueries({ queryKey: ["queries"] });
+      queryClient.invalidateQueries({ queryKey: ["queries-badge"] });
       if (roots.length) {
-        setMinusWords(demoMode ? buildDemoMinusPhraseList() : roots);
+        setMinusWords(demoMode ? [...DEMO_MINUS_WORDS] : roots);
       }
       setSelected({});
     }
@@ -110,7 +144,34 @@ export function QueriesPage() {
       }
       return [...roots];
     },
-    onSuccess: (roots) => setMinusWords(demoMode ? buildDemoMinusPhraseList() : roots)
+    onSuccess: (roots) => setMinusWords(demoMode ? [...DEMO_MINUS_WORDS] : roots)
+  });
+
+  const applyMinusWordsMutation = useMutation({
+    mutationFn: async (campaignIds: number[]) => {
+      const words = new Set<string>();
+      let applied = 0;
+      let failed = 0;
+      let savings = 0;
+
+      for (const campaign of campaignIds) {
+        const result = await applyMinusWords(campaign);
+        applied += result.applied;
+        failed += result.failed;
+        savings += parseRubAmount(result.saved_budget_estimate);
+        const campaignMinusWords = await listMinusWords(campaign);
+        campaignMinusWords.forEach((item) => words.add(item.word_root));
+      }
+
+      return { applied, failed, savings, words: [...words] };
+    },
+    onSuccess: (result) => {
+      setApplySummary({ applied: result.applied, failed: result.failed, savings: result.savings });
+      setMinusWords(demoMode ? [...DEMO_MINUS_WORDS] : result.words);
+      queryClient.invalidateQueries({ queryKey: ["queries"] });
+      queryClient.invalidateQueries({ queryKey: ["queries-badge"] });
+      setSelected({});
+    }
   });
 
   useEffect(() => {
@@ -144,9 +205,50 @@ export function QueriesPage() {
   const selectedRows = Object.values(selected);
   const rows = queriesQuery.data || [];
   const loading = campaignsQuery.isLoading || queriesQuery.isLoading;
+  const campaignIdsInScope = useMemo(() => {
+    if (campaignId) {
+      return [Number(campaignId)];
+    }
+    return [...new Set(rows.map((row) => row.campaign_id))];
+  }, [campaignId, rows]);
+  const allCampaignIds = useMemo(
+    () => [...new Set((campaignsQuery.data || []).map((campaign) => campaign.id))],
+    [campaignsQuery.data]
+  );
+  const querySummary = useMemo(
+    () =>
+      rows.reduce(
+        (acc, row) => {
+          const label = resolveRowLabel(row);
+          if (label === "relevant") {
+            acc.relevant += 1;
+            acc.relevantSpend += row.spend;
+          } else if (label === "not_relevant") {
+            acc.notRelevant += 1;
+            acc.notRelevantSpend += row.spend;
+          } else {
+            acc.pending += 1;
+            acc.pendingSpend += row.spend;
+          }
+          return acc;
+        },
+        {
+          relevant: 0,
+          pending: 0,
+          notRelevant: 0,
+          relevantSpend: 0,
+          pendingSpend: 0,
+          notRelevantSpend: 0
+        }
+      ),
+    [rows]
+  );
+  const defaultSavingsPerDay = querySummary.notRelevantSpend;
+  const savingsPerDay = applySummary?.savings || defaultSavingsPerDay;
 
   async function applyLabel(rowsToUpdate: QueryRow[], label: LabelValue) {
     if (!rowsToUpdate.length) return;
+    setApplySummary(null);
     bulkMutation.mutate({ rows: rowsToUpdate, label });
   }
 
@@ -163,12 +265,24 @@ export function QueriesPage() {
   }
 
   function selectAllIrrelevant() {
-    const candidates = rows.filter((row) => row.ctr < 1 && row.impressions > 300 && row.orders === 0);
+    const candidates = rows.filter((row) => resolveRowLabel(row) === "not_relevant");
     const next: Record<number, QueryRow> = {};
     candidates.forEach((row) => {
       next[row.id] = row;
     });
     setSelected(next);
+  }
+
+  function runAutoMinusPipeline() {
+    if (!campaignIdsInScope.length) return;
+    setApplySummary(null);
+    applyMinusWordsMutation.mutate(campaignIdsInScope);
+  }
+
+  function applyAllMinusWordsBulk() {
+    if (!allCampaignIds.length) return;
+    setApplySummary(null);
+    applyMinusWordsMutation.mutate(allCampaignIds);
   }
 
   async function exportXlsx() {
@@ -183,7 +297,7 @@ export function QueriesPage() {
             row.ctr.toFixed(2),
             row.spend.toFixed(2),
             row.orders,
-            row.label,
+            resolveRowLabel(row),
             csvEscape(row.campaign_name || ""),
             row.marketplace || ""
           ].join(",")
@@ -297,31 +411,49 @@ export function QueriesPage() {
           onClick={selectAllIrrelevant}
           className="rounded-md border border-slate-300/30 px-3 py-2 text-xs"
         >
-          Select all irrelevant
+          Выбрать все нерелевантные
         </button>
         <button
           onClick={() => applyLabel(selectedRows, "relevant")}
-          className="rounded-md bg-emerald-600 px-3 py-2 text-xs text-white"
+          className="rounded-md bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-50"
+          disabled={!selectedRows.length}
         >
           Mark relevant
         </button>
         <button
           onClick={() => applyLabel(selectedRows, "not_relevant")}
-          className="rounded-md bg-rose-600 px-3 py-2 text-xs text-white"
+          className="rounded-md bg-rose-600 px-3 py-2 text-xs text-white disabled:opacity-50"
+          disabled={!selectedRows.length}
         >
           Mark not relevant
         </button>
         <button
           onClick={() => applyLabel(selectedRows, "pending")}
-          className="rounded-md bg-yellow-500 px-3 py-2 text-xs text-black"
+          className="rounded-md bg-yellow-500 px-3 py-2 text-xs text-black disabled:opacity-50"
+          disabled={!selectedRows.length}
         >
           Mark pending
         </button>
         <button
           onClick={() => generateMinusMutation.mutate(selectedRows)}
-          className="rounded-md bg-[color:var(--tg-button-color)] px-3 py-2 text-xs text-white"
+          className="rounded-md bg-[color:var(--tg-button-color)] px-3 py-2 text-xs text-white disabled:opacity-50"
+          disabled={!selectedRows.length}
         >
           Generate minus-words
+        </button>
+        <button
+          onClick={runAutoMinusPipeline}
+          className="rounded-md bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+          disabled={!campaignIdsInScope.length || applyMinusWordsMutation.isPending}
+        >
+          Авто-минусовка
+        </button>
+        <button
+          onClick={applyAllMinusWordsBulk}
+          className="rounded-md border border-violet-500/60 px-3 py-2 text-xs font-semibold text-violet-700 disabled:opacity-50"
+          disabled={!allCampaignIds.length || applyMinusWordsMutation.isPending}
+        >
+          Применить все минус-слова
         </button>
         <button onClick={exportXlsx} className="rounded-md border border-slate-300/30 px-3 py-2 text-xs">
           <Download size={14} className="mr-1 inline" />
@@ -334,6 +466,35 @@ export function QueriesPage() {
           <RefreshCw size={14} className="mr-1 inline" />
           Refresh
         </button>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-3">
+        <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3">
+          <div className="text-[11px] text-emerald-700">Relevant</div>
+          <div className="text-lg font-semibold">{querySummary.relevant}</div>
+          <div className="text-xs text-[color:var(--tg-hint-color)]">{formatRub(querySummary.relevantSpend)}/день</div>
+        </div>
+        <div className="rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-3">
+          <div className="text-[11px] text-yellow-800">Pending</div>
+          <div className="text-lg font-semibold">{querySummary.pending}</div>
+          <div className="text-xs text-[color:var(--tg-hint-color)]">{formatRub(querySummary.pendingSpend)}/день</div>
+        </div>
+        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3">
+          <div className="text-[11px] text-rose-700">Not relevant</div>
+          <div className="text-lg font-semibold">{querySummary.notRelevant}</div>
+          <div className="text-xs text-[color:var(--tg-hint-color)]">{formatRub(querySummary.notRelevantSpend)}/день</div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-violet-500/40 bg-violet-500/10 p-3">
+        <div className="text-sm font-semibold">
+          {`Применение минус-слов сэкономит ~${formatRub(savingsPerDay)}/день (${formatRub(savingsPerDay * 30)}/месяц)`}
+        </div>
+        {applySummary && (
+          <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">
+            Применено: {applySummary.applied}, ошибок: {applySummary.failed}
+          </div>
+        )}
       </div>
 
       {demoMode && (
@@ -386,6 +547,7 @@ export function QueriesPage() {
           </thead>
           <tbody>
             {rows.map((row) => {
+              const label = resolveRowLabel(row);
               const cr = row.clicks > 0 ? (row.orders / row.clicks) * 100 : 0;
               return (
                 <tr key={row.id} className={rowClassName(row)}>
@@ -400,7 +562,11 @@ export function QueriesPage() {
                   <td className="px-2 py-2 text-center">{row.orders}</td>
                   <td className="px-2 py-2 text-center">{cr.toFixed(2)}%</td>
                   <td className="px-2 py-2 text-center">{row.cpo.toFixed(2)}</td>
-                  <td className="px-2 py-2 text-center">{row.label}</td>
+                  <td className="px-2 py-2 text-center">
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${labelBadgeClass(label)}`}>
+                      {labelTitle(label)}
+                    </span>
+                  </td>
                   <td className="px-2 py-2">
                     <div className="flex items-center gap-1">
                       <button

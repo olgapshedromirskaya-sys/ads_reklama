@@ -87,3 +87,39 @@ class WBApiClient:
 
     async def resume_campaign(self, campaign_id: str | int) -> Any:
         return await self._request("GET", "/adv/v0/start", params={"id": int(campaign_id)})
+
+    async def add_minus_phrases(self, campaign_id: str | int, phrases: Sequence[str]) -> Any:
+        cleaned_phrases = sorted({phrase.strip() for phrase in phrases if phrase and phrase.strip()})
+        if not cleaned_phrases:
+            return {"applied": 0}
+
+        payload_candidates = [
+            (
+                "/adv/v1/auto/minus-words",
+                {"advertId": int(campaign_id), "minusPhrases": cleaned_phrases},
+            ),
+            (
+                "/adv/v1/minus-words",
+                {"advertId": int(campaign_id), "phrases": cleaned_phrases},
+            ),
+            (
+                "/adv/v0/keywords/minus/add",
+                {"advertId": int(campaign_id), "keywords": cleaned_phrases},
+            ),
+        ]
+
+        last_error: MarketplaceAPIError | None = None
+        for endpoint, payload in payload_candidates:
+            try:
+                return await self._request("POST", endpoint, json=payload)
+            except MarketplaceAPIError as exc:
+                last_error = exc
+                # WB endpoint naming differs between API versions.
+                # Retry with fallback endpoint variants if one is absent.
+                if " 404" in str(exc):
+                    continue
+                raise
+
+        if last_error is not None:
+            raise last_error
+        return {"applied": len(cleaned_phrases)}

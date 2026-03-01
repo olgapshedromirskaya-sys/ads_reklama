@@ -5,15 +5,16 @@ from typing import Any
 
 import httpx
 from celery import shared_task
-from sqlalchemy import and_, func, select
+from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
-from app.models.entities import Alert, Campaign, KeywordPosition, MPAccount, QueryLabel, SearchQuery, User, WatchlistKeyword
+from app.models.entities import KeywordPosition, MPAccount, User, WatchlistKeyword
 from app.services.sync import (
     check_budget_rules,
     clear_old_alerts,
     daily_summary_by_user,
+    run_budget_protection_alerts_for_account,
     run_async,
     sync_all_accounts_campaigns,
     sync_all_campaign_stats,
@@ -53,31 +54,12 @@ def sync_search_queries_task() -> dict[str, Any]:
 def check_budget_rules_task() -> dict[str, Any]:
     with SessionLocal() as db:
         triggered = run_async(check_budget_rules(db))
-
-        # Alert for newly observed highly irrelevant queries.
-        suspicious_rows = db.execute(
-            select(Campaign.id, Campaign.name, MPAccount.user_id, func.count(SearchQuery.id))
-            .join(SearchQuery, SearchQuery.campaign_id == Campaign.id)
-            .join(MPAccount, MPAccount.id == Campaign.account_id)
-            .where(
-                and_(
-                    SearchQuery.date == date.today(),
-                    SearchQuery.ctr < 1.0,
-                    SearchQuery.impressions >= 500,
-                    SearchQuery.orders == 0,
-                )
-            )
-            .group_by(Campaign.id, Campaign.name, MPAccount.user_id)
-        ).all()
-
+        accounts = db.execute(select(MPAccount).where(MPAccount.is_active.is_(True))).scalars().all()
         created = 0
-        for campaign_id, campaign_name, user_id, count in suspicious_rows:
-            message = f"Detected {count} potentially irrelevant queries in campaign '{campaign_name}'."
-            db.add(Alert(user_id=user_id, campaign_id=campaign_id, type="irrelevant_queries", message=message))
-            created += 1
-        db.commit()
+        for account in accounts:
+            created += run_budget_protection_alerts_for_account(account, db)
         removed = clear_old_alerts(db, days=90)
-        return {"triggered_rules": triggered, "new_irrelevant_alerts": created, "removed_old_alerts": removed}
+        return {"triggered_rules": triggered, "budget_protection_alerts": created, "removed_old_alerts": removed}
 
 
 @shared_task(name="app.tasks.jobs.sync_keyword_positions_task")

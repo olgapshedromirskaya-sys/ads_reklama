@@ -111,13 +111,14 @@ const DAILY_SPEND_VALUES = [
   31289, 32738, 31967, 30638, 29319, 26699, 25194, 24693, 25910, 28065, 29709, 31697, 33110, 30945, 29903
 ];
 
-export const DEMO_MINUS_WORDS = ["мужские", "winter", "домашние", "кожаные", "детские"] as const;
+export const DEMO_MINUS_WORDS = ["мужские", "детские", "зимние", "б/у", "ремонт", "wholesale"] as const;
 export const DEMO_MINUS_PHRASES = [
   "кроссовки мужские 46",
-  "boots winter",
-  "тапочки домашние",
-  "сапоги кожаные",
-  "кроссовки детские"
+  "кроссовки детские светящиеся",
+  "кеды зимние",
+  "кроссовки б/у",
+  "ремонт кроссовок",
+  "wholesale sneakers lot"
 ] as const;
 
 function clone<T>(value: T): T {
@@ -240,32 +241,26 @@ type QuerySeed = {
 };
 
 const querySeeds: QuerySeed[] = [
-  { query: "кроссовки женские", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 48200, ctr: 4.3, spend: 7860, orders: 41 },
-  { query: "кроссовки на платформе", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 26700, ctr: 3.8, spend: 5240, orders: 27 },
-  { query: "белые кроссовки", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 21400, ctr: 3.5, spend: 4120, orders: 23 },
-  { query: "кроссовки nike женские", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 19100, ctr: 3.2, spend: 4780, orders: 19 },
-  { query: "обувь спортивная", label: "pending", campaignId: 101, marketplace: "wb", impressions: 34100, ctr: 1.9, spend: 3920, orders: 14 },
-  { query: "кеды женские", label: "pending", campaignId: 101, marketplace: "wb", impressions: 17300, ctr: 1.4, spend: 2360, orders: 9 },
-  { query: "обувь для фитнеса", label: "pending", campaignId: 103, marketplace: "ozon", impressions: 12800, ctr: 1.2, spend: 1880, orders: 5 },
-  { query: "sneakers women", label: "pending", campaignId: 103, marketplace: "ozon", impressions: 9100, ctr: 1.1, spend: 1420, orders: 4 },
-  { query: "кроссовки мужские 46", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 7800, ctr: 0.8, spend: 980, orders: 0 },
-  { query: "boots winter", label: "not_relevant", campaignId: 103, marketplace: "ozon", impressions: 5200, ctr: 0.6, spend: 760, orders: 0 },
-  { query: "сапоги кожаные", label: "not_relevant", campaignId: 102, marketplace: "wb", impressions: 6400, ctr: 0.7, spend: 910, orders: 1 },
-  { query: "тапочки домашние", label: "not_relevant", campaignId: 105, marketplace: "ozon", impressions: 5800, ctr: 0.5, spend: 640, orders: 0 },
-  { query: "кроссовки детские", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 9600, ctr: 0.9, spend: 1200, orders: 0 },
-  { query: "кроссовки белые женские", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 22400, ctr: 3.9, spend: 4380, orders: 24 },
-  { query: "кроссовки для бега", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 19800, ctr: 3.1, spend: 3690, orders: 17 },
-  { query: "легкие кроссовки", label: "pending", campaignId: 101, marketplace: "wb", impressions: 15600, ctr: 1.6, spend: 2140, orders: 8 },
-  { query: "кроссовки женские скидка", label: "pending", campaignId: 101, marketplace: "wb", impressions: 13200, ctr: 1.3, spend: 1960, orders: 6 },
-  { query: "платья летние", label: "relevant", campaignId: 102, marketplace: "wb", impressions: 30500, ctr: 4.1, spend: 6120, orders: 33 },
-  { query: "платье хлопок", label: "pending", campaignId: 102, marketplace: "wb", impressions: 14100, ctr: 1.5, spend: 2060, orders: 7 },
-  { query: "сарафан офисный", label: "pending", campaignId: 102, marketplace: "wb", impressions: 11400, ctr: 1.0, spend: 1450, orders: 3 },
-  { query: "джинсы slim fit", label: "relevant", campaignId: 104, marketplace: "wb", impressions: 18200, ctr: 2.8, spend: 2740, orders: 12 },
-  { query: "джинсы мужские slim", label: "not_relevant", campaignId: 104, marketplace: "wb", impressions: 8700, ctr: 0.7, spend: 910, orders: 0 },
-  { query: "футболки базовые", label: "relevant", campaignId: 105, marketplace: "ozon", impressions: 27600, ctr: 3.6, spend: 4980, orders: 29 },
-  { query: "футболка оверсайз", label: "pending", campaignId: 105, marketplace: "ozon", impressions: 15200, ctr: 1.8, spend: 2300, orders: 10 },
-  { query: "майка домашняя", label: "not_relevant", campaignId: 105, marketplace: "ozon", impressions: 4900, ctr: 0.6, spend: 520, orders: 0 },
-  { query: "базовые tshirt pack", label: "pending", campaignId: 105, marketplace: "ozon", impressions: 10200, ctr: 1.1, spend: 1320, orders: 4 }
+  { query: "кроссовки женские", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 48200, ctr: 4.8, spend: 6500, orders: 58 },
+  { query: "кроссовки белые женские", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 40300, ctr: 4.2, spend: 5800, orders: 51 },
+  { query: "кеды женские комфорт", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 36600, ctr: 3.9, spend: 5400, orders: 47 },
+  { query: "обувь для бега женская", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 38800, ctr: 4.1, spend: 6200, orders: 54 },
+  { query: "кроссовки летние легкие", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 35200, ctr: 3.8, spend: 5600, orders: 45 },
+  { query: "кроссовки сетка", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 33400, ctr: 3.7, spend: 5200, orders: 43 },
+  { query: "кроссовки повседневные", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 31800, ctr: 3.6, spend: 4900, orders: 40 },
+  { query: "кроссовки на платформе", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 34100, ctr: 3.9, spend: 5400, orders: 44 },
+  { query: "обувь спортивная", label: "pending", campaignId: 101, marketplace: "wb", impressions: 22600, ctr: 1.3, spend: 2200, orders: 11 },
+  { query: "sneakers women", label: "pending", campaignId: 101, marketplace: "wb", impressions: 17100, ctr: 1.2, spend: 1800, orders: 8 },
+  { query: "кеды casual", label: "pending", campaignId: 101, marketplace: "wb", impressions: 14900, ctr: 1.1, spend: 1600, orders: 7 },
+  { query: "кроссовки скидка", label: "pending", campaignId: 101, marketplace: "wb", impressions: 16400, ctr: 1.2, spend: 2100, orders: 9 },
+  { query: "обувь демисезон", label: "pending", campaignId: 101, marketplace: "wb", impressions: 15300, ctr: 1.0, spend: 1900, orders: 6 },
+  { query: "кроссовки мужские 46", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 9200, ctr: 0.2, spend: 2300, orders: 0 },
+  { query: "кроссовки детские светящиеся", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 8700, ctr: 0.2, spend: 1800, orders: 0 },
+  { query: "ботинки зимние мужские", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 8100, ctr: 0.2, spend: 1600, orders: 0 },
+  { query: "кроссовки б/у оригинал", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 6900, ctr: 0.2, spend: 1400, orders: 0 },
+  { query: "ремонт кроссовок", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 7400, ctr: 0.1, spend: 1700, orders: 0 },
+  { query: "wholesale sneakers lot", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 6700, ctr: 0.2, spend: 1500, orders: 0 },
+  { query: "зимние кеды детские", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 7100, ctr: 0.2, spend: 2000, orders: 0 }
 ];
 
 function buildQueryRows(): DemoQueryRow[] {
@@ -536,6 +531,14 @@ export async function updateQueryLabelsBulk(campaignId: number, updates: Array<{
 
 export async function generateMinusWords(_campaignId: number, _queries?: string[]) {
   return [...DEMO_MINUS_WORDS];
+}
+
+export async function applyMinusWords(_campaignId: number) {
+  return {
+    applied: DEMO_MINUS_WORDS.length,
+    failed: 0,
+    saved_budget_estimate: "12,300₽"
+  };
 }
 
 export async function listMinusWords(_campaignId: number) {
