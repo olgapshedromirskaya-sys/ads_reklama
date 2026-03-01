@@ -3,7 +3,7 @@ import re
 from collections import defaultdict
 from collections import namedtuple
 
-import pymorphy2
+import pymorphy3 as pymorphy2
 
 TOKEN_RE = re.compile(r"[a-zA-Zа-яА-ЯёЁ0-9]+")
 
