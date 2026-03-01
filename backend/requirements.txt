@@ -4,7 +4,7 @@ fastapi
 httpx
 openpyxl
 pandas
-psycopg[binary]
+psycopg2-binary
 pydantic-settings
 PyJWT
 pymorphy2
