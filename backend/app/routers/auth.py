@@ -75,6 +75,7 @@ def _serialize_auth_user(user: User) -> dict[str, Any]:
 
 @router.post("/telegram", response_model=AuthResponse)
 def telegram_login(payload: TelegramLoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
+    logger.info("Received /api/auth/telegram request init_data_length=%d", len(payload.init_data))
     init_data_user = _extract_init_data_user_payload(payload.init_data)
     telegram_id = int(init_data_user["id"])
     username = init_data_user.get("username")
@@ -107,8 +108,9 @@ def telegram_login(payload: TelegramLoginRequest, db: Session = Depends(get_db))
         "token_type": "bearer",
         "user": _serialize_auth_user(user),
     }
-    logger.info("Returning /auth/telegram response payload: %s", response_payload)
-    return AuthResponse.model_validate(response_payload)
+    auth_response = AuthResponse.model_validate(response_payload)
+    logger.info("Returning /api/auth/telegram response JSON: %s", auth_response.model_dump_json())
+    return auth_response
 
 
 @router.get("/me", response_model=TelegramUserOut)
