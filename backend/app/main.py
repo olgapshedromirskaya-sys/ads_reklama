@@ -6,6 +6,13 @@ from app.routers import alerts, auth, budget, campaigns, keywords, queries
 
 settings = get_settings()
 
+required_cors_origins = [
+    "https://ads-reklama-frontend.onrender.com",
+    "https://web.telegram.org",
+    "*",
+]
+allowed_origins = list(dict.fromkeys([*settings.allowed_origins, *required_cors_origins]))
+
 app = FastAPI(
     title=settings.project_name,
     version="1.0.0",
@@ -15,7 +22,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
