@@ -1,0 +1,17 @@
+alembic
+celery[redis]
+fastapi
+httpx
+openpyxl
+pandas
+psycopg[binary]
+pydantic-settings
+PyJWT
+pymorphy2
+pymorphy2-dicts-ru
+python-multipart
+python-telegram-bot>=20.0
+redis
+SQLAlchemy
+tenacity
+uvicorn[standard]

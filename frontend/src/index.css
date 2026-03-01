@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --tg-bg-color: #ffffff;
+  --tg-text-color: #111827;
+  --tg-hint-color: #6b7280;
+  --tg-link-color: #2563eb;
+  --tg-button-color: #3b82f6;
+  --tg-button-text-color: #ffffff;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background-color: var(--tg-bg-color);
+  color: var(--tg-text-color);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 4rem);
+}
