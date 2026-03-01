@@ -4,6 +4,7 @@ import { Download, RefreshCw, Search, X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { apiClient } from "@/api/client";
 import {
+  getQueryTrends,
   generateMinusWords,
   listCampaigns,
   listQueries,
@@ -11,6 +12,8 @@ import {
   updateQueryLabelsBulk
 } from "@/api/endpoints";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import { isDemoMode } from "@/demo/mode";
+import { DEMO_MINUS_PHRASES, DEMO_MINUS_WORDS } from "@/demo/mockApi";
 
 type LabelValue = "relevant" | "not_relevant" | "pending";
 
@@ -22,6 +25,7 @@ function rowClassName(row: QueryRow) {
 }
 
 export function QueriesPage() {
+  const demoMode = isDemoMode();
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState("");
   const [marketplace, setMarketplace] = useState<"" | "wb" | "ozon">("");
@@ -58,13 +62,7 @@ export function QueriesPage() {
 
   const trendQuery = useQuery({
     queryKey: ["query-trend", trendKeyword],
-    queryFn: async () => {
-      const { data } = await apiClient.get<Array<{ date: string; impressions: number; clicks: number; spend: number }>>(
-        "/queries/trends",
-        { params: { query: trendKeyword, days: 30 } }
-      );
-      return data;
-    },
+    queryFn: () => getQueryTrends(trendKeyword, 30),
     enabled: trendKeyword.length > 1
   });
 
@@ -89,7 +87,7 @@ export function QueriesPage() {
     onSuccess: (roots) => {
       queryClient.invalidateQueries({ queryKey: ["queries"] });
       if (roots.length) {
-        setMinusWords(roots);
+        setMinusWords(demoMode ? buildDemoMinusPhraseList() : roots);
       }
       setSelected({});
     }
@@ -97,6 +95,9 @@ export function QueriesPage() {
 
   const generateMinusMutation = useMutation({
     mutationFn: async (rows: QueryRow[]) => {
+      if (demoMode && rows.length === 0) {
+        return [...DEMO_MINUS_WORDS];
+      }
       const byCampaign = rows.reduce<Record<number, string[]>>((acc, row) => {
         acc[row.campaign_id] = acc[row.campaign_id] || [];
         acc[row.campaign_id].push(row.query);
@@ -109,7 +110,7 @@ export function QueriesPage() {
       }
       return [...roots];
     },
-    onSuccess: (roots) => setMinusWords(roots)
+    onSuccess: (roots) => setMinusWords(demoMode ? buildDemoMinusPhraseList() : roots)
   });
 
   useEffect(() => {
@@ -171,6 +172,33 @@ export function QueriesPage() {
   }
 
   async function exportXlsx() {
+    if (demoMode) {
+      const lines = [
+        "query,impressions,clicks,ctr,spend,orders,label,campaign,marketplace",
+        ...rows.map((row) =>
+          [
+            csvEscape(row.query),
+            row.impressions,
+            row.clicks,
+            row.ctr.toFixed(2),
+            row.spend.toFixed(2),
+            row.orders,
+            row.label,
+            csvEscape(row.campaign_name || ""),
+            row.marketplace || ""
+          ].join(",")
+        )
+      ];
+      const blob = new Blob([`\uFEFF${lines.join("\n")}`], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "queries_export_demo.csv";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
     const { data } = await apiClient.get("/queries/export.xlsx", {
       responseType: "blob",
       params: { campaign_id: campaignId || undefined }
@@ -308,6 +336,37 @@ export function QueriesPage() {
         </button>
       </div>
 
+      {demoMode && (
+        <div className="rounded-xl border border-yellow-400/50 bg-yellow-100/30 p-3">
+          <div className="text-sm font-semibold">Demo minus-words generator</div>
+          <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">Detected irrelevant words:</div>
+          <div className="mt-2 flex flex-wrap gap-1">
+            {DEMO_MINUS_WORDS.map((word) => (
+              <span
+                key={word}
+                className="rounded-full border border-rose-400/50 bg-rose-100/60 px-2 py-1 text-[11px] font-semibold text-rose-700"
+              >
+                {word}
+              </span>
+            ))}
+          </div>
+          <div className="mt-3 text-xs text-[color:var(--tg-hint-color)]">Generated minus-phrases (ready to copy):</div>
+          <textarea
+            readOnly
+            value={buildDemoMinusPhraseList().join("\n")}
+            className="mt-2 h-28 w-full rounded-md border border-yellow-400/50 bg-transparent p-2 text-xs"
+          />
+          <div className="mt-2">
+            <button
+              onClick={() => navigator.clipboard.writeText(buildDemoMinusPhraseList().join("\n"))}
+              className="rounded-md bg-yellow-500 px-3 py-2 text-xs font-semibold text-yellow-950"
+            >
+              Copy minus-phrases
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-slate-300/30">
         <table className="min-w-[980px] table-auto border-collapse text-xs">
           <thead>
@@ -423,6 +482,14 @@ export function QueriesPage() {
       )}
     </div>
   );
+}
+
+function buildDemoMinusPhraseList() {
+  return DEMO_MINUS_PHRASES.map((phrase) => `- ${phrase}`);
+}
+
+function csvEscape(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
 }
 
 function MinusWordsModal({

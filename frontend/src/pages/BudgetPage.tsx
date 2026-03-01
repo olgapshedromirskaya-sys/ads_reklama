@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createBudgetRule, listBudgetRules, listCampaigns, toggleBudgetRule } from "@/api/endpoints";
-import { apiClient } from "@/api/client";
+import { createBudgetRule, listBudgetRules, listCampaigns, runBudgetChecks, toggleBudgetRule } from "@/api/endpoints";
 import { LoadingScreen } from "@/components/LoadingScreen";
 
 const RULE_TYPES = [
@@ -39,10 +38,7 @@ export function BudgetPage() {
   });
 
   const checkMutation = useMutation({
-    mutationFn: async () => {
-      const { data } = await apiClient.post<{ triggered: number }>("/budget/check");
-      return data;
-    }
+    mutationFn: runBudgetChecks
   });
 
   if (campaignsQuery.isLoading || rulesQuery.isLoading) {

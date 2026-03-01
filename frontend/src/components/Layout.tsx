@@ -25,7 +25,15 @@ function shouldShowBack(pathname: string) {
   return pathname.startsWith("/campaigns/") && pathname !== "/campaigns";
 }
 
-export function Layout({ children }: { children: ReactNode }) {
+export function Layout({
+  children,
+  demoMode = false,
+  onExitDemo
+}: {
+  children: ReactNode;
+  demoMode?: boolean;
+  onExitDemo?: () => void;
+}) {
   const navigate = useNavigate();
   const location = useLocation();
   const backVisible = shouldShowBack(location.pathname);
@@ -50,6 +58,19 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="mx-auto min-h-screen max-w-3xl bg-[color:var(--tg-bg-color)] text-[color:var(--tg-text-color)] safe-bottom">
+      {demoMode && (
+        <div className="pointer-events-none fixed right-3 top-3 z-50 flex flex-col items-end gap-2">
+          <span className="pointer-events-auto rounded-full bg-yellow-300 px-3 py-1 text-[10px] font-extrabold tracking-wide text-yellow-900 shadow">
+            DEMO MODE
+          </span>
+          <button
+            onClick={onExitDemo}
+            className="pointer-events-auto rounded-md border border-yellow-400 bg-yellow-100 px-3 py-1.5 text-[11px] font-semibold text-yellow-900 shadow"
+          >
+            Подключить аккаунт WB/Ozon
+          </button>
+        </div>
+      )}
       <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-slate-300/30 bg-[color:var(--tg-bg-color)] px-4 py-3">
         {backVisible && (
           <button onClick={() => navigate(-1)} className="rounded-md p-1 text-[color:var(--tg-text-color)]">

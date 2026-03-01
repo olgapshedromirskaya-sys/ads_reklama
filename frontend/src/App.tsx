@@ -6,6 +6,7 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 import { telegramLogin } from "@/api/endpoints";
 import { useTelegramTheme } from "@/hooks/useTelegramTheme";
 import { useAuthStore } from "@/store/auth";
+import { removeDemoParamFromCurrentUrl, resolveLaunchContext, setDemoMode } from "@/demo/mode";
 import { AlertsPage } from "@/pages/AlertsPage";
 import { BudgetPage } from "@/pages/BudgetPage";
 import { CampaignDetailPage } from "@/pages/CampaignDetailPage";
@@ -20,6 +21,7 @@ function App() {
   const token = useAuthStore((state) => state.token);
   const setAuth = useAuthStore((state) => state.setAuth);
   const navigate = useNavigate();
+  const [demoMode, setDemoModeState] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
 
@@ -64,7 +66,21 @@ function App() {
     }
 
     async function bootstrapAuth() {
-      console.log("[TelegramAuth] Bootstrapping Telegram authorization flow");
+      const launchContext = resolveLaunchContext();
+      if (mounted) {
+        setDemoModeState(launchContext.demoMode);
+      }
+      setDemoMode(launchContext.demoMode);
+      console.log("[TelegramAuth] Bootstrapping app", {
+        demoMode: launchContext.demoMode,
+        initDataPresent: Boolean(launchContext.initData)
+      });
+
+      if (launchContext.demoMode) {
+        setBootstrapError(null);
+        setBootstrapping(false);
+        return;
+      }
 
       if (token) {
         console.log("[TelegramAuth] Existing token found in auth store, skipping bootstrap auth");
@@ -73,15 +89,13 @@ function App() {
       }
 
       setBootstrapping(true);
-      const webAppInitData = window.Telegram?.WebApp?.initData || "";
-      const queryParams = new URLSearchParams(window.location.search);
-      const initData = webAppInitData || queryParams.get("initData") || queryParams.get("tgWebAppData") || "";
+      const initData = launchContext.initData;
 
       console.log("[TelegramAuth] Telegram WebApp available:", Boolean(window.Telegram?.WebApp));
       console.log("[TelegramAuth] initData detected:", Boolean(initData), "length:", initData.length);
 
       if (!initData) {
-        console.error("[TelegramAuth] initData missing; app opened outside Telegram WebApp context");
+        console.error("[TelegramAuth] initData missing; unable to continue regular auth flow");
         setBootstrapping(false);
         setBootstrapError("Open this app from Telegram to authorize.");
         return;
@@ -89,9 +103,6 @@ function App() {
 
       try {
         console.log("[TelegramAuth] Sending initData to POST /api/auth/telegram");
-        console.log("[DEBUG] API base URL:", import.meta.env.VITE_API_BASE_URL);
-        console.log("[DEBUG] Will call:", (import.meta.env.VITE_API_BASE_URL || "/api") + "/auth/telegram");
-        alert("API URL: " + (import.meta.env.VITE_API_BASE_URL || "/api"));
         const auth = await telegramLogin(initData);
         if (!auth?.user?.id) {
           throw new Error("Invalid auth response");
@@ -127,6 +138,12 @@ function App() {
     };
   }, [navigate, token, setAuth]);
 
+  function handleExitDemoMode() {
+    setDemoMode(false);
+    setDemoModeState(false);
+    window.location.href = removeDemoParamFromCurrentUrl();
+  }
+
   if (bootstrapping) {
     return <LoadingScreen text="Authorizing..." fullscreen />;
   }
@@ -143,7 +160,7 @@ function App() {
   }
 
   return (
-    <Layout>
+    <Layout demoMode={demoMode} onExitDemo={handleExitDemoMode}>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
