@@ -54,6 +54,9 @@ function App() {
       }
 
       if (error instanceof Error) {
+        if (error.message === "Invalid auth response") {
+          return "Failed to authenticate Telegram session: backend returned an invalid user payload.";
+        }
         return `Failed to authenticate Telegram session: ${error.message}`;
       }
 
@@ -87,6 +90,9 @@ function App() {
       try {
         console.log("[TelegramAuth] Sending initData to POST /api/auth/telegram");
         const auth = await telegramLogin(initData);
+        if (!auth?.user?.id) {
+          throw new Error("Invalid auth response");
+        }
         if (!mounted) {
           return;
         }
