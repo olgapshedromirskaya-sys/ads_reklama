@@ -5,7 +5,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_scope_user_id, require_admin_or_director
 from app.models.entities import Campaign, CampaignStat, MPAccount, Marketplace, QueryLabel, QueryLabelStatus, SearchQuery, User
 from app.schemas.campaigns import (
     CampaignAutoMinusToggleOut,
@@ -124,10 +124,11 @@ def list_campaigns(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CampaignOut]:
+    scope_user_id = get_scope_user_id(current_user)
     query = (
         select(Campaign)
         .join(MPAccount, Campaign.account_id == MPAccount.id)
-        .where(MPAccount.user_id == current_user.id)
+        .where(MPAccount.user_id == scope_user_id)
         .options(joinedload(Campaign.account))
         .order_by(Campaign.updated_at.desc())
     )
@@ -136,7 +137,7 @@ def list_campaigns(
     if status_filter:
         query = query.where(Campaign.status == status_filter)
     campaigns = db.execute(query).scalars().all()
-    metrics_map = _collect_campaign_metrics(db, current_user.id, days=days)
+    metrics_map = _collect_campaign_metrics(db, scope_user_id, days=days)
 
     result: list[CampaignOut] = []
     for campaign in campaigns:
@@ -157,6 +158,35 @@ def _get_campaign_for_user(db: Session, user_id: int, campaign_id: int) -> Campa
     return campaign
 
 
+def _resolve_dashboard_period(period: str, date_from: date | None, date_to: date | None) -> tuple[date, date]:
+    today = date.today()
+    if period == "day":
+        return today, today
+    if period == "month":
+        return today.replace(day=1), today
+    if period == "custom":
+        if date_from is None or date_to is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Для custom периода укажите date_from и date_to",
+            )
+        if date_from > date_to:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="date_from не может быть больше date_to",
+            )
+        if (date_to - date_from).days > 180:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Диапазон периода не должен превышать 180 дней",
+            )
+        return date_from, date_to
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="period должен быть одним из: day, month, custom",
+    )
+
+
 @router.get("/{campaign_id}", response_model=CampaignOut)
 def campaign_detail(
     campaign_id: int,
@@ -164,8 +194,9 @@ def campaign_detail(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CampaignOut:
-    campaign = _get_campaign_for_user(db, current_user.id, campaign_id)
-    metrics_map = _collect_campaign_metrics(db, current_user.id, days=days)
+    scope_user_id = get_scope_user_id(current_user)
+    campaign = _get_campaign_for_user(db, scope_user_id, campaign_id)
+    metrics_map = _collect_campaign_metrics(db, scope_user_id, days=days)
     metrics, mp = metrics_map.get(campaign.id, (DashboardMetricsOut(), campaign.account.marketplace if campaign.account else None))
     return _campaign_to_out(campaign, metrics, mp)
 
@@ -177,7 +208,8 @@ def campaign_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[CampaignStatOut]:
-    campaign = _get_campaign_for_user(db, current_user.id, campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    campaign = _get_campaign_for_user(db, scope_user_id, campaign_id)
     date_from = date.today() - timedelta(days=days - 1)
     stats = db.execute(
         select(CampaignStat)
@@ -205,10 +237,11 @@ def campaign_stats(
 @router.post("/{campaign_id}/pause")
 def pause_campaign(
     campaign_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    campaign = _get_campaign_for_user(db, current_user.id, campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    campaign = _get_campaign_for_user(db, scope_user_id, campaign_id)
     run_async(pause_or_resume_campaign(campaign, pause=True))
     campaign.status = "paused"
     db.commit()
@@ -218,10 +251,11 @@ def pause_campaign(
 @router.post("/{campaign_id}/resume")
 def resume_campaign(
     campaign_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    campaign = _get_campaign_for_user(db, current_user.id, campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    campaign = _get_campaign_for_user(db, scope_user_id, campaign_id)
     run_async(pause_or_resume_campaign(campaign, pause=False))
     campaign.status = "active"
     db.commit()
@@ -232,10 +266,11 @@ def resume_campaign(
 def toggle_campaign_auto_minus(
     campaign_id: int,
     payload: CampaignAutoMinusToggleRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> CampaignAutoMinusToggleOut:
-    campaign = _get_campaign_for_user(db, current_user.id, campaign_id)
+    scope_user_id = get_scope_user_id(current_user)
+    campaign = _get_campaign_for_user(db, scope_user_id, campaign_id)
     campaign.auto_minus_enabled = payload.enabled
     campaign.updated_at = datetime.now(UTC)
     db.commit()
@@ -243,11 +278,22 @@ def toggle_campaign_auto_minus(
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummaryOut)
-def dashboard_summary(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> DashboardSummaryOut:
+def dashboard_summary(
+    marketplace: Marketplace | None = Query(default=None),
+    period: str = Query(default="month"),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DashboardSummaryOut:
+    scope_user_id = get_scope_user_id(current_user)
     today = date.today()
     week_start = today - timedelta(days=6)
     month_start = today.replace(day=1)
-    thirty_days_start = today - timedelta(days=29)
+    range_from, range_to = _resolve_dashboard_period(period, date_from, date_to)
+    account_filters = [MPAccount.user_id == scope_user_id]
+    if marketplace:
+        account_filters.append(MPAccount.marketplace == marketplace)
 
     base_stats = (
         select(
@@ -259,41 +305,51 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
         )
         .join(Campaign, Campaign.id == CampaignStat.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
-        .where(MPAccount.user_id == current_user.id)
+        .where(*account_filters)
     )
 
-    _, _, spend_today, orders_today, revenue_today = db.execute(base_stats.where(CampaignStat.date == today)).one()
+    _, _, spend_today, _, _ = db.execute(base_stats.where(CampaignStat.date == today)).one()
     _, _, spend_week, _, _ = db.execute(base_stats.where(CampaignStat.date >= week_start)).one()
     _, _, spend_month, _, _ = db.execute(base_stats.where(CampaignStat.date >= month_start)).one()
     impressions_total, clicks_total, spend_total, orders_total, revenue_total = db.execute(
-        base_stats.where(CampaignStat.date >= thirty_days_start)
+        base_stats.where(CampaignStat.date >= range_from, CampaignStat.date <= range_to)
     ).one()
 
-    wb_spend = db.execute(
-        select(func.coalesce(func.sum(CampaignStat.spend), 0))
-        .join(Campaign, Campaign.id == CampaignStat.campaign_id)
-        .join(MPAccount, MPAccount.id == Campaign.account_id)
-        .where(
-            MPAccount.user_id == current_user.id,
-            MPAccount.marketplace == Marketplace.WB,
-            CampaignStat.date >= month_start,
-        )
-    ).scalar_one()
-    ozon_spend = db.execute(
-        select(func.coalesce(func.sum(CampaignStat.spend), 0))
-        .join(Campaign, Campaign.id == CampaignStat.campaign_id)
-        .join(MPAccount, MPAccount.id == Campaign.account_id)
-        .where(
-            MPAccount.user_id == current_user.id,
-            MPAccount.marketplace == Marketplace.OZON,
-            CampaignStat.date >= month_start,
-        )
-    ).scalar_one()
+    if marketplace == Marketplace.WB:
+        wb_spend = float(spend_total or 0.0)
+        ozon_spend = 0.0
+    elif marketplace == Marketplace.OZON:
+        wb_spend = 0.0
+        ozon_spend = float(spend_total or 0.0)
+    else:
+        wb_spend = db.execute(
+            select(func.coalesce(func.sum(CampaignStat.spend), 0))
+            .join(Campaign, Campaign.id == CampaignStat.campaign_id)
+            .join(MPAccount, MPAccount.id == Campaign.account_id)
+            .where(
+                MPAccount.user_id == scope_user_id,
+                MPAccount.marketplace == Marketplace.WB,
+                CampaignStat.date >= range_from,
+                CampaignStat.date <= range_to,
+            )
+        ).scalar_one()
+        ozon_spend = db.execute(
+            select(func.coalesce(func.sum(CampaignStat.spend), 0))
+            .join(Campaign, Campaign.id == CampaignStat.campaign_id)
+            .join(MPAccount, MPAccount.id == Campaign.account_id)
+            .where(
+                MPAccount.user_id == scope_user_id,
+                MPAccount.marketplace == Marketplace.OZON,
+                CampaignStat.date >= range_from,
+                CampaignStat.date <= range_to,
+            )
+        ).scalar_one()
 
     avg_drr = _calc_rate(float(spend_total) * 100, float(revenue_total))
-    last_synced_at = db.execute(
-        select(func.max(MPAccount.last_synced_at)).where(MPAccount.user_id == current_user.id)
-    ).scalar_one()
+    sync_filters = [MPAccount.user_id == scope_user_id]
+    if marketplace:
+        sync_filters.append(MPAccount.marketplace == marketplace)
+    last_synced_at = db.execute(select(func.max(MPAccount.last_synced_at)).where(*sync_filters)).scalar_one()
 
     trend_rows = db.execute(
         select(
@@ -305,7 +361,7 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
         )
         .join(Campaign, Campaign.id == CampaignStat.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
-        .where(MPAccount.user_id == current_user.id, CampaignStat.date >= thirty_days_start)
+        .where(*account_filters, CampaignStat.date >= range_from, CampaignStat.date <= range_to)
         .group_by(CampaignStat.date)
         .order_by(CampaignStat.date.asc())
     ).all()
@@ -330,7 +386,7 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
         )
         .join(Campaign, Campaign.id == CampaignStat.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
-        .where(MPAccount.user_id == current_user.id, CampaignStat.date >= thirty_days_start)
+        .where(*account_filters, CampaignStat.date >= range_from, CampaignStat.date <= range_to)
         .group_by(Campaign.id)
     ).all()
     high_drr_campaigns = 0
@@ -347,7 +403,7 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
         select(func.max(SearchQuery.date))
         .join(Campaign, Campaign.id == SearchQuery.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
-        .where(MPAccount.user_id == current_user.id)
+        .where(*account_filters)
     ).scalar_one_or_none()
 
     zero_sales_queries = 0
@@ -364,7 +420,7 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
             )
             .join(Campaign, Campaign.id == SearchQuery.campaign_id)
             .join(MPAccount, MPAccount.id == Campaign.account_id)
-            .where(MPAccount.user_id == current_user.id, SearchQuery.date == latest_query_date)
+            .where(*account_filters, SearchQuery.date == latest_query_date)
             .group_by(SearchQuery.campaign_id, SearchQuery.query)
         ).all()
         for _, _, orders, spend in latest_query_rows:
@@ -390,7 +446,7 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
                 ),
             )
             .where(
-                MPAccount.user_id == current_user.id,
+                *account_filters,
                 SearchQuery.date == latest_query_date,
                 QueryLabel.label == QueryLabelStatus.NOT_RELEVANT,
             )
@@ -409,7 +465,7 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
         spend_today=float(spend_today),
         spend_week=float(spend_week),
         spend_month=float(spend_month),
-        total_orders=int(orders_today or 0),
+        total_orders=int(orders_total or 0),
         avg_drr=avg_drr,
         wb_spend=float(wb_spend),
         ozon_spend=float(ozon_spend),

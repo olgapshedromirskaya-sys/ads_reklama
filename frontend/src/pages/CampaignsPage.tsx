@@ -2,13 +2,17 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { listCampaigns, pauseCampaign, resumeCampaign } from "@/api/endpoints";
+import { canAccessExtendedFeatures } from "@/auth/roles";
 import { crColorClass, ctrColorClass, drrColorClass, formatCurrency, formatInteger, formatPercent, marketplaceLabel } from "@/components/metricUtils";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { isDemoMode } from "@/demo/mode";
+import { useAuthStore } from "@/store/auth";
 
 export function CampaignsPage() {
   const navigate = useNavigate();
   const demoMode = isDemoMode();
+  const user = useAuthStore((state) => state.user);
+  const extendedAccess = canAccessExtendedFeatures(user);
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("all");
   const { data, isLoading, isError } = useQuery({
@@ -114,20 +118,24 @@ export function CampaignsPage() {
                 <td className="px-2 py-2 text-center">{formatStatus(campaign.status)}</td>
                 <td className="px-2 py-2">
                   <div className="flex items-center justify-center gap-1">
-                    <button
-                      onClick={() => pauseMutation.mutate(campaign.id)}
-                      className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
-                      disabled={demoMode && campaign.status === "paused"}
-                    >
-                      Поставить на паузу
-                    </button>
-                    <button
-                      onClick={() => resumeMutation.mutate(campaign.id)}
-                      className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
-                      disabled={demoMode && campaign.status === "active"}
-                    >
-                      Возобновить
-                    </button>
+                    {extendedAccess && (
+                      <>
+                        <button
+                          onClick={() => pauseMutation.mutate(campaign.id)}
+                          className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
+                          disabled={demoMode && campaign.status === "paused"}
+                        >
+                          Поставить на паузу
+                        </button>
+                        <button
+                          onClick={() => resumeMutation.mutate(campaign.id)}
+                          className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
+                          disabled={demoMode && campaign.status === "active"}
+                        >
+                          Возобновить
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => navigate(`/campaigns/${campaign.id}`)}
                       className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"

@@ -13,6 +13,7 @@ from app.models.entities import (
     QueryLabelStatus,
     SearchQuery,
     User,
+    UserRole,
     WatchlistKeyword,
 )
 
@@ -31,5 +32,6 @@ __all__ = [
     "QueryLabelStatus",
     "SearchQuery",
     "User",
+    "UserRole",
     "WatchlistKeyword",
 ]

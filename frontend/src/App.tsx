@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { telegramLogin } from "@/api/endpoints";
+import { canAccessExtendedFeatures } from "@/auth/roles";
 import { useTelegramTheme } from "@/hooks/useTelegramTheme";
 import { useAuthStore } from "@/store/auth";
 import { removeDemoParamFromCurrentUrl, resolveLaunchContext, setDemoMode } from "@/demo/mode";
@@ -19,6 +20,7 @@ import { SettingsPage } from "@/pages/SettingsPage";
 function App() {
   useTelegramTheme();
   const token = useAuthStore((state) => state.token);
+  const user = useAuthStore((state) => state.user);
   const setAuth = useAuthStore((state) => state.setAuth);
   const navigate = useNavigate();
   const [demoMode, setDemoModeState] = useState(false);
@@ -144,6 +146,8 @@ function App() {
     window.location.href = removeDemoParamFromCurrentUrl();
   }
 
+  const extendedAccess = canAccessExtendedFeatures(user);
+
   if (bootstrapping) {
     return <LoadingScreen text="Авторизация..." fullscreen />;
   }
@@ -166,11 +170,11 @@ function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/campaigns" element={<CampaignsPage />} />
         <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
-        <Route path="/queries" element={<QueriesPage />} />
-        <Route path="/keywords" element={<KeywordsPage />} />
-        <Route path="/budget" element={<BudgetPage />} />
+        <Route path="/queries" element={extendedAccess ? <QueriesPage /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/keywords" element={extendedAccess ? <KeywordsPage /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/budget" element={extendedAccess ? <BudgetPage /> : <Navigate to="/dashboard" replace />} />
         <Route path="/alerts" element={<AlertsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings" element={extendedAccess ? <SettingsPage /> : <Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Layout>

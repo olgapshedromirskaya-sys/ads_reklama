@@ -1,5 +1,6 @@
 type Marketplace = "wb" | "ozon";
 type QueryLabel = "relevant" | "not_relevant" | "pending";
+type UserRole = "director" | "admin" | "manager";
 
 export type DemoCampaign = {
   id: number;
@@ -73,6 +74,13 @@ export type DemoDashboardSummary = {
   };
 };
 
+export type DemoDashboardSummaryParams = {
+  marketplace?: Marketplace;
+  period?: "day" | "month" | "custom";
+  date_from?: string;
+  date_to?: string;
+};
+
 export type DemoQueryRow = {
   id: number;
   campaign_id: number;
@@ -136,6 +144,15 @@ export type DemoAccount = {
   is_active: boolean;
   needs_reconnection: boolean;
   last_synced_at: string;
+  created_at: string;
+};
+
+export type DemoTeamMember = {
+  id: number;
+  telegram_id: number;
+  username?: string | null;
+  role: UserRole;
+  owner_id?: number | null;
   created_at: string;
 };
 
@@ -213,8 +230,36 @@ function getNowIso() {
   return new Date().toISOString();
 }
 
-function sumLast<T>(rows: T[], count: number, selector: (row: T) => number) {
-  return rows.slice(Math.max(0, rows.length - count)).reduce((acc, row) => acc + selector(row), 0);
+function parseIsoDate(value?: string) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function toIsoDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function firstDayOfCurrentMonth() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+function resolveSummaryRange(params?: DemoDashboardSummaryParams): { from: string; to: string } {
+  const period = params?.period || "month";
+  const today = new Date();
+  const todayIso = toIsoDate(today);
+  if (period === "day") {
+    return { from: todayIso, to: todayIso };
+  }
+  if (period === "custom") {
+    const from = parseIsoDate(params?.date_from);
+    const to = parseIsoDate(params?.date_to);
+    if (from && to && from <= to) {
+      return { from: toIsoDate(from), to: toIsoDate(to) };
+    }
+  }
+  return { from: toIsoDate(firstDayOfCurrentMonth()), to: todayIso };
 }
 
 function hashText(value: string) {
@@ -420,6 +465,25 @@ let accounts: DemoAccount[] = [
   }
 ];
 
+let teamMembers: DemoTeamMember[] = [
+  {
+    id: 1,
+    telegram_id: 100200300,
+    username: "admin_demo",
+    role: "admin",
+    owner_id: 1,
+    created_at: isoDateDaysAgo(30)
+  },
+  {
+    id: 2,
+    telegram_id: 100200301,
+    username: "manager_demo",
+    role: "manager",
+    owner_id: 1,
+    created_at: isoDateDaysAgo(12)
+  }
+];
+
 let budgetRules: DemoBudgetRule[] = [
   { id: 1, campaign_id: 103, rule_type: "drr", threshold: 35, action: "pause_campaign", is_active: true },
   { id: 2, campaign_id: 101, rule_type: "daily_budget", threshold: 16000, action: "alert", is_active: true }
@@ -431,6 +495,7 @@ let watchlist: DemoWatchlistItem[] = [
 ];
 
 let nextAccountId = 3;
+let nextTeamMemberId = 3;
 let nextRuleId = 3;
 let nextWatchlistId = 3;
 const watchlistPositions = new Map<number, DemoWatchlistPosition[]>();
@@ -570,49 +635,84 @@ export function getDemoDailySpend() {
   return clone(demoDailySpend);
 }
 
-export function getDemoDashboardSummary(): DemoDashboardSummary {
-  const trend = demoDailySpend.map((row, index) => {
-    const impressions = Math.round(38000 + Math.sin(index / 4.2) * 5200 + index * 140);
-    const clicks = Math.round(impressions * (0.028 + (index % 5) * 0.001));
-    const orders = Math.round(clicks * (0.028 + (index % 4) * 0.002));
-    return {
-      date: row.date,
-      impressions,
-      clicks,
-      orders,
-      spend: row.spend
-    };
-  });
+export function getDemoDashboardSummary(params?: DemoDashboardSummaryParams): DemoDashboardSummary {
+  const selectedMarketplace = params?.marketplace;
+  const { from, to } = resolveSummaryRange(params);
+  const spendShare = selectedMarketplace === "wb" ? 0.73 : selectedMarketplace === "ozon" ? 0.27 : 1;
+  const ctrShift = selectedMarketplace === "wb" ? 0.2 : selectedMarketplace === "ozon" ? -0.25 : 0;
+
+  const trend = demoDailySpend
+    .map((row, index) => {
+      const impressions = Math.max(400, Math.round((38000 + Math.sin(index / 4.2) * 5200 + index * 140) * spendShare));
+      const clicks = Math.max(1, Math.round(impressions * (0.028 + (index % 5) * 0.001 + ctrShift / 100)));
+      const orders = Math.max(0, Math.round(clicks * (0.028 + (index % 4) * 0.002)));
+      return {
+        date: row.date,
+        impressions,
+        clicks,
+        orders,
+        spend: Math.round(row.spend * spendShare)
+      };
+    })
+    .filter((row) => row.date >= from && row.date <= to);
+
+  const totals = trend.reduce(
+    (acc, row) => {
+      acc.impressions += row.impressions;
+      acc.clicks += row.clicks;
+      acc.orders += row.orders;
+      acc.spend += row.spend;
+      return acc;
+    },
+    { impressions: 0, clicks: 0, orders: 0, spend: 0 }
+  );
+  const avgOrderValue = selectedMarketplace === "ozon" ? 4700 : 5200;
+  const revenue = Math.round(totals.orders * avgOrderValue);
+  const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
+  const cpc = totals.clicks > 0 ? totals.spend / totals.clicks : 0;
+  const cr = totals.clicks > 0 ? (totals.orders / totals.clicks) * 100 : 0;
+  const drr = revenue > 0 ? (totals.spend / revenue) * 100 : 0;
+
+  const spendToday = trend[trend.length - 1]?.spend ?? 0;
+  const spendWeek = trend.slice(-7).reduce((acc, row) => acc + row.spend, 0);
+  const spendMonth = totals.spend;
+
+  const wbSpend = selectedMarketplace === "ozon" ? 0 : Math.round(totals.spend * (selectedMarketplace ? 1 : 0.73));
+  const ozonSpend = selectedMarketplace === "wb" ? 0 : Math.round(totals.spend * (selectedMarketplace ? 1 : 0.27));
+
+  const irrelevantBase = Math.round(12300 * spendShare);
+  const irrelevantCount = Math.max(1, Math.round(19 * spendShare));
+
   return {
-    spend_today: demoDailySpend[demoDailySpend.length - 1]?.spend ?? 0,
-    spend_week: sumLast(demoDailySpend, 7, (row) => row.spend),
-    spend_month: 847_320,
-    total_orders: 1_247,
-    avg_drr: 13.6,
-    wb_spend: 623_100,
-    ozon_spend: 224_220,
+    spend_today: spendToday,
+    spend_week: spendWeek,
+    spend_month: spendMonth,
+    total_orders: totals.orders,
+    avg_drr: Number(drr.toFixed(2)),
+    wb_spend: wbSpend,
+    ozon_spend: ozonSpend,
     last_synced_at: getNowIso(),
     totals: {
-      impressions: 1_247_000,
-      clicks: 38_450,
-      ctr: 3.1,
-      cpc: 22,
-      orders: 1_247,
-      cr: 3.2,
-      revenue: 6_235_000,
-      drr: 13.6,
-      spend: 847_320
+      impressions: totals.impressions,
+      clicks: totals.clicks,
+      ctr: Number(ctr.toFixed(2)),
+      cpc: Number(cpc.toFixed(2)),
+      orders: totals.orders,
+      cr: Number(cr.toFixed(2)),
+      revenue,
+      drr: Number(drr.toFixed(2)),
+      spend: totals.spend
     },
     trend,
     diagnostics: [
-      "❌ 5 кампаний с ДРР > 35%",
-      "❌ 12 ключей с 0 продажами сливают 8,400₽/день",
-      "❌ CTR ниже 1% в 3 кампаниях — проблема с карточкой"
+      `❌ ${selectedMarketplace === "ozon" ? 2 : 3} кампаний с ДРР > 35%`,
+      `❌ ${Math.max(2, Math.round(12 * spendShare))} ключей с 0 продажами сливают ${formatRub(irrelevantBase)}/день`,
+      `❌ CTR ниже 1% в ${selectedMarketplace === "ozon" ? 2 : 1} кампаниях — проблема с карточкой`
     ],
     irrelevant_alert: {
-      count: 19,
-      wasted_per_day: 12300,
-      wasted_per_month: 369000
+      count: irrelevantCount,
+      wasted_per_day: irrelevantBase,
+      wasted_per_month: irrelevantBase * 30
     }
   };
 }
@@ -786,6 +886,34 @@ export async function markAlertsRead(alertIds: number[]) {
 
 export async function listAccounts() {
   return clone(accounts);
+}
+
+export async function listTeamMembers() {
+  return clone(teamMembers);
+}
+
+export async function addTeamMember(payload: {
+  telegram_id: number;
+  username?: string;
+  role: "admin" | "manager";
+}) {
+  const member: DemoTeamMember = {
+    id: nextTeamMemberId,
+    telegram_id: payload.telegram_id,
+    username: payload.username || null,
+    role: payload.role,
+    owner_id: 1,
+    created_at: getNowIso()
+  };
+  nextTeamMemberId += 1;
+  teamMembers = [member, ...teamMembers.filter((item) => item.telegram_id !== payload.telegram_id)];
+  return clone(member);
+}
+
+export async function removeTeamMember(memberId: number) {
+  const before = teamMembers.length;
+  teamMembers = teamMembers.filter((item) => item.id !== memberId);
+  return { removed: before !== teamMembers.length ? 1 : 0 };
 }
 
 export async function connectAccount(payload: {

@@ -1,14 +1,18 @@
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from app.core.config import get_settings
 from bot.handlers.commands import (
+    add_employee_command,
     alerts_command,
     campaigns_command,
     dashboard_command,
     pause_command,
+    remove_employee_command,
     resume_command,
     start_command,
     summary_command,
+    team_command,
+    text_menu_handler,
 )
 
 
@@ -23,6 +27,10 @@ def build_application() -> Application:
     application.add_handler(CommandHandler("campaigns", campaigns_command))
     application.add_handler(CommandHandler("pause", pause_command))
     application.add_handler(CommandHandler("resume", resume_command))
+    application.add_handler(CommandHandler("team", team_command))
+    application.add_handler(CommandHandler("add_employee", add_employee_command))
+    application.add_handler(CommandHandler("remove_employee", remove_employee_command))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_menu_handler))
     return application
 
 

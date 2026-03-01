@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_scope_user_id, require_admin_or_director
 from app.models.entities import KeywordPosition, MPAccount, User, WatchlistKeyword
 from app.schemas.keywords import KeywordPositionOut, WatchlistKeywordCreate, WatchlistKeywordOut
 
@@ -13,11 +13,15 @@ router = APIRouter(prefix="/keywords", tags=["keywords"])
 
 
 @router.get("/watchlist", response_model=list[WatchlistKeywordOut])
-def list_watchlist(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[WatchlistKeyword]:
+def list_watchlist(
+    current_user: User = Depends(require_admin_or_director),
+    db: Session = Depends(get_db),
+) -> list[WatchlistKeyword]:
+    scope_user_id = get_scope_user_id(current_user)
     return db.execute(
         select(WatchlistKeyword)
         .join(MPAccount, MPAccount.id == WatchlistKeyword.account_id)
-        .where(MPAccount.user_id == current_user.id)
+        .where(MPAccount.user_id == scope_user_id)
         .order_by(WatchlistKeyword.id.desc())
     ).scalars().all()
 
@@ -25,11 +29,12 @@ def list_watchlist(current_user: User = Depends(get_current_user), db: Session =
 @router.post("/watchlist", response_model=WatchlistKeywordOut)
 def create_watchlist(
     payload: WatchlistKeywordCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> WatchlistKeyword:
+    scope_user_id = get_scope_user_id(current_user)
     account = db.execute(
-        select(MPAccount).where(MPAccount.id == payload.account_id, MPAccount.user_id == current_user.id)
+        select(MPAccount).where(MPAccount.id == payload.account_id, MPAccount.user_id == scope_user_id)
     ).scalar_one_or_none()
     if account is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
@@ -48,13 +53,14 @@ def create_watchlist(
 @router.delete("/watchlist/{watchlist_id}")
 def delete_watchlist(
     watchlist_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
+    scope_user_id = get_scope_user_id(current_user)
     watchlist = db.execute(
         select(WatchlistKeyword)
         .join(MPAccount, MPAccount.id == WatchlistKeyword.account_id)
-        .where(WatchlistKeyword.id == watchlist_id, MPAccount.user_id == current_user.id)
+        .where(WatchlistKeyword.id == watchlist_id, MPAccount.user_id == scope_user_id)
     ).scalar_one_or_none()
     if watchlist is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watchlist keyword not found")
@@ -67,13 +73,14 @@ def delete_watchlist(
 def list_keyword_positions(
     watchlist_id: int,
     days: int = Query(default=30, ge=1, le=365),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin_or_director),
     db: Session = Depends(get_db),
 ) -> list[KeywordPosition]:
+    scope_user_id = get_scope_user_id(current_user)
     watchlist = db.execute(
         select(WatchlistKeyword)
         .join(MPAccount, MPAccount.id == WatchlistKeyword.account_id)
-        .where(WatchlistKeyword.id == watchlist_id, MPAccount.user_id == current_user.id)
+        .where(WatchlistKeyword.id == watchlist_id, MPAccount.user_id == scope_user_id)
     ).scalar_one_or_none()
     if watchlist is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watchlist keyword not found")
