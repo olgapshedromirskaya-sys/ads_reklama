@@ -50,19 +50,19 @@ function App() {
             ? detail
             : detail
               ? JSON.stringify(detail)
-              : "Unknown authorization error";
+              : "Неизвестная ошибка авторизации";
 
-        return `Failed to authenticate Telegram session${status ? ` (${status})` : ""}: ${detailText}`;
+        return `Не удалось авторизовать сессию Telegram${status ? ` (${status})` : ""}: ${detailText}`;
       }
 
       if (error instanceof Error) {
         if (error.message === "Invalid auth response") {
-          return "Failed to authenticate Telegram session: backend returned an invalid user payload.";
+          return "Не удалось авторизовать сессию Telegram: сервер вернул некорректные данные пользователя.";
         }
-        return `Failed to authenticate Telegram session: ${error.message}`;
+        return `Не удалось авторизовать сессию Telegram: ${error.message}`;
       }
 
-      return "Failed to authenticate Telegram session: Unknown error.";
+      return "Не удалось авторизовать сессию Telegram: неизвестная ошибка.";
     }
 
     async function bootstrapAuth() {
@@ -97,7 +97,7 @@ function App() {
       if (!initData) {
         console.error("[TelegramAuth] initData missing; unable to continue regular auth flow");
         setBootstrapping(false);
-        setBootstrapError("Open this app from Telegram to authorize.");
+        setBootstrapError("Откройте приложение из Telegram для авторизации.");
         return;
       }
 
@@ -145,14 +145,14 @@ function App() {
   }
 
   if (bootstrapping) {
-    return <LoadingScreen text="Authorizing..." fullscreen />;
+    return <LoadingScreen text="Авторизация..." fullscreen />;
   }
 
   if (bootstrapError && !token) {
     return (
       <div className="mx-auto flex min-h-screen max-w-xl items-center justify-center px-6 text-center">
         <div>
-          <h1 className="mb-2 text-lg font-semibold">MP Ads Manager</h1>
+          <h1 className="mb-2 text-lg font-semibold">Менеджер рекламы МП</h1>
           <p className="text-sm text-[color:var(--tg-hint-color)]">{bootstrapError}</p>
         </div>
       </div>

@@ -45,20 +45,20 @@ export function KeywordsPage() {
   );
 
   if (accountsQuery.isLoading || watchlistQuery.isLoading) {
-    return <LoadingScreen text="Loading watchlist..." />;
+    return <LoadingScreen text="Загрузка ключевых слов..." />;
   }
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 text-sm font-semibold">Add keyword to watchlist</div>
+        <div className="mb-2 text-sm font-semibold">Добавить ключевое слово</div>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <select
             value={form.account_id || ""}
             onChange={(event) => setForm((prev) => ({ ...prev, account_id: Number(event.target.value) }))}
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
           >
-            <option value="">Select account</option>
+            <option value="">Выберите аккаунт</option>
             {accountsQuery.data?.map((account) => (
               <option key={account.id} value={account.id}>
                 {account.name} ({account.marketplace})
@@ -68,19 +68,19 @@ export function KeywordsPage() {
           <input
             value={form.article_id}
             onChange={(event) => setForm((prev) => ({ ...prev, article_id: event.target.value }))}
-            placeholder="Article / SKU"
+            placeholder="Артикул / SKU"
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
           />
           <input
             value={form.keyword}
             onChange={(event) => setForm((prev) => ({ ...prev, keyword: event.target.value }))}
-            placeholder="Keyword"
+            placeholder="Ключевое слово"
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
           />
           <input
             value={form.target_position}
             onChange={(event) => setForm((prev) => ({ ...prev, target_position: event.target.value }))}
-            placeholder="Target position"
+            placeholder="Целевая позиция"
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
           />
         </div>
@@ -95,7 +95,7 @@ export function KeywordsPage() {
           }
           className="mt-2 rounded-md bg-[color:var(--tg-button-color)] px-3 py-2 text-xs text-white"
         >
-          Add to watchlist
+          Добавить
         </button>
       </div>
 
@@ -106,11 +106,11 @@ export function KeywordsPage() {
               <button onClick={() => setSelectedWatchlistId(item.id)} className="text-left">
                 <div className="text-sm font-semibold">{item.keyword}</div>
                 <div className="text-xs text-[color:var(--tg-hint-color)]">
-                  SKU: {item.article_id} • target {item.target_position ?? "n/a"}
+                  SKU: {item.article_id} • цель {item.target_position ?? "—"}
                 </div>
               </button>
               <button onClick={() => deleteMutation.mutate(item.id)} className="rounded-md border border-slate-300/30 px-2 py-1 text-xs">
-                Delete
+                Удалить
               </button>
             </div>
           </div>
@@ -118,7 +118,7 @@ export function KeywordsPage() {
       </div>
 
       <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 text-sm font-semibold">Position history</div>
+        <div className="mb-2 text-sm font-semibold">История позиций</div>
         <div className="h-52">
           {chartData.length ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -133,7 +133,7 @@ export function KeywordsPage() {
             </ResponsiveContainer>
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-[color:var(--tg-hint-color)]">
-              Select keyword to display history.
+              Выберите ключевое слово для отображения истории.
             </div>
           )}
         </div>

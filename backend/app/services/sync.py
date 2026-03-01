@@ -22,11 +22,8 @@ from app.models.entities import (
     SearchQuery,
     User,
 )
+from app.services.auto_cleanup import auto_cleanup_campaign
 from app.services.exceptions import MarketplaceAuthError
-from app.services.morphology import (
-    auto_classify_campaign_queries,
-    regenerate_minus_words_for_campaign,
-)
 from app.services.ozon_api import OzonApiClient
 from app.services.wb_api import WBApiClient
 
@@ -502,8 +499,12 @@ async def sync_account_search_queries(account: MPAccount, db: Session, days: int
         written = await _sync_search_queries_ozon(account, campaigns, db, days)
 
     for campaign in campaigns:
-        auto_classify_campaign_queries(db, campaign.id)
-        regenerate_minus_words_for_campaign(db, campaign.id)
+        await auto_cleanup_campaign(
+            db,
+            campaign,
+            days=7,
+            force_auto_apply=campaign.auto_minus_enabled,
+        )
 
     run_budget_protection_alerts_for_account(account, db)
     return written

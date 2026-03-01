@@ -9,8 +9,17 @@ export type DemoCampaign = {
   type: string;
   status: "active" | "paused";
   daily_budget: number;
-  avg_drr: number;
+  auto_minus_enabled: boolean;
   marketplace: Marketplace;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  orders: number;
+  cr: number;
+  revenue: number;
+  drr: number;
+  spend: number;
   created_at: string;
   updated_at: string;
 };
@@ -26,6 +35,7 @@ export type DemoCampaignStat = {
   cpc: number;
   cpo: number;
   drr: number;
+  cr: number;
 };
 
 export type DemoDashboardSummary = {
@@ -37,6 +47,30 @@ export type DemoDashboardSummary = {
   wb_spend: number;
   ozon_spend: number;
   last_synced_at: string;
+  totals: {
+    impressions: number;
+    clicks: number;
+    ctr: number;
+    cpc: number;
+    orders: number;
+    cr: number;
+    revenue: number;
+    drr: number;
+    spend: number;
+  };
+  trend: Array<{
+    date: string;
+    impressions: number;
+    clicks: number;
+    orders: number;
+    spend: number;
+  }>;
+  diagnostics: string[];
+  irrelevant_alert: {
+    count: number;
+    wasted_per_day: number;
+    wasted_per_month: number;
+  };
 };
 
 export type DemoQueryRow = {
@@ -51,10 +85,39 @@ export type DemoQueryRow = {
   ctr: number;
   cpc: number;
   cpo: number;
+  cr: number;
+  revenue: number;
+  drr: number;
   relevance_hint: QueryLabel;
   label: QueryLabel;
   campaign_name: string;
   marketplace: Marketplace;
+};
+
+type DemoCleanupQuery = {
+  query: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  orders: number;
+  spend: number;
+  revenue: number;
+  drr: number;
+  rules_triggered: string[];
+};
+
+type DemoCleanupResult = {
+  campaign_id: number;
+  campaign_name: string;
+  auto_minus_enabled: boolean;
+  irrelevant_found: number;
+  minus_words: string[];
+  budget_wasted: number;
+  budget_saved: number;
+  auto_applied: boolean;
+  apply_failed: number;
+  queries: DemoCleanupQuery[];
 };
 
 export type DemoAlert = {
@@ -111,14 +174,29 @@ const DAILY_SPEND_VALUES = [
   31289, 32738, 31967, 30638, 29319, 26699, 25194, 24693, 25910, 28065, 29709, 31697, 33110, 30945, 29903
 ];
 
-export const DEMO_MINUS_WORDS = ["мужские", "детские", "зимние", "б/у", "ремонт", "wholesale"] as const;
+export const DEMO_MINUS_WORDS = [
+  "мужские",
+  "тапочки",
+  "сапоги",
+  "рабочие",
+  "берцы",
+  "детские",
+  "классика",
+  "опт",
+  "зимние",
+  "46",
+  "домашние",
+  "армейские"
+] as const;
+
 export const DEMO_MINUS_PHRASES = [
   "кроссовки мужские 46",
-  "кроссовки детские светящиеся",
-  "кеды зимние",
-  "кроссовки б/у",
-  "ремонт кроссовок",
-  "wholesale sneakers lot"
+  "тапочки домашние",
+  "сапоги зимние",
+  "босоножки детские",
+  "рабочие ботинки",
+  "туфли мужские классика",
+  "берцы армейские"
 ] as const;
 
 function clone<T>(value: T): T {
@@ -135,31 +213,22 @@ function getNowIso() {
   return new Date().toISOString();
 }
 
-const demoDailySpend = DAILY_SPEND_VALUES.map((spend, index) => ({
-  date: isoDateDaysAgo(DAILY_SPEND_VALUES.length - 1 - index),
-  spend
-}));
-
 function sumLast<T>(rows: T[], count: number, selector: (row: T) => number) {
   return rows.slice(Math.max(0, rows.length - count)).reduce((acc, row) => acc + selector(row), 0);
 }
 
-export function getDemoDailySpend() {
-  return clone(demoDailySpend);
+function hashText(value: string) {
+  return value.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
 }
 
-export function getDemoDashboardSummary(): DemoDashboardSummary {
-  return {
-    spend_today: demoDailySpend[demoDailySpend.length - 1]?.spend ?? 0,
-    spend_week: sumLast(demoDailySpend, 7, (row) => row.spend),
-    spend_month: 847_320,
-    total_orders: 1_247,
-    avg_drr: 12.3,
-    wb_spend: 623_100,
-    ozon_spend: 224_220,
-    last_synced_at: getNowIso()
-  };
+function formatRub(value: number) {
+  return `${Math.round(value).toLocaleString("ru-RU")}₽`;
 }
+
+const demoDailySpend = DAILY_SPEND_VALUES.map((spend, index) => ({
+  date: isoDateDaysAgo(DAILY_SPEND_VALUES.length - 1 - index),
+  spend
+}));
 
 const initialCampaigns: DemoCampaign[] = [
   {
@@ -170,9 +239,18 @@ const initialCampaigns: DemoCampaign[] = [
     type: "search",
     status: "active",
     daily_budget: 15000,
-    avg_drr: 11.2,
+    auto_minus_enabled: true,
     marketplace: "wb",
-    created_at: isoDateDaysAgo(90),
+    impressions: 245000,
+    clicks: 8820,
+    ctr: 3.6,
+    cpc: 18.5,
+    orders: 441,
+    cr: 5.0,
+    revenue: 1989900,
+    drr: 8.2,
+    spend: 163170,
+    created_at: isoDateDaysAgo(120),
     updated_at: getNowIso()
   },
   {
@@ -182,108 +260,110 @@ const initialCampaigns: DemoCampaign[] = [
     name: "Платья летние",
     type: "catalog",
     status: "active",
-    daily_budget: 8000,
-    avg_drr: 14.5,
+    daily_budget: 12000,
+    auto_minus_enabled: false,
     marketplace: "wb",
-    created_at: isoDateDaysAgo(72),
+    impressions: 189000,
+    clicks: 5670,
+    ctr: 3.0,
+    cpc: 21.0,
+    orders: 198,
+    cr: 3.5,
+    revenue: 692300,
+    drr: 17.2,
+    spend: 119070,
+    created_at: isoDateDaysAgo(100),
     updated_at: getNowIso()
   },
   {
     id: 103,
     account_id: 2,
     external_id: "OZ-103",
-    name: "Кроссовки мужские",
-    type: "search",
-    status: "active",
-    daily_budget: 12000,
-    avg_drr: 9.8,
-    marketplace: "ozon",
-    created_at: isoDateDaysAgo(64),
-    updated_at: getNowIso()
-  },
-  {
-    id: 104,
-    account_id: 1,
-    external_id: "WB-104",
     name: "Джинсы slim fit",
     type: "search",
-    status: "paused",
-    daily_budget: 5000,
-    avg_drr: 18.1,
-    marketplace: "wb",
-    created_at: isoDateDaysAgo(51),
-    updated_at: getNowIso()
-  },
-  {
-    id: 105,
-    account_id: 2,
-    external_id: "OZ-105",
-    name: "Футболки базовые",
-    type: "catalog",
     status: "active",
-    daily_budget: 6500,
-    avg_drr: 13.7,
+    daily_budget: 9000,
+    auto_minus_enabled: true,
     marketplace: "ozon",
-    created_at: isoDateDaysAgo(43),
+    impressions: 156000,
+    clicks: 1560,
+    ctr: 1.0,
+    cpc: 45.0,
+    orders: 31,
+    cr: 2.0,
+    revenue: 186200,
+    drr: 37.7,
+    spend: 70200,
+    created_at: isoDateDaysAgo(80),
     updated_at: getNowIso()
   }
 ];
 
 type QuerySeed = {
   query: string;
-  label: QueryLabel;
-  campaignId: number;
+  campaign_id: number;
   marketplace: Marketplace;
   impressions: number;
-  ctr: number;
+  clicks: number;
   spend: number;
   orders: number;
+  label: QueryLabel;
 };
 
 const querySeeds: QuerySeed[] = [
-  { query: "кроссовки женские", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 48200, ctr: 4.8, spend: 6500, orders: 58 },
-  { query: "кроссовки белые женские", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 40300, ctr: 4.2, spend: 5800, orders: 51 },
-  { query: "кеды женские комфорт", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 36600, ctr: 3.9, spend: 5400, orders: 47 },
-  { query: "обувь для бега женская", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 38800, ctr: 4.1, spend: 6200, orders: 54 },
-  { query: "кроссовки летние легкие", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 35200, ctr: 3.8, spend: 5600, orders: 45 },
-  { query: "кроссовки сетка", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 33400, ctr: 3.7, spend: 5200, orders: 43 },
-  { query: "кроссовки повседневные", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 31800, ctr: 3.6, spend: 4900, orders: 40 },
-  { query: "кроссовки на платформе", label: "relevant", campaignId: 101, marketplace: "wb", impressions: 34100, ctr: 3.9, spend: 5400, orders: 44 },
-  { query: "обувь спортивная", label: "pending", campaignId: 101, marketplace: "wb", impressions: 22600, ctr: 1.3, spend: 2200, orders: 11 },
-  { query: "sneakers women", label: "pending", campaignId: 101, marketplace: "wb", impressions: 17100, ctr: 1.2, spend: 1800, orders: 8 },
-  { query: "кеды casual", label: "pending", campaignId: 101, marketplace: "wb", impressions: 14900, ctr: 1.1, spend: 1600, orders: 7 },
-  { query: "кроссовки скидка", label: "pending", campaignId: 101, marketplace: "wb", impressions: 16400, ctr: 1.2, spend: 2100, orders: 9 },
-  { query: "обувь демисезон", label: "pending", campaignId: 101, marketplace: "wb", impressions: 15300, ctr: 1.0, spend: 1900, orders: 6 },
-  { query: "кроссовки мужские 46", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 9200, ctr: 0.2, spend: 2300, orders: 0 },
-  { query: "кроссовки детские светящиеся", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 8700, ctr: 0.2, spend: 1800, orders: 0 },
-  { query: "ботинки зимние мужские", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 8100, ctr: 0.2, spend: 1600, orders: 0 },
-  { query: "кроссовки б/у оригинал", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 6900, ctr: 0.2, spend: 1400, orders: 0 },
-  { query: "ремонт кроссовок", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 7400, ctr: 0.1, spend: 1700, orders: 0 },
-  { query: "wholesale sneakers lot", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 6700, ctr: 0.2, spend: 1500, orders: 0 },
-  { query: "зимние кеды детские", label: "not_relevant", campaignId: 101, marketplace: "wb", impressions: 7100, ctr: 0.2, spend: 2000, orders: 0 }
+  { query: "кроссовки женские", campaign_id: 101, marketplace: "wb", impressions: 64200, clicks: 2480, spend: 44500, orders: 142, label: "relevant" },
+  { query: "кроссовки белые женские", campaign_id: 101, marketplace: "wb", impressions: 53200, clicks: 1940, spend: 35600, orders: 101, label: "relevant" },
+  { query: "кеды женские", campaign_id: 101, marketplace: "wb", impressions: 38100, clicks: 1410, spend: 26100, orders: 64, label: "relevant" },
+  { query: "обувь для бега женская", campaign_id: 101, marketplace: "wb", impressions: 30200, clicks: 970, spend: 17400, orders: 41, label: "relevant" },
+  { query: "кроссовки на платформе", campaign_id: 101, marketplace: "wb", impressions: 22100, clicks: 560, spend: 10200, orders: 18, label: "pending" },
+  { query: "кроссовки весна", campaign_id: 101, marketplace: "wb", impressions: 17300, clicks: 310, spend: 5900, orders: 7, label: "pending" },
+  { query: "кроссовки мужские 46", campaign_id: 101, marketplace: "wb", impressions: 240000, clicks: 1200, spend: 4800, orders: 0, label: "not_relevant" },
+  { query: "тапочки домашние", campaign_id: 101, marketplace: "wb", impressions: 142000, clicks: 890, spend: 3200, orders: 0, label: "not_relevant" },
+  { query: "сапоги зимние", campaign_id: 101, marketplace: "wb", impressions: 78000, clicks: 450, spend: 2100, orders: 0, label: "not_relevant" },
+  { query: "босоножки детские", campaign_id: 101, marketplace: "wb", impressions: 25500, clicks: 110, spend: 600, orders: 0, label: "not_relevant" },
+  { query: "рабочие ботинки", campaign_id: 101, marketplace: "wb", impressions: 18200, clicks: 95, spend: 500, orders: 0, label: "not_relevant" },
+  { query: "туфли мужские классика", campaign_id: 101, marketplace: "wb", impressions: 22400, clicks: 130, spend: 600, orders: 0, label: "not_relevant" },
+  { query: "берцы армейские", campaign_id: 101, marketplace: "wb", impressions: 19300, clicks: 120, spend: 500, orders: 0, label: "not_relevant" },
+  { query: "платья летние", campaign_id: 102, marketplace: "wb", impressions: 90100, clicks: 2920, spend: 61200, orders: 98, label: "relevant" },
+  { query: "платье в цветок", campaign_id: 102, marketplace: "wb", impressions: 67100, clicks: 1870, spend: 39100, orders: 66, label: "relevant" },
+  { query: "платье короткое", campaign_id: 102, marketplace: "wb", impressions: 31800, clicks: 540, spend: 9200, orders: 14, label: "pending" },
+  { query: "джинсы slim fit", campaign_id: 103, marketplace: "ozon", impressions: 80400, clicks: 840, spend: 39300, orders: 19, label: "pending" },
+  { query: "джинсы мужские slim", campaign_id: 103, marketplace: "ozon", impressions: 75600, clicks: 720, spend: 30900, orders: 12, label: "pending" }
 ];
+
+function campaignAov(campaignId: number) {
+  const campaign = initialCampaigns.find((item) => item.id === campaignId);
+  if (!campaign || campaign.orders <= 0) return 0;
+  return campaign.revenue / campaign.orders;
+}
 
 function buildQueryRows(): DemoQueryRow[] {
   return querySeeds.map((seed, index) => {
-    const clicks = Math.max(1, Math.round((seed.impressions * seed.ctr) / 100));
-    const cpc = Number((seed.spend / clicks).toFixed(2));
-    const cpo = Number((seed.orders > 0 ? seed.spend / seed.orders : seed.spend).toFixed(2));
-    const campaignName = initialCampaigns.find((campaign) => campaign.id === seed.campaignId)?.name ?? "Campaign";
+    const ctr = seed.impressions > 0 ? (seed.clicks / seed.impressions) * 100 : 0;
+    const cpc = seed.clicks > 0 ? seed.spend / seed.clicks : 0;
+    const cpo = seed.orders > 0 ? seed.spend / seed.orders : seed.spend;
+    const cr = seed.clicks > 0 ? (seed.orders / seed.clicks) * 100 : 0;
+    const revenue = campaignAov(seed.campaign_id) * seed.orders;
+    const drr = revenue > 0 ? (seed.spend / revenue) * 100 : seed.spend > 0 ? 999 : 0;
+    const campaign = initialCampaigns.find((item) => item.id === seed.campaign_id);
     return {
       id: index + 1,
-      campaign_id: seed.campaignId,
+      campaign_id: seed.campaign_id,
       query: seed.query,
-      date: isoDateDaysAgo(index % 14),
+      date: isoDateDaysAgo(index % 7),
       impressions: seed.impressions,
-      clicks,
+      clicks: seed.clicks,
       spend: seed.spend,
       orders: seed.orders,
-      ctr: seed.ctr,
-      cpc,
-      cpo,
+      ctr: Number(ctr.toFixed(2)),
+      cpc: Number(cpc.toFixed(2)),
+      cpo: Number(cpo.toFixed(2)),
+      cr: Number(cr.toFixed(2)),
+      revenue: Number(revenue.toFixed(2)),
+      drr: Number(drr.toFixed(2)),
       relevance_hint: seed.label,
       label: seed.label,
-      campaign_name: campaignName,
+      campaign_name: campaign?.name || "Кампания",
       marketplace: seed.marketplace
     };
   });
@@ -295,26 +375,26 @@ let queries = buildQueryRows();
 let alerts: DemoAlert[] = [
   {
     id: 1,
-    type: "budget",
-    message: "Campaign «Джинсы slim fit» paused due to DRR > 18%",
+    type: "ддр",
+    message: "🔴 Кампания «Джинсы slim fit»: ДРР 37.7%, требуется оптимизация.",
     is_read: false,
     created_at: isoDateDaysAgo(0),
-    campaign_id: 104
+    campaign_id: 103
   },
   {
     id: 2,
-    type: "query",
-    message: "12 low-CTR queries detected in «Кроссовки женские»",
+    type: "запросы",
+    message: "🔴 Обнаружено 19 нерелевантных запросов — сливают 12,300₽/день.",
     is_read: false,
-    created_at: isoDateDaysAgo(1),
-    campaign_id: 101
+    created_at: isoDateDaysAgo(0),
+    campaign_id: null
   },
   {
     id: 3,
-    type: "sync",
-    message: "WB and Ozon accounts synced successfully.",
+    type: "синхронизация",
+    message: "Синхронизация WB и Ozon завершена успешно.",
     is_read: true,
-    created_at: isoDateDaysAgo(2),
+    created_at: isoDateDaysAgo(1),
     campaign_id: null
   }
 ];
@@ -323,53 +403,47 @@ let accounts: DemoAccount[] = [
   {
     id: 1,
     marketplace: "wb",
-    name: "WB Demo Store",
+    name: "WB Демо магазин",
     is_active: true,
     needs_reconnection: false,
     last_synced_at: getNowIso(),
-    created_at: isoDateDaysAgo(80)
+    created_at: isoDateDaysAgo(120)
   },
   {
     id: 2,
     marketplace: "ozon",
-    name: "Ozon Demo Store",
+    name: "Ozon Демо магазин",
     is_active: true,
     needs_reconnection: false,
     last_synced_at: getNowIso(),
-    created_at: isoDateDaysAgo(78)
+    created_at: isoDateDaysAgo(118)
   }
 ];
 
 let budgetRules: DemoBudgetRule[] = [
-  { id: 1, campaign_id: 101, rule_type: "drr", threshold: 16, action: "alert", is_active: true },
-  { id: 2, campaign_id: 104, rule_type: "daily_budget", threshold: 5000, action: "pause_campaign", is_active: true },
-  { id: 3, campaign_id: 105, rule_type: "ctr_drop", threshold: 1.1, action: "alert", is_active: false }
+  { id: 1, campaign_id: 103, rule_type: "drr", threshold: 35, action: "pause_campaign", is_active: true },
+  { id: 2, campaign_id: 101, rule_type: "daily_budget", threshold: 16000, action: "alert", is_active: true }
 ];
 
 let watchlist: DemoWatchlistItem[] = [
-  { id: 1, account_id: 1, article_id: "WB-532992", keyword: "кроссовки женские", target_position: 12 },
-  { id: 2, account_id: 2, article_id: "OZ-88412", keyword: "футболки базовые", target_position: 18 }
+  { id: 1, account_id: 1, article_id: "WB-112233", keyword: "кроссовки женские", target_position: 12 },
+  { id: 2, account_id: 2, article_id: "OZ-778899", keyword: "джинсы slim fit", target_position: 16 }
 ];
 
 let nextAccountId = 3;
-let nextRuleId = 4;
+let nextRuleId = 3;
 let nextWatchlistId = 3;
-
 const watchlistPositions = new Map<number, DemoWatchlistPosition[]>();
-
-function hashText(value: string) {
-  return value.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-}
 
 function buildWatchlistPositions(keyword: string, targetPosition = 15): DemoWatchlistPosition[] {
   const seed = hashText(keyword);
   const rows: DemoWatchlistPosition[] = [];
   for (let offset = 29; offset >= 0; offset -= 1) {
     const idx = 29 - offset;
-    const seasonal = Math.sin((idx + (seed % 9)) / 3.8) * 2.5;
-    const randomShift = ((idx * (seed % 17 + 3)) % 6) - 3;
-    const organic = Math.max(1, Math.round(targetPosition + seasonal + randomShift));
-    const paid = Math.max(1, Math.round(organic - 2 + (((idx + seed) % 4) - 1)));
+    const wave = Math.sin((idx + (seed % 11)) / 4.1) * 2.2;
+    const randomShift = ((idx * (seed % 13 + 5)) % 5) - 2;
+    const organic = Math.max(1, Math.round(targetPosition + wave + randomShift));
+    const paid = Math.max(1, Math.round(organic - 2 + (((idx + seed) % 3) - 1)));
     rows.push({
       date: isoDateDaysAgo(offset),
       organic_position: organic,
@@ -386,34 +460,28 @@ for (const item of watchlist) {
 function getCampaignOrThrow(campaignId: number) {
   const campaign = campaigns.find((item) => item.id === campaignId);
   if (!campaign) {
-    throw new Error(`Campaign ${campaignId} not found in demo dataset`);
+    throw new Error(`Кампания ${campaignId} не найдена в демо-данных`);
   }
   return campaign;
-}
-
-export async function listCampaigns() {
-  return clone(campaigns);
-}
-
-export async function getCampaign(campaignId: number) {
-  return clone(getCampaignOrThrow(campaignId));
 }
 
 function buildCampaignStats(campaign: DemoCampaign): DemoCampaignStat[] {
   const rows: DemoCampaignStat[] = [];
   for (let offset = 29; offset >= 0; offset -= 1) {
     const i = 29 - offset;
-    const seasonal = Math.sin((i + campaign.id % 5) / 3.2) * 0.13;
-    const jitter = (((i + campaign.id) * 17) % 9 - 4) / 100;
-    const factor = Math.max(0.65, 0.95 + seasonal + jitter);
-    const spend = Math.round(campaign.daily_budget * factor);
-    const impressions = Math.max(1000, Math.round(spend * (28 + ((i * 3 + campaign.id) % 12))));
-    const ctr = Number((1.6 + ((i * 5 + campaign.id) % 28) / 10).toFixed(2));
-    const clicks = Math.max(10, Math.round((impressions * ctr) / 100));
-    const cr = 1.2 + ((i * 7 + campaign.id) % 11) / 10;
-    const orders = Math.max(1, Math.round((clicks * cr) / 100));
-    const drr = Number((campaign.avg_drr + (((i + campaign.id) % 7) - 3) * 0.4).toFixed(2));
-    const revenue = Math.max(spend + 1500, Math.round((spend * 100) / Math.max(6, drr)));
+    const seasonal = Math.sin((i + campaign.id % 7) / 3.2) * 0.12;
+    const jitter = (((i + campaign.id) * 11) % 7 - 3) / 100;
+    const factor = Math.max(0.7, 0.95 + seasonal + jitter);
+    const spend = Math.max(100, Math.round((campaign.spend / 30) * factor));
+    const impressions = Math.max(1000, Math.round((campaign.impressions / 30) * factor));
+    const clicks = Math.max(5, Math.round((campaign.clicks / 30) * factor));
+    const orders = Math.max(0, Math.round((campaign.orders / 30) * factor));
+    const revenue = Math.max(0, Math.round((campaign.revenue / 30) * factor));
+    const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
+    const cpc = clicks > 0 ? spend / clicks : 0;
+    const cpo = orders > 0 ? spend / orders : spend;
+    const cr = clicks > 0 ? (orders / clicks) * 100 : 0;
+    const drr = revenue > 0 ? (spend / revenue) * 100 : spend > 0 ? 999 : 0;
     rows.push({
       date: isoDateDaysAgo(offset),
       impressions,
@@ -421,13 +489,140 @@ function buildCampaignStats(campaign: DemoCampaign): DemoCampaignStat[] {
       spend,
       orders,
       revenue,
-      ctr: Number(((clicks / impressions) * 100).toFixed(2)),
-      cpc: Number((spend / clicks).toFixed(2)),
-      cpo: Number((spend / orders).toFixed(2)),
-      drr: Number(((spend / revenue) * 100).toFixed(2))
+      ctr: Number(ctr.toFixed(2)),
+      cpc: Number(cpc.toFixed(2)),
+      cpo: Number(cpo.toFixed(2)),
+      drr: Number(drr.toFixed(2)),
+      cr: Number(cr.toFixed(2))
     });
   }
   return rows;
+}
+
+function compareValue(left: DemoQueryRow, right: DemoQueryRow, key: string) {
+  if (key === "date") {
+    return left.date.localeCompare(right.date);
+  }
+  const a = left[key as keyof DemoQueryRow];
+  const b = right[key as keyof DemoQueryRow];
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  if (typeof a === "string" && typeof b === "string") return a.localeCompare(b);
+  return 0;
+}
+
+function buildCleanupResult(campaign: DemoCampaign, applyNow = false): DemoCleanupResult {
+  if (campaign.id === 101) {
+    return {
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      auto_minus_enabled: campaign.auto_minus_enabled,
+      irrelevant_found: 15,
+      minus_words: [...DEMO_MINUS_WORDS],
+      budget_wasted: 58800,
+      budget_saved: 8400,
+      auto_applied: applyNow || campaign.auto_minus_enabled,
+      apply_failed: 0,
+      queries: queries
+        .filter((item) => item.campaign_id === campaign.id && item.label === "not_relevant")
+        .map((item) => ({
+          query: item.query,
+          impressions: item.impressions,
+          clicks: item.clicks,
+          ctr: item.ctr,
+          cpc: item.cpc,
+          orders: item.orders,
+          spend: item.spend,
+          revenue: item.revenue,
+          drr: item.drr,
+          rules_triggered: ["правило 1", "правило 4"]
+        }))
+    };
+  }
+  if (campaign.id === 102) {
+    return {
+      campaign_id: campaign.id,
+      campaign_name: campaign.name,
+      auto_minus_enabled: campaign.auto_minus_enabled,
+      irrelevant_found: 2,
+      minus_words: ["выпускной", "вечерние"],
+      budget_wasted: 6300,
+      budget_saved: 900,
+      auto_applied: applyNow || campaign.auto_minus_enabled,
+      apply_failed: 0,
+      queries: []
+    };
+  }
+  return {
+    campaign_id: campaign.id,
+    campaign_name: campaign.name,
+    auto_minus_enabled: campaign.auto_minus_enabled,
+    irrelevant_found: 2,
+    minus_words: ["детские", "теплые"],
+    budget_wasted: 21000,
+    budget_saved: 3000,
+    auto_applied: applyNow || campaign.auto_minus_enabled,
+    apply_failed: 0,
+    queries: []
+  };
+}
+
+export function getDemoDailySpend() {
+  return clone(demoDailySpend);
+}
+
+export function getDemoDashboardSummary(): DemoDashboardSummary {
+  const trend = demoDailySpend.map((row, index) => {
+    const impressions = Math.round(38000 + Math.sin(index / 4.2) * 5200 + index * 140);
+    const clicks = Math.round(impressions * (0.028 + (index % 5) * 0.001));
+    const orders = Math.round(clicks * (0.028 + (index % 4) * 0.002));
+    return {
+      date: row.date,
+      impressions,
+      clicks,
+      orders,
+      spend: row.spend
+    };
+  });
+  return {
+    spend_today: demoDailySpend[demoDailySpend.length - 1]?.spend ?? 0,
+    spend_week: sumLast(demoDailySpend, 7, (row) => row.spend),
+    spend_month: 847_320,
+    total_orders: 1_247,
+    avg_drr: 13.6,
+    wb_spend: 623_100,
+    ozon_spend: 224_220,
+    last_synced_at: getNowIso(),
+    totals: {
+      impressions: 1_247_000,
+      clicks: 38_450,
+      ctr: 3.1,
+      cpc: 22,
+      orders: 1_247,
+      cr: 3.2,
+      revenue: 6_235_000,
+      drr: 13.6,
+      spend: 847_320
+    },
+    trend,
+    diagnostics: [
+      "❌ 5 кампаний с ДРР > 35%",
+      "❌ 12 ключей с 0 продажами сливают 8,400₽/день",
+      "❌ CTR ниже 1% в 3 кампаниях — проблема с карточкой"
+    ],
+    irrelevant_alert: {
+      count: 19,
+      wasted_per_day: 12300,
+      wasted_per_month: 369000
+    }
+  };
+}
+
+export async function listCampaigns(_days = 30) {
+  return clone(campaigns);
+}
+
+export async function getCampaign(campaignId: number, _days = 30) {
+  return clone(getCampaignOrThrow(campaignId));
 }
 
 export async function getCampaignStats(campaignId: number, days = 30) {
@@ -440,29 +635,21 @@ export async function pauseCampaign(campaignId: number) {
   campaigns = campaigns.map((item) =>
     item.id === campaignId ? { ...item, status: "paused", updated_at: getNowIso() } : item
   );
-  return { ok: true };
+  return { status: "paused" };
 }
 
 export async function resumeCampaign(campaignId: number) {
   campaigns = campaigns.map((item) =>
     item.id === campaignId ? { ...item, status: "active", updated_at: getNowIso() } : item
   );
-  return { ok: true };
+  return { status: "active" };
 }
 
-function compareValue(left: DemoQueryRow, right: DemoQueryRow, key: string) {
-  if (key === "date") {
-    return left.date.localeCompare(right.date);
-  }
-  const a = left[key as keyof DemoQueryRow];
-  const b = right[key as keyof DemoQueryRow];
-  if (typeof a === "number" && typeof b === "number") {
-    return a - b;
-  }
-  if (typeof a === "string" && typeof b === "string") {
-    return a.localeCompare(b);
-  }
-  return 0;
+export async function setCampaignAutoMinus(campaignId: number, enabled: boolean) {
+  campaigns = campaigns.map((item) =>
+    item.id === campaignId ? { ...item, auto_minus_enabled: enabled, updated_at: getNowIso() } : item
+  );
+  return { campaign_id: campaignId, auto_minus_enabled: enabled };
 }
 
 export async function listQueries(params: Record<string, unknown>) {
@@ -508,19 +695,11 @@ export async function updateQueryLabelsBulk(campaignId: number, updates: Array<{
   const containsNotRelevant = updates.some((item) => item.label === "not_relevant");
 
   queries = queries.map((row) => {
-    if (row.campaign_id !== campaignId) {
-      return row;
-    }
+    if (row.campaign_id !== campaignId) return row;
     const match = updates.find((item) => item.query === row.query);
-    if (!match || !isValidLabel(match.label)) {
-      return row;
-    }
+    if (!match || !isValidLabel(match.label)) return row;
     updatedCount += 1;
-    return {
-      ...row,
-      label: match.label,
-      relevance_hint: match.label
-    };
+    return { ...row, label: match.label, relevance_hint: match.label };
   });
 
   return {
@@ -531,14 +710,6 @@ export async function updateQueryLabelsBulk(campaignId: number, updates: Array<{
 
 export async function generateMinusWords(_campaignId: number, _queries?: string[]) {
   return [...DEMO_MINUS_WORDS];
-}
-
-export async function applyMinusWords(_campaignId: number) {
-  return {
-    applied: DEMO_MINUS_WORDS.length,
-    failed: 0,
-    saved_budget_estimate: "12,300₽"
-  };
 }
 
 export async function listMinusWords(_campaignId: number) {
@@ -552,17 +723,41 @@ export async function listMinusWords(_campaignId: number) {
   }));
 }
 
+export async function applyMinusWords(_campaignId: number) {
+  return {
+    applied: 19,
+    failed: 0,
+    saved_budget_estimate: formatRub(12300)
+  };
+}
+
+export async function runAutoCleanupCampaign(campaignId: number, params?: { days?: number; apply_now?: boolean }) {
+  const campaign = getCampaignOrThrow(campaignId);
+  return clone(buildCleanupResult(campaign, Boolean(params?.apply_now)));
+}
+
+export async function runAutoCleanupAll(params?: { days?: number; apply_now?: boolean; only_auto_enabled?: boolean }) {
+  const results = campaigns.map((campaign) => buildCleanupResult(campaign, Boolean(params?.apply_now)));
+  return clone({
+    campaigns_processed: 3,
+    irrelevant_found: 19,
+    budget_wasted: 86100,
+    budget_saved: 12300,
+    results
+  });
+}
+
 export async function getQueryTrends(keyword: string, days = 30) {
   const seed = hashText(keyword || "demo");
   const rows: DemoTrendPoint[] = [];
   for (let offset = Math.max(0, days - 1); offset >= 0; offset -= 1) {
     const i = days - 1 - offset;
-    const baseline = 3200 + ((seed + i * 79) % 8500);
-    const wave = Math.sin((i + (seed % 13)) / 4.4) * 1100;
-    const impressions = Math.max(500, Math.round(baseline + wave));
-    const ctr = 0.9 + ((seed + i * 17) % 31) / 10;
+    const baseline = 3000 + ((seed + i * 77) % 7800);
+    const wave = Math.sin((i + (seed % 13)) / 4.2) * 900;
+    const impressions = Math.max(400, Math.round(baseline + wave));
+    const ctr = 0.8 + ((seed + i * 13) % 24) / 10;
     const clicks = Math.max(4, Math.round((impressions * ctr) / 100));
-    const spend = Math.max(200, Math.min(8000, Math.round(clicks * (3.4 + ((seed + i * 5) % 7) * 0.5))));
+    const spend = Math.max(150, Math.round(clicks * (3.8 + ((seed + i * 7) % 6) * 0.6)));
     rows.push({
       date: isoDateDaysAgo(offset),
       impressions,
@@ -582,9 +777,7 @@ export async function markAlertsRead(alertIds: number[]) {
   const idSet = new Set(alertIds);
   let updated = 0;
   alerts = alerts.map((item) => {
-    if (!idSet.has(item.id) || item.is_read) {
-      return item;
-    }
+    if (!idSet.has(item.id) || item.is_read) return item;
     updated += 1;
     return { ...item, is_read: true };
   });
@@ -605,7 +798,7 @@ export async function connectAccount(payload: {
   const account: DemoAccount = {
     id: nextAccountId,
     marketplace: payload.marketplace,
-    name: payload.name || `${payload.marketplace.toUpperCase()} account ${nextAccountId}`,
+    name: payload.name || `${payload.marketplace.toUpperCase()} аккаунт ${nextAccountId}`,
     is_active: true,
     needs_reconnection: false,
     last_synced_at: getNowIso(),
@@ -619,9 +812,7 @@ export async function connectAccount(payload: {
 export async function refreshAccount(accountId: number) {
   let refreshed = 0;
   accounts = accounts.map((item) => {
-    if (item.id !== accountId) {
-      return item;
-    }
+    if (item.id !== accountId) return item;
     refreshed += 1;
     return { ...item, last_synced_at: getNowIso(), needs_reconnection: false };
   });
@@ -655,14 +846,12 @@ export async function createBudgetRule(payload: {
 export async function toggleBudgetRule(ruleId: number) {
   let updated: DemoBudgetRule | null = null;
   budgetRules = budgetRules.map((rule) => {
-    if (rule.id !== ruleId) {
-      return rule;
-    }
+    if (rule.id !== ruleId) return rule;
     updated = { ...rule, is_active: !rule.is_active };
     return updated;
   });
   if (!updated) {
-    throw new Error(`Rule ${ruleId} not found in demo dataset`);
+    throw new Error(`Правило ${ruleId} не найдено в демо-данных`);
   }
   return clone(updated);
 }

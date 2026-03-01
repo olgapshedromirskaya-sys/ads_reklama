@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
@@ -6,31 +6,143 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
-from app.models.entities import Campaign, CampaignStat, MPAccount, Marketplace, User
-from app.schemas.campaigns import CampaignOut, CampaignStatOut, DashboardSummaryOut
+from app.models.entities import Campaign, CampaignStat, MPAccount, Marketplace, QueryLabel, QueryLabelStatus, SearchQuery, User
+from app.schemas.campaigns import (
+    CampaignAutoMinusToggleOut,
+    CampaignAutoMinusToggleRequest,
+    CampaignOut,
+    CampaignStatOut,
+    DashboardIrrelevantAlertOut,
+    DashboardMetricsOut,
+    DashboardSummaryOut,
+    DashboardTrendPointOut,
+)
 from app.services.sync import pause_or_resume_campaign, run_async
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
+
+
+def _calc_rate(numerator: float, denominator: float) -> float:
+    if denominator <= 0:
+        return 0.0
+    return numerator / denominator
+
+
+def _format_rub(amount: float) -> str:
+    rounded = int(round(amount))
+    return f"{rounded:,}₽"
+
+
+def _build_metrics(impressions: int, clicks: int, spend: float, orders: int, revenue: float) -> DashboardMetricsOut:
+    ctr = _calc_rate(clicks * 100, impressions)
+    cpc = _calc_rate(spend, clicks)
+    cr = _calc_rate(orders * 100, clicks)
+    drr = _calc_rate(spend * 100, revenue)
+    return DashboardMetricsOut(
+        impressions=int(impressions or 0),
+        clicks=int(clicks or 0),
+        ctr=ctr,
+        cpc=cpc,
+        orders=int(orders or 0),
+        cr=cr,
+        revenue=float(revenue or 0.0),
+        drr=drr,
+        spend=float(spend or 0.0),
+    )
+
+
+def _collect_campaign_metrics(db: Session, user_id: int, days: int = 30) -> dict[int, tuple[DashboardMetricsOut, Marketplace | None]]:
+    date_from = date.today() - timedelta(days=max(1, days) - 1)
+    rows = db.execute(
+        select(
+            Campaign.id,
+            MPAccount.marketplace,
+            func.coalesce(func.sum(CampaignStat.impressions), 0),
+            func.coalesce(func.sum(CampaignStat.clicks), 0),
+            func.coalesce(func.sum(CampaignStat.spend), 0),
+            func.coalesce(func.sum(CampaignStat.orders), 0),
+            func.coalesce(func.sum(CampaignStat.revenue), 0),
+        )
+        .join(MPAccount, Campaign.account_id == MPAccount.id)
+        .outerjoin(
+            CampaignStat,
+            and_(
+                CampaignStat.campaign_id == Campaign.id,
+                CampaignStat.date >= date_from,
+            ),
+        )
+        .where(MPAccount.user_id == user_id)
+        .group_by(Campaign.id, MPAccount.marketplace)
+    ).all()
+
+    result: dict[int, tuple[DashboardMetricsOut, Marketplace | None]] = {}
+    for campaign_id, marketplace, impressions, clicks, spend, orders, revenue in rows:
+        result[int(campaign_id)] = (
+            _build_metrics(
+                impressions=int(impressions or 0),
+                clicks=int(clicks or 0),
+                spend=float(spend or 0.0),
+                orders=int(orders or 0),
+                revenue=float(revenue or 0.0),
+            ),
+            marketplace,
+        )
+    return result
+
+
+def _campaign_to_out(campaign: Campaign, metrics: DashboardMetricsOut | None, marketplace: Marketplace | None) -> CampaignOut:
+    metrics_data = metrics or DashboardMetricsOut()
+    return CampaignOut(
+        id=campaign.id,
+        account_id=campaign.account_id,
+        external_id=campaign.external_id,
+        name=campaign.name,
+        type=campaign.type,
+        status=campaign.status,
+        daily_budget=float(campaign.daily_budget) if campaign.daily_budget is not None else None,
+        auto_minus_enabled=campaign.auto_minus_enabled,
+        marketplace=marketplace,
+        impressions=metrics_data.impressions,
+        clicks=metrics_data.clicks,
+        ctr=metrics_data.ctr,
+        cpc=metrics_data.cpc,
+        orders=metrics_data.orders,
+        cr=metrics_data.cr,
+        revenue=metrics_data.revenue,
+        drr=metrics_data.drr,
+        spend=metrics_data.spend,
+        created_at=campaign.created_at,
+        updated_at=campaign.updated_at,
+    )
 
 
 @router.get("/", response_model=list[CampaignOut])
 def list_campaigns(
     marketplace: Marketplace | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    days: int = Query(default=30, ge=1, le=180),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Campaign]:
+) -> list[CampaignOut]:
     query = (
         select(Campaign)
         .join(MPAccount, Campaign.account_id == MPAccount.id)
         .where(MPAccount.user_id == current_user.id)
+        .options(joinedload(Campaign.account))
         .order_by(Campaign.updated_at.desc())
     )
     if marketplace:
         query = query.where(MPAccount.marketplace == marketplace)
     if status_filter:
         query = query.where(Campaign.status == status_filter)
-    return db.execute(query).scalars().all()
+    campaigns = db.execute(query).scalars().all()
+    metrics_map = _collect_campaign_metrics(db, current_user.id, days=days)
+
+    result: list[CampaignOut] = []
+    for campaign in campaigns:
+        metrics, mp = metrics_map.get(campaign.id, (DashboardMetricsOut(), campaign.account.marketplace if campaign.account else None))
+        result.append(_campaign_to_out(campaign, metrics, mp))
+    return result
 
 
 def _get_campaign_for_user(db: Session, user_id: int, campaign_id: int) -> Campaign:
@@ -48,10 +160,14 @@ def _get_campaign_for_user(db: Session, user_id: int, campaign_id: int) -> Campa
 @router.get("/{campaign_id}", response_model=CampaignOut)
 def campaign_detail(
     campaign_id: int,
+    days: int = Query(default=30, ge=1, le=180),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> Campaign:
-    return _get_campaign_for_user(db, current_user.id, campaign_id)
+) -> CampaignOut:
+    campaign = _get_campaign_for_user(db, current_user.id, campaign_id)
+    metrics_map = _collect_campaign_metrics(db, current_user.id, days=days)
+    metrics, mp = metrics_map.get(campaign.id, (DashboardMetricsOut(), campaign.account.marketplace if campaign.account else None))
+    return _campaign_to_out(campaign, metrics, mp)
 
 
 @router.get("/{campaign_id}/stats", response_model=list[CampaignStatOut])
@@ -60,7 +176,7 @@ def campaign_stats(
     days: int = Query(default=30, ge=1, le=180),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[CampaignStat]:
+) -> list[CampaignStatOut]:
     campaign = _get_campaign_for_user(db, current_user.id, campaign_id)
     date_from = date.today() - timedelta(days=days - 1)
     stats = db.execute(
@@ -68,7 +184,22 @@ def campaign_stats(
         .where(and_(CampaignStat.campaign_id == campaign.id, CampaignStat.date >= date_from))
         .order_by(CampaignStat.date.asc())
     ).scalars().all()
-    return stats
+    return [
+        CampaignStatOut(
+            date=item.date,
+            impressions=item.impressions,
+            clicks=item.clicks,
+            spend=float(item.spend),
+            orders=item.orders,
+            revenue=float(item.revenue),
+            ctr=item.ctr,
+            cpc=item.cpc,
+            cpo=item.cpo,
+            drr=item.drr,
+            cr=_calc_rate(item.orders * 100, item.clicks),
+        )
+        for item in stats
+    ]
 
 
 @router.post("/{campaign_id}/pause")
@@ -97,14 +228,31 @@ def resume_campaign(
     return {"status": "active"}
 
 
+@router.post("/{campaign_id}/auto-minus", response_model=CampaignAutoMinusToggleOut)
+def toggle_campaign_auto_minus(
+    campaign_id: int,
+    payload: CampaignAutoMinusToggleRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CampaignAutoMinusToggleOut:
+    campaign = _get_campaign_for_user(db, current_user.id, campaign_id)
+    campaign.auto_minus_enabled = payload.enabled
+    campaign.updated_at = datetime.now(UTC)
+    db.commit()
+    return CampaignAutoMinusToggleOut(campaign_id=campaign.id, auto_minus_enabled=campaign.auto_minus_enabled)
+
+
 @router.get("/dashboard/summary", response_model=DashboardSummaryOut)
 def dashboard_summary(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> DashboardSummaryOut:
     today = date.today()
     week_start = today - timedelta(days=6)
     month_start = today.replace(day=1)
+    thirty_days_start = today - timedelta(days=29)
 
     base_stats = (
         select(
+            func.coalesce(func.sum(CampaignStat.impressions), 0).label("impressions"),
+            func.coalesce(func.sum(CampaignStat.clicks), 0).label("clicks"),
             func.coalesce(func.sum(CampaignStat.spend), 0).label("spend"),
             func.coalesce(func.sum(CampaignStat.orders), 0).label("orders"),
             func.coalesce(func.sum(CampaignStat.revenue), 0).label("revenue"),
@@ -114,27 +262,148 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
         .where(MPAccount.user_id == current_user.id)
     )
 
-    spend_today, orders_today, revenue_today = db.execute(base_stats.where(CampaignStat.date == today)).one()
-    spend_week, _, _ = db.execute(base_stats.where(CampaignStat.date >= week_start)).one()
-    spend_month, _, _ = db.execute(base_stats.where(CampaignStat.date >= month_start)).one()
+    _, _, spend_today, orders_today, revenue_today = db.execute(base_stats.where(CampaignStat.date == today)).one()
+    _, _, spend_week, _, _ = db.execute(base_stats.where(CampaignStat.date >= week_start)).one()
+    _, _, spend_month, _, _ = db.execute(base_stats.where(CampaignStat.date >= month_start)).one()
+    impressions_total, clicks_total, spend_total, orders_total, revenue_total = db.execute(
+        base_stats.where(CampaignStat.date >= thirty_days_start)
+    ).one()
 
     wb_spend = db.execute(
         select(func.coalesce(func.sum(CampaignStat.spend), 0))
         .join(Campaign, Campaign.id == CampaignStat.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
-        .where(MPAccount.user_id == current_user.id, MPAccount.marketplace == Marketplace.WB, CampaignStat.date == today)
+        .where(
+            MPAccount.user_id == current_user.id,
+            MPAccount.marketplace == Marketplace.WB,
+            CampaignStat.date >= month_start,
+        )
     ).scalar_one()
     ozon_spend = db.execute(
         select(func.coalesce(func.sum(CampaignStat.spend), 0))
         .join(Campaign, Campaign.id == CampaignStat.campaign_id)
         .join(MPAccount, MPAccount.id == Campaign.account_id)
-        .where(MPAccount.user_id == current_user.id, MPAccount.marketplace == Marketplace.OZON, CampaignStat.date == today)
+        .where(
+            MPAccount.user_id == current_user.id,
+            MPAccount.marketplace == Marketplace.OZON,
+            CampaignStat.date >= month_start,
+        )
     ).scalar_one()
 
-    avg_drr = (float(spend_today) / float(revenue_today) * 100) if float(revenue_today) > 0 else 0.0
+    avg_drr = _calc_rate(float(spend_total) * 100, float(revenue_total))
     last_synced_at = db.execute(
         select(func.max(MPAccount.last_synced_at)).where(MPAccount.user_id == current_user.id)
     ).scalar_one()
+
+    trend_rows = db.execute(
+        select(
+            CampaignStat.date,
+            func.coalesce(func.sum(CampaignStat.impressions), 0),
+            func.coalesce(func.sum(CampaignStat.clicks), 0),
+            func.coalesce(func.sum(CampaignStat.orders), 0),
+            func.coalesce(func.sum(CampaignStat.spend), 0),
+        )
+        .join(Campaign, Campaign.id == CampaignStat.campaign_id)
+        .join(MPAccount, MPAccount.id == Campaign.account_id)
+        .where(MPAccount.user_id == current_user.id, CampaignStat.date >= thirty_days_start)
+        .group_by(CampaignStat.date)
+        .order_by(CampaignStat.date.asc())
+    ).all()
+    trend = [
+        DashboardTrendPointOut(
+            date=row_date,
+            impressions=int(impressions or 0),
+            clicks=int(clicks or 0),
+            orders=int(orders or 0),
+            spend=float(spend or 0.0),
+        )
+        for row_date, impressions, clicks, orders, spend in trend_rows
+    ]
+
+    campaign_metrics_rows = db.execute(
+        select(
+            Campaign.id,
+            func.coalesce(func.sum(CampaignStat.impressions), 0),
+            func.coalesce(func.sum(CampaignStat.clicks), 0),
+            func.coalesce(func.sum(CampaignStat.spend), 0),
+            func.coalesce(func.sum(CampaignStat.revenue), 0),
+        )
+        .join(Campaign, Campaign.id == CampaignStat.campaign_id)
+        .join(MPAccount, MPAccount.id == Campaign.account_id)
+        .where(MPAccount.user_id == current_user.id, CampaignStat.date >= thirty_days_start)
+        .group_by(Campaign.id)
+    ).all()
+    high_drr_campaigns = 0
+    low_ctr_campaigns = 0
+    for _, impressions, clicks, spend, revenue in campaign_metrics_rows:
+        ctr = _calc_rate(float(clicks or 0) * 100, float(impressions or 0))
+        drr = _calc_rate(float(spend or 0) * 100, float(revenue or 0))
+        if drr > 35:
+            high_drr_campaigns += 1
+        if impressions and ctr < 1:
+            low_ctr_campaigns += 1
+
+    latest_query_date = db.execute(
+        select(func.max(SearchQuery.date))
+        .join(Campaign, Campaign.id == SearchQuery.campaign_id)
+        .join(MPAccount, MPAccount.id == Campaign.account_id)
+        .where(MPAccount.user_id == current_user.id)
+    ).scalar_one_or_none()
+
+    zero_sales_queries = 0
+    zero_sales_wasted = 0.0
+    irrelevant_count = 0
+    irrelevant_spend = 0.0
+    if latest_query_date is not None:
+        latest_query_rows = db.execute(
+            select(
+                SearchQuery.campaign_id,
+                SearchQuery.query,
+                func.coalesce(func.sum(SearchQuery.orders), 0),
+                func.coalesce(func.sum(SearchQuery.spend), 0),
+            )
+            .join(Campaign, Campaign.id == SearchQuery.campaign_id)
+            .join(MPAccount, MPAccount.id == Campaign.account_id)
+            .where(MPAccount.user_id == current_user.id, SearchQuery.date == latest_query_date)
+            .group_by(SearchQuery.campaign_id, SearchQuery.query)
+        ).all()
+        for _, _, orders, spend in latest_query_rows:
+            spend_float = float(spend or 0.0)
+            orders_int = int(orders or 0)
+            if orders_int == 0 and spend_float > 0:
+                zero_sales_queries += 1
+                zero_sales_wasted += spend_float
+
+        irrelevant_rows = db.execute(
+            select(
+                SearchQuery.campaign_id,
+                SearchQuery.query,
+                func.coalesce(func.sum(SearchQuery.spend), 0),
+            )
+            .join(Campaign, Campaign.id == SearchQuery.campaign_id)
+            .join(MPAccount, MPAccount.id == Campaign.account_id)
+            .join(
+                QueryLabel,
+                and_(
+                    QueryLabel.campaign_id == SearchQuery.campaign_id,
+                    QueryLabel.query == SearchQuery.query,
+                ),
+            )
+            .where(
+                MPAccount.user_id == current_user.id,
+                SearchQuery.date == latest_query_date,
+                QueryLabel.label == QueryLabelStatus.NOT_RELEVANT,
+            )
+            .group_by(SearchQuery.campaign_id, SearchQuery.query)
+        ).all()
+        irrelevant_count = len(irrelevant_rows)
+        irrelevant_spend = sum(float(spend or 0.0) for _, _, spend in irrelevant_rows)
+
+    diagnostics = [
+        f"❌ {high_drr_campaigns} кампаний с ДРР > 35%",
+        f"❌ {zero_sales_queries} ключей с 0 продажами сливают {_format_rub(zero_sales_wasted)}/день",
+        f"❌ CTR ниже 1% в {low_ctr_campaigns} кампаниях — проблема с карточкой",
+    ]
 
     return DashboardSummaryOut(
         spend_today=float(spend_today),
@@ -145,4 +414,18 @@ def dashboard_summary(current_user: User = Depends(get_current_user), db: Sessio
         wb_spend=float(wb_spend),
         ozon_spend=float(ozon_spend),
         last_synced_at=last_synced_at,
+        totals=_build_metrics(
+            impressions=int(impressions_total or 0),
+            clicks=int(clicks_total or 0),
+            spend=float(spend_total or 0.0),
+            orders=int(orders_total or 0),
+            revenue=float(revenue_total or 0.0),
+        ),
+        trend=trend,
+        diagnostics=diagnostics,
+        irrelevant_alert=DashboardIrrelevantAlertOut(
+            count=irrelevant_count,
+            wasted_per_day=round(irrelevant_spend, 2),
+            wasted_per_month=round(irrelevant_spend * 30, 2),
+        ),
     )

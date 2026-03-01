@@ -4,11 +4,11 @@ import { createBudgetRule, listBudgetRules, listCampaigns, runBudgetChecks, togg
 import { LoadingScreen } from "@/components/LoadingScreen";
 
 const RULE_TYPES = [
-  { value: "daily_budget", label: "Daily budget" },
-  { value: "weekly_budget", label: "Weekly budget" },
-  { value: "monthly_budget", label: "Monthly budget" },
-  { value: "drr", label: "DRR" },
-  { value: "ctr_drop", label: "CTR drop" }
+  { value: "daily_budget", label: "Дневной бюджет" },
+  { value: "weekly_budget", label: "Недельный бюджет" },
+  { value: "monthly_budget", label: "Месячный бюджет" },
+  { value: "drr", label: "ДРР" },
+  { value: "ctr_drop", label: "Падение CTR" }
 ];
 
 export function BudgetPage() {
@@ -21,7 +21,7 @@ export function BudgetPage() {
     is_active: true
   });
 
-  const campaignsQuery = useQuery({ queryKey: ["campaigns"], queryFn: listCampaigns });
+  const campaignsQuery = useQuery({ queryKey: ["campaigns"], queryFn: () => listCampaigns() });
   const rulesQuery = useQuery({ queryKey: ["budget-rules"], queryFn: listBudgetRules });
 
   const createMutation = useMutation({
@@ -42,20 +42,20 @@ export function BudgetPage() {
   });
 
   if (campaignsQuery.isLoading || rulesQuery.isLoading) {
-    return <LoadingScreen text="Loading budget rules..." />;
+    return <LoadingScreen text="Загрузка правил бюджета..." />;
   }
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 text-sm font-semibold">Create budget rule</div>
+        <div className="mb-2 text-sm font-semibold">Создать правило</div>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <select
             value={form.campaign_id || ""}
             onChange={(event) => setForm((prev) => ({ ...prev, campaign_id: Number(event.target.value) }))}
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
           >
-            <option value="">Select campaign</option>
+            <option value="">Выберите кампанию</option>
             {campaignsQuery.data?.map((campaign) => (
               <option key={campaign.id} value={campaign.id}>
                 {campaign.name}
@@ -76,7 +76,7 @@ export function BudgetPage() {
           <input
             value={form.threshold}
             onChange={(event) => setForm((prev) => ({ ...prev, threshold: event.target.value }))}
-            placeholder="Threshold"
+            placeholder="Порог"
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
           />
           <select
@@ -84,8 +84,8 @@ export function BudgetPage() {
             onChange={(event) => setForm((prev) => ({ ...prev, action: event.target.value }))}
             className="rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
           >
-            <option value="pause_campaign">Auto pause</option>
-            <option value="alert">Alert only</option>
+            <option value="pause_campaign">Авто-пауза</option>
+            <option value="alert">Уведомление</option>
           </select>
         </div>
         <div className="mt-2 flex gap-2">
@@ -101,13 +101,13 @@ export function BudgetPage() {
             }
             className="rounded-md bg-[color:var(--tg-button-color)] px-3 py-2 text-xs text-white"
           >
-            Save rule
+            Сохранить
           </button>
           <button
             onClick={() => checkMutation.mutate()}
             className="rounded-md border border-slate-300/30 px-3 py-2 text-xs"
           >
-            Run checks now
+            Проверить сейчас
           </button>
         </div>
       </div>
@@ -117,16 +117,16 @@ export function BudgetPage() {
           <div key={rule.id} className="rounded-xl border border-slate-300/30 p-3">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <div className="text-sm font-semibold">{rule.rule_type}</div>
+                <div className="text-sm font-semibold">{labelRuleType(rule.rule_type)}</div>
                 <div className="text-xs text-[color:var(--tg-hint-color)]">
-                  Campaign #{rule.campaign_id} • threshold {rule.threshold} • action {rule.action}
+                  Кампания №{rule.campaign_id} • порог {rule.threshold} • {labelAction(rule.action)}
                 </div>
               </div>
               <button
                 onClick={() => toggleMutation.mutate(rule.id)}
                 className="rounded-md border border-slate-300/30 px-2 py-1 text-xs"
               >
-                {rule.is_active ? "Disable" : "Enable"}
+                {rule.is_active ? "Отключить" : "Включить"}
               </button>
             </div>
           </div>
@@ -134,4 +134,19 @@ export function BudgetPage() {
       </div>
     </div>
   );
+}
+
+function labelRuleType(type: string) {
+  if (type === "drr") return "ДРР";
+  if (type === "daily_budget") return "Дневной бюджет";
+  if (type === "ctr_drop") return "Падение CTR";
+  if (type === "weekly_budget") return "Недельный бюджет";
+  if (type === "monthly_budget") return "Месячный бюджет";
+  return type;
+}
+
+function labelAction(action: string) {
+  if (action === "alert") return "уведомление";
+  if (action === "pause_campaign") return "пауза кампании";
+  return action;
 }
