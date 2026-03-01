@@ -1,25 +1,26 @@
 from app.models.entities import QueryLabelStatus, SearchQuery
+from app.services.morphology import classify_query_relevancy
 
 
-def classify_query_default(ctr: float, impressions: int, orders: int) -> QueryLabelStatus:
+def classify_query_default(ctr: float, impressions: int, orders: int, spend: float = 0.0) -> QueryLabelStatus:
     """
-    Default auto-label strategy:
-    - likely relevant: CTR > 3% or at least one order
-    - potentially irrelevant: CTR < 1% and impressions > 300
-    - otherwise pending
+    Default auto-label strategy (automatic minus-words pipeline):
+    - relevant: CTR > 1.5% and orders > 0
+    - not_relevant: CTR < 0.3% or (impressions > 1000 and orders == 0 and spend > 500)
+    - pending: otherwise
     """
-    if orders > 0 or ctr > 3.0:
-        return QueryLabelStatus.RELEVANT
-    if ctr < 1.0 and impressions > 300:
-        return QueryLabelStatus.NOT_RELEVANT
-    return QueryLabelStatus.PENDING
+    return classify_query_relevancy(ctr=ctr, impressions=impressions, orders=orders, spend=spend)
 
 
 def classify_row_color(query: SearchQuery) -> str:
-    if query.ctr > 2.0 and query.orders > 0:
+    label = classify_query_default(
+        ctr=query.ctr,
+        impressions=query.impressions,
+        orders=query.orders,
+        spend=float(query.spend),
+    )
+    if label == QueryLabelStatus.RELEVANT:
         return "green"
-    if 1.0 <= query.ctr <= 2.0:
-        return "yellow"
-    if query.ctr < 1.0 and query.orders == 0:
+    if label == QueryLabelStatus.NOT_RELEVANT:
         return "red"
     return "yellow"

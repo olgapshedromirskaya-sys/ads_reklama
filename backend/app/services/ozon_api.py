@@ -72,3 +72,37 @@ class OzonApiClient:
 
     async def deactivate_campaign(self, campaign_id: str | int) -> Any:
         return await self._request("POST", "/api/client/campaign/deactivate", json={"campaign_id": int(campaign_id)})
+
+    async def add_negative_keywords(self, campaign_id: str | int, keywords: Sequence[str]) -> Any:
+        cleaned_keywords = sorted({word.strip() for word in keywords if word and word.strip()})
+        if not cleaned_keywords:
+            return {"applied": 0}
+
+        payload_candidates = [
+            (
+                "/api/client/campaign/negative-keywords/update",
+                {"campaign_id": int(campaign_id), "keywords": cleaned_keywords},
+            ),
+            (
+                "/api/client/campaign/keywords/negative/add",
+                {"campaign_id": int(campaign_id), "negative_keywords": cleaned_keywords},
+            ),
+            (
+                "/api/client/campaign/keywords/update",
+                {"campaign_id": int(campaign_id), "minus_keywords": cleaned_keywords},
+            ),
+        ]
+
+        last_error: MarketplaceAPIError | None = None
+        for endpoint, payload in payload_candidates:
+            try:
+                return await self._request("POST", endpoint, json=payload)
+            except MarketplaceAPIError as exc:
+                last_error = exc
+                if " 404" in str(exc):
+                    continue
+                raise
+
+        if last_error is not None:
+            raise last_error
+        return {"applied": len(cleaned_keywords)}

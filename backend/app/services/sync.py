@@ -23,8 +23,11 @@ from app.models.entities import (
     User,
 )
 from app.services.exceptions import MarketplaceAuthError
+from app.services.morphology import (
+    auto_classify_campaign_queries,
+    regenerate_minus_words_for_campaign,
+)
 from app.services.ozon_api import OzonApiClient
-from app.services.relevancy import classify_query_default
 from app.services.wb_api import WBApiClient
 
 
@@ -99,6 +102,128 @@ def _calc_rate(numerator: float, denominator: float) -> float:
     if denominator <= 0:
         return 0.0
     return numerator / denominator
+
+
+def _format_money(amount: float) -> str:
+    rounded = round(amount, 2)
+    if rounded.is_integer():
+        return f"{int(rounded):,}".replace(",", " ")
+    return f"{rounded:,.2f}".replace(",", " ")
+
+
+def _create_alert_if_missing_recently(
+    db: Session,
+    user_id: int,
+    campaign_id: int,
+    alert_type: str,
+    message: str,
+    lookback_hours: int = 24,
+) -> bool:
+    border = datetime.now(UTC) - timedelta(hours=lookback_hours)
+    exists = db.execute(
+        select(Alert.id).where(
+            Alert.user_id == user_id,
+            Alert.campaign_id == campaign_id,
+            Alert.type == alert_type,
+            Alert.message == message,
+            Alert.created_at >= border,
+        )
+    ).scalar_one_or_none()
+    if exists:
+        return False
+    db.add(Alert(user_id=user_id, campaign_id=campaign_id, type=alert_type, message=message))
+    return True
+
+
+def _latest_campaign_stat(db: Session, campaign_id: int) -> CampaignStat | None:
+    return db.execute(
+        select(CampaignStat)
+        .where(CampaignStat.campaign_id == campaign_id)
+        .order_by(CampaignStat.date.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def _latest_not_relevant_waste(db: Session, campaign_id: int) -> tuple[int, float]:
+    latest_query_date = db.execute(
+        select(func.max(SearchQuery.date)).where(SearchQuery.campaign_id == campaign_id)
+    ).scalar_one_or_none()
+    if latest_query_date is None:
+        return (0, 0.0)
+
+    wasted_spend, query_count = db.execute(
+        select(
+            func.coalesce(func.sum(SearchQuery.spend), 0),
+            func.count(func.distinct(SearchQuery.query)),
+        )
+        .join(
+            QueryLabel,
+            and_(
+                QueryLabel.campaign_id == SearchQuery.campaign_id,
+                QueryLabel.query == SearchQuery.query,
+            ),
+        )
+        .where(
+            SearchQuery.campaign_id == campaign_id,
+            SearchQuery.date == latest_query_date,
+            QueryLabel.label == QueryLabelStatus.NOT_RELEVANT,
+        )
+    ).one()
+    return int(query_count or 0), float(wasted_spend or 0)
+
+
+def run_budget_protection_alerts_for_account(account: MPAccount, db: Session) -> int:
+    campaigns = db.execute(select(Campaign).where(Campaign.account_id == account.id)).scalars().all()
+    created = 0
+    user_id = account.user_id
+
+    for campaign in campaigns:
+        campaign_budget = _as_float(campaign.daily_budget)
+        latest_stat = _latest_campaign_stat(db, campaign.id)
+        if latest_stat is not None:
+            drr_value = _as_float(latest_stat.drr)
+            spend_value = _as_float(latest_stat.spend)
+            if drr_value > 25:
+                message = f"Высокий ДРР у кампании {campaign.name} - {drr_value:.1f}%, рекомендуется пауза"
+                if _create_alert_if_missing_recently(
+                    db,
+                    user_id=user_id,
+                    campaign_id=campaign.id,
+                    alert_type="high_drr",
+                    message=message,
+                ):
+                    created += 1
+
+            if campaign_budget > 0 and spend_value > campaign_budget * 0.9:
+                message = f"Кампания {campaign.name} израсходовала 90% дневного бюджета"
+                if _create_alert_if_missing_recently(
+                    db,
+                    user_id=user_id,
+                    campaign_id=campaign.id,
+                    alert_type="budget_limit_90",
+                    message=message,
+                ):
+                    created += 1
+
+        if campaign_budget > 0:
+            not_relevant_count, not_relevant_spend = _latest_not_relevant_waste(db, campaign.id)
+            if not_relevant_count > 0 and not_relevant_spend > campaign_budget * 0.2:
+                message = (
+                    f"Кампания {campaign.name}: {not_relevant_count} нерелевантных запросов "
+                    f"сливают {_format_money(not_relevant_spend)}₽"
+                )
+                if _create_alert_if_missing_recently(
+                    db,
+                    user_id=user_id,
+                    campaign_id=campaign.id,
+                    alert_type="irrelevant_queries_budget_waste",
+                    message=message,
+                ):
+                    created += 1
+
+    if created:
+        db.commit()
+    return created
 
 
 async def sync_account_campaigns(account: MPAccount, db: Session) -> int:
@@ -261,9 +386,14 @@ async def _sync_campaign_stats_ozon(account: MPAccount, campaigns: list[Campaign
 
 async def sync_account_campaign_stats(account: MPAccount, db: Session, days: int = 7) -> int:
     campaigns = db.execute(select(Campaign).where(Campaign.account_id == account.id)).scalars().all()
+    if not campaigns:
+        return 0
     if account.marketplace == Marketplace.WB:
-        return await _sync_campaign_stats_wb(account, campaigns, db, days)
-    return await _sync_campaign_stats_ozon(account, campaigns, db, days)
+        written = await _sync_campaign_stats_wb(account, campaigns, db, days)
+    else:
+        written = await _sync_campaign_stats_ozon(account, campaigns, db, days)
+    run_budget_protection_alerts_for_account(account, db)
+    return written
 
 
 async def _sync_search_queries_wb(account: MPAccount, campaigns: list[Campaign], db: Session, days: int) -> int:
@@ -309,18 +439,6 @@ async def _sync_search_queries_wb(account: MPAccount, campaigns: list[Campaign],
                 search_query.ctr = ctr
                 search_query.cpc = cpc
                 search_query.cpo = cpo
-
-                existing_label = db.execute(
-                    select(QueryLabel).where(QueryLabel.campaign_id == campaign.id, QueryLabel.query == query_text)
-                ).scalar_one_or_none()
-                if existing_label is None:
-                    db.add(
-                        QueryLabel(
-                            campaign_id=campaign.id,
-                            query=query_text,
-                            label=classify_query_default(ctr=ctr, impressions=impressions, orders=orders),
-                        )
-                    )
                 written += 1
     db.commit()
     return written
@@ -369,18 +487,6 @@ async def _sync_search_queries_ozon(account: MPAccount, campaigns: list[Campaign
                 search_query.ctr = ctr
                 search_query.cpc = cpc
                 search_query.cpo = cpo
-
-                existing_label = db.execute(
-                    select(QueryLabel).where(QueryLabel.campaign_id == campaign.id, QueryLabel.query == query_text)
-                ).scalar_one_or_none()
-                if existing_label is None:
-                    db.add(
-                        QueryLabel(
-                            campaign_id=campaign.id,
-                            query=query_text,
-                            label=classify_query_default(ctr=ctr, impressions=impressions, orders=orders),
-                        )
-                    )
                 written += 1
     db.commit()
     return written
@@ -388,9 +494,19 @@ async def _sync_search_queries_ozon(account: MPAccount, campaigns: list[Campaign
 
 async def sync_account_search_queries(account: MPAccount, db: Session, days: int = 30) -> int:
     campaigns = db.execute(select(Campaign).where(Campaign.account_id == account.id)).scalars().all()
+    if not campaigns:
+        return 0
     if account.marketplace == Marketplace.WB:
-        return await _sync_search_queries_wb(account, campaigns, db, days)
-    return await _sync_search_queries_ozon(account, campaigns, db, days)
+        written = await _sync_search_queries_wb(account, campaigns, db, days)
+    else:
+        written = await _sync_search_queries_ozon(account, campaigns, db, days)
+
+    for campaign in campaigns:
+        auto_classify_campaign_queries(db, campaign.id)
+        regenerate_minus_words_for_campaign(db, campaign.id)
+
+    run_budget_protection_alerts_for_account(account, db)
+    return written
 
 
 async def sync_all_accounts_campaigns(db: Session) -> dict[str, int]:
