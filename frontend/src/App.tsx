@@ -89,6 +89,9 @@ function App() {
 
       try {
         console.log("[TelegramAuth] Sending initData to POST /api/auth/telegram");
+        console.log("[DEBUG] API base URL:", import.meta.env.VITE_API_BASE_URL);
+        console.log("[DEBUG] Will call:", (import.meta.env.VITE_API_BASE_URL || "/api") + "/auth/telegram");
+        alert("API URL: " + (import.meta.env.VITE_API_BASE_URL || "/api"));
         const auth = await telegramLogin(initData);
         if (!auth?.user?.id) {
           throw new Error("Invalid auth response");
