@@ -86,8 +86,11 @@ export type Account = {
 };
 
 export async function telegramLogin(initData: string): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>("/auth/telegram", { init_data: initData });
-  return data;
+  const { data: response } = await apiClient.post<AuthResponse>("/auth/telegram", { init_data: initData });
+  if (!response?.user?.id) {
+    throw new Error("Invalid auth response");
+  }
+  return response;
 }
 
 export async function getDashboardSummary() {

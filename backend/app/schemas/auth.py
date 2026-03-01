@@ -18,10 +18,16 @@ class TelegramUserOut(BaseModel):
     created_at: datetime
 
 
+class AuthUserOut(BaseModel):
+    id: int
+    telegram_id: int
+    username: str | None
+
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    user: TelegramUserOut
+    user: AuthUserOut
 
 
 class AccountCreate(BaseModel):
