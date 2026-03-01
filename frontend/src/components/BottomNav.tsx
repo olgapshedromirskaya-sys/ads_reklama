@@ -2,7 +2,7 @@ import { BarChart3, Bell, CircleDollarSign, Search, Settings, Target } from "luc
 import { NavLink } from "react-router-dom";
 
 const items = [
-  { to: "/", label: "Dashboard", icon: BarChart3 },
+  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { to: "/queries", label: "Queries", icon: Search },
   { to: "/keywords", label: "Keywords", icon: Target },
   { to: "/budget", label: "Budget", icon: CircleDollarSign },

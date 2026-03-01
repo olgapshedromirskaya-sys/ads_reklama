@@ -19,7 +19,14 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     webapp_url: str = "http://localhost:8080"
     backend_url: str = "http://backend:8000"
-    allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "https://ads-reklama-frontend.onrender.com",
+            "https://web.telegram.org",
+            "*",
+        ]
+    )
 
     wb_api_base_url: str = "https://advert-api.wildberries.ru"
     ozon_api_base_url: str = "https://performance.ozon.ru"

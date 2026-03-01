@@ -5,6 +5,7 @@ import { BottomNav } from "./BottomNav";
 
 const titleMap: Record<string, string> = {
   "/": "Dashboard",
+  "/dashboard": "Dashboard",
   "/campaigns": "Campaigns",
   "/queries": "Search Queries",
   "/keywords": "Keyword Positions",

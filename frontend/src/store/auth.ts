@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+const JWT_STORAGE_KEY = "mp-ads-jwt";
+
 type AuthUser = {
   id: number;
   telegram_id: number;
@@ -19,8 +21,14 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       token: null,
       user: null,
-      setAuth: (token, user) => set({ token, user }),
-      clearAuth: () => set({ token: null, user: null })
+      setAuth: (token, user) => {
+        localStorage.setItem(JWT_STORAGE_KEY, token);
+        set({ token, user });
+      },
+      clearAuth: () => {
+        localStorage.removeItem(JWT_STORAGE_KEY);
+        set({ token: null, user: null });
+      }
     }),
     { name: "mp-ads-auth" }
   )

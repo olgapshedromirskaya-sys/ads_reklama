@@ -6,7 +6,7 @@ from app.models.entities import Marketplace
 
 
 class TelegramLoginRequest(BaseModel):
-    init_data: str = Field(..., description="Telegram WebApp initData")
+    init_data: str = Field(..., min_length=1, description="Telegram WebApp initData")
 
 
 class TelegramUserOut(BaseModel):
