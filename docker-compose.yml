@@ -1,0 +1,129 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mp-ads-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mp_ads
+      POSTGRES_USER: mp_ads
+      POSTGRES_PASSWORD: mp_ads
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mp_ads -d mp_ads"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mp-ads-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mp-ads-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mp-ads-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: celery -A app.tasks.celery_app.celery_app worker -l info
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mp-ads-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: celery -A app.tasks.celery_app.celery_app beat -l info
+    depends_on:
+      worker:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  bot:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mp-ads-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: python -m bot.main
+    depends_on:
+      backend:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${WEBAPP_URL:-http://localhost:8080}/api
+    container_name: mp-ads-frontend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:
