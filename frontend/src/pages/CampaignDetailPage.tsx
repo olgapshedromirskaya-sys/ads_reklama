@@ -57,20 +57,15 @@ export function CampaignDetailPage() {
     }
   });
 
-  if (campaignQuery.isLoading || statsQuery.isLoading || queriesQuery.isLoading) {
-    return <LoadingScreen text="Загрузка кампании..." />;
-  }
-  if (!campaignQuery.data || !statsQuery.data || !queriesQuery.data) {
-    return <div className="text-sm text-red-500">Ошибка загрузки кампании.</div>;
-  }
+  const statsRows = statsQuery.data ?? [];
 
-  const chartData = statsQuery.data.map((row) => ({
+  const chartData = statsRows.map((row) => ({
     ...row,
     day: row.date.slice(5)
   }));
 
   const metrics = useMemo(() => {
-    if (!statsQuery.data.length) {
+    if (!statsRows.length) {
       return {
         impressions: 0,
         clicks: 0,
@@ -83,7 +78,7 @@ export function CampaignDetailPage() {
         drr: 0
       };
     }
-    const totals = statsQuery.data.reduce(
+    const totals = statsRows.reduce(
       (acc, row) => {
         acc.impressions += row.impressions;
         acc.clicks += row.clicks;
@@ -99,7 +94,7 @@ export function CampaignDetailPage() {
     const cr = totals.clicks > 0 ? (totals.orders / totals.clicks) * 100 : 0;
     const drr = totals.revenue > 0 ? (totals.spend / totals.revenue) * 100 : totals.spend > 0 ? 999 : 0;
     return { ...totals, ctr, cpc, cr, drr };
-  }, [statsQuery.data]);
+  }, [statsRows]);
 
   const warnings = useMemo(() => {
     const items: string[] = [];
@@ -114,6 +109,13 @@ export function CampaignDetailPage() {
     }
     return items;
   }, [metrics]);
+
+  if (campaignQuery.isLoading || statsQuery.isLoading || queriesQuery.isLoading) {
+    return <LoadingScreen text="Загрузка кампании..." />;
+  }
+  if (!campaignQuery.data || !statsQuery.data || !queriesQuery.data) {
+    return <div className="text-sm text-red-500">Ошибка загрузки кампании.</div>;
+  }
 
   return (
     <div className="space-y-4">

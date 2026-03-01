@@ -30,6 +30,14 @@ export function DashboardPage() {
     }
   });
 
+  const chartData = useMemo(() => {
+    const trend = data?.trend ?? [];
+    return trend.map((item) => ({
+      ...item,
+      d: item.date.slice(5)
+    }));
+  }, [data?.trend]);
+
   if (isLoading) {
     return <LoadingScreen text="Загрузка дашборда..." />;
   }
@@ -37,15 +45,6 @@ export function DashboardPage() {
   if (isError || !data) {
     return <div className="text-sm text-red-500">Ошибка загрузки дашборда.</div>;
   }
-
-  const chartData = useMemo(
-    () =>
-      data.trend.map((item) => ({
-        ...item,
-        d: item.date.slice(5)
-      })),
-    [data.trend]
-  );
 
   return (
     <div className="space-y-4">
