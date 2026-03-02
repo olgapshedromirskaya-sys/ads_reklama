@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 BTN_DRR = "📊 ДРР"
 BTN_WEEK_REPORT = "📈 Отчёт за неделю"
 BTN_DIAGNOSTICS = "🔍 Диагностика"
+BTN_PLAN_FACT = "📊 План/Факт"
 BTN_AUTO_MINUS = "🚫 Авто-минусовка"
 BTN_CAMPAIGNS = "📦 Кампании"
 BTN_NOTIFICATIONS = "🔔 Уведомления"
@@ -29,8 +30,9 @@ BTN_OPEN_DASHBOARD = "🚀 Открыть дашборд"
 def _build_main_menu() -> ReplyKeyboardMarkup:
     rows: list[list[KeyboardButton]] = [
         [KeyboardButton(text=BTN_DRR), KeyboardButton(text=BTN_WEEK_REPORT)],
-        [KeyboardButton(text=BTN_DIAGNOSTICS), KeyboardButton(text=BTN_AUTO_MINUS)],
-        [KeyboardButton(text=BTN_CAMPAIGNS), KeyboardButton(text=BTN_NOTIFICATIONS)],
+        [KeyboardButton(text=BTN_DIAGNOSTICS), KeyboardButton(text=BTN_PLAN_FACT)],
+        [KeyboardButton(text=BTN_AUTO_MINUS), KeyboardButton(text=BTN_CAMPAIGNS)],
+        [KeyboardButton(text=BTN_NOTIFICATIONS)],
         [KeyboardButton(text=BTN_OPEN_DASHBOARD)],
     ]
     return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
@@ -149,10 +151,57 @@ async def _send_week_report(update: Update) -> None:
         "Заказы: 1,247 | CR: 3.2% 🟡\n"
         "Выручка: 3,245,000₽\n"
         "ДРР: 8.4% 🟢\n\n"
+        "📊 Выкуп с рекламы (WB):\n"
+        "Кроссовки женские: 374 из 441 → 84.8% 🟢\n"
+        "Платья летние: 158 из 198 → 79.8% 🟡\n"
+        "Джинсы slim fit: 21 из 31 → 67.7% 🔴 ⚠️ Низкий выкуп\n\n"
         "💡 Рекомендации:\n"
         "- Масштабируй Кроссовки женские — ДРР 8.2%\n"
         "- Останови Джинсы slim fit — ДРР 37.7%\n"
         "- 7 нерелевантных ключей к удалению"
+    )
+
+
+async def _send_campaigns_report(update: Update) -> None:
+    message = update.effective_message
+    if message is None:
+        return
+    await message.reply_text(
+        "📦 Кампании\n\n"
+        "🟣 WB: 3 активные кампании\n"
+        "🔵 Ozon: 3 активные кампании\n\n"
+        "📍 Топ позиции сегодня (WB):\n"
+        "кроссовки женские → поз.3 ↑ ставка 220₽\n"
+        "платья летние → поз.5 ↑ ставка 210₽\n"
+        "джинсы slim fit → поз.22 ↓ ставка 155₽ ⚠️ падает\n\n"
+        "📍 Размещение WB (сегодня):\n\n"
+        "Кроссовки женские:\n"
+        "🔍 Поиск: 4.0% CTR, ДРР 7.1% 🟢\n"
+        "📦 Полки: 2.5% CTR, ДРР 14.8% 🟡\n\n"
+        "Джинсы slim fit:\n"
+        "🔍 Поиск: 1.0% CTR, ДРР 32.1% 🔴\n"
+        "📦 Полки: 1.0% CTR, ДРР 50.0% 🔴 ⚠️ Убыточно!\n\n"
+        "💡 Отключите Полки у Джинсы slim fit — ДРР 50%",
+        reply_markup=_dashboard_inline_keyboard(),
+    )
+
+
+async def _send_plan_fact_report(update: Update) -> None:
+    message = update.effective_message
+    if message is None:
+        return
+    await message.reply_text(
+        "📊 План/Факт на март 2026\n\n"
+        "🟣 WB:\n"
+        "💰 Бюджет: 163,170₽ из 350,000₽ (46.6%)\n"
+        "📦 Заказы: 441 из 850 (51.9%) 🟢 Опережаем\n"
+        "Прогноз заказов: ~974 (план 850) ✅\n\n"
+        "🔵 Ozon:\n"
+        "💰 Бюджет: 38,427₽ из 120,000₽ (32.0%)\n"
+        "📦 Заказы: 138 из 400 (34.5%) 🟢 В норме\n"
+        "Прогноз заказов: ~305 (план 400) 🟡 Отстаём\n\n"
+        "💡 Рекомендация: по WB всё хорошо, по Ozon увеличьте рекламный бюджет",
+        reply_markup=_dashboard_inline_keyboard(),
     )
 
 
@@ -189,7 +238,7 @@ async def alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def campaigns_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     del context
-    await _send_in_development_message(update)
+    await _send_campaigns_report(update)
 
 
 async def pause_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -232,13 +281,19 @@ async def text_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if text == BTN_WEEK_REPORT:
         await _send_week_report(update)
         return
+    if text == BTN_PLAN_FACT:
+        await _send_plan_fact_report(update)
+        return
     if text == BTN_OPEN_DASHBOARD:
         await dashboard_command(update, context)
         return
     if text == BTN_AUTO_MINUS:
         await _send_auto_minus_result(update)
         return
-    if text in {BTN_CAMPAIGNS, BTN_NOTIFICATIONS}:
+    if text == BTN_CAMPAIGNS:
+        await _send_campaigns_report(update)
+        return
+    if text == BTN_NOTIFICATIONS:
         await _send_in_development_message(update)
         return
 
