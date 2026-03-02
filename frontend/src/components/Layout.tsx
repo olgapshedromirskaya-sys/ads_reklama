@@ -1,50 +1,38 @@
-import { type MouseEvent, type ReactNode, type TouchEvent, useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { BottomNav, type DashboardRoute } from "./BottomNav";
+import { type CSSProperties, type ReactNode } from "react";
+import { BottomNav } from "./BottomNav";
+
+export type AppTab = "ozon" | "wb" | "settings";
+
+const tabs: Array<{
+  id: AppTab;
+  label: string;
+  activeColor: string;
+  clickLog: string;
+  touchLog: string;
+}> = [
+  { id: "ozon", label: "🔵 Ozon", activeColor: "#0c4a6e", clickLog: "Ozon tab clicked", touchLog: "Ozon tab touched" },
+  { id: "wb", label: "🟣 WB", activeColor: "#6b21a8", clickLog: "WB tab clicked", touchLog: "WB tab touched" },
+  {
+    id: "settings",
+    label: "⚙️ Настройки",
+    activeColor: "#334155",
+    clickLog: "Settings tab clicked",
+    touchLog: "Settings tab touched"
+  }
+];
 
 export function Layout({
   children,
-  demoMode = false
+  demoMode = false,
+  activeTab,
+  onTabChange
 }: {
   children: ReactNode;
   demoMode?: boolean;
+  activeTab: AppTab;
+  onTabChange: (tab: AppTab) => void;
 }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<DashboardRoute>(() => resolveRouteTab(location.pathname));
-  const lastTouchTimeRef = useRef(0);
-  const tabs = [
-    { to: "/ozon", label: "🔵 Ozon", activeClass: "text-sky-300 border-sky-300/60" },
-    { to: "/wb", label: "🟣 WB", activeClass: "text-violet-300 border-violet-300/60" },
-    { to: "/settings", label: "⚙️ Настройки", activeClass: "text-slate-100 border-slate-200/60" }
-  ] as const;
-
-  useEffect(() => {
-    setActiveTab(resolveRouteTab(location.pathname));
-  }, [location.pathname]);
-
-  const changeTab = (tab: DashboardRoute) => {
-    setActiveTab(tab);
-    if (location.pathname !== tab) {
-      navigate(tab);
-    }
-  };
-
-  const handleTabTouchEnd = (tab: DashboardRoute) => (event: TouchEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    lastTouchTimeRef.current = Date.now();
-    changeTab(tab);
-  };
-
-  const handleTabClick = (tab: DashboardRoute) => (event: MouseEvent<HTMLButtonElement>) => {
-    if (Date.now() - lastTouchTimeRef.current < 500) {
-      return;
-    }
-    event.preventDefault();
-    changeTab(tab);
-  };
-
-  const pageTitle = location.pathname === "/queries" ? "📊 Аналитика запросов" : "Реклама маркетплейсов";
+  const pageTitle = activeTab === "settings" ? "⚙️ Настройки" : "Реклама маркетплейсов";
 
   return (
     <div className="mx-auto min-h-screen max-w-3xl bg-[color:var(--tg-bg-color)] text-[color:var(--tg-text-color)] safe-bottom">
@@ -60,13 +48,18 @@ export function Layout({
         <div className="mt-2 grid grid-cols-3 gap-2">
           {tabs.map((tab) => (
             <button
-              key={tab.to}
+              key={tab.id}
               type="button"
-              onClick={handleTabClick(tab.to)}
-              onTouchEnd={handleTabTouchEnd(tab.to)}
-              className={`rounded-lg border px-2 py-2 text-center text-xs font-semibold transition-colors ${
-                activeTab === tab.to ? `${tab.activeClass} bg-slate-600/20` : "border-slate-500/30 text-slate-300"
-              }`}
+              onClick={() => {
+                console.log(tab.clickLog);
+                onTabChange(tab.id);
+              }}
+              onTouchStart={(event) => {
+                event.stopPropagation();
+                console.log(tab.touchLog);
+                onTabChange(tab.id);
+              }}
+              style={buildTabButtonStyle(activeTab === tab.id, tab.activeColor)}
             >
               {tab.label}
             </button>
@@ -74,14 +67,20 @@ export function Layout({
         </div>
       </header>
       <main className="px-4 py-4">{children}</main>
-      <BottomNav activeTab={activeTab} onTabChange={changeTab} />
+      <BottomNav activeTab={activeTab} onTabChange={onTabChange} />
     </div>
   );
 }
 
-function resolveRouteTab(pathname: string): DashboardRoute {
-  if (pathname.startsWith("/wb")) return "/wb";
-  if (pathname.startsWith("/queries")) return "/queries";
-  if (pathname.startsWith("/settings")) return "/settings";
-  return "/ozon";
+function buildTabButtonStyle(isActive: boolean, activeColor: string): CSSProperties {
+  return {
+    background: isActive ? activeColor : "transparent",
+    color: "white",
+    border: `1px solid ${activeColor}`,
+    padding: "8px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "12px",
+    fontWeight: 600
+  };
 }

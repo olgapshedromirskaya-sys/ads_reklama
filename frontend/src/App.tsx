@@ -1,23 +1,21 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
-import { Layout } from "@/components/Layout";
+import { Layout, type AppTab } from "@/components/Layout";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { telegramLogin } from "@/api/endpoints";
 import { useTelegramTheme } from "@/hooks/useTelegramTheme";
 import { useAuthStore } from "@/store/auth";
 import { resolveLaunchContext, setDemoMode } from "@/demo/mode";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { QueriesPage } from "@/pages/QueriesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
 function App() {
   useTelegramTheme();
   const token = useAuthStore((state) => state.token);
   const setAuth = useAuthStore((state) => state.setAuth);
-  const navigate = useNavigate();
   const [demoMode, setDemoModeState] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [activeTab, setActiveTab] = useState<AppTab>("ozon");
 
   useEffect(() => {
     let mounted = true;
@@ -26,7 +24,7 @@ function App() {
       if (!mounted) return;
       setDemoModeState(true);
       setDemoMode(true);
-      navigate("/ozon", { replace: true });
+      setActiveTab("ozon");
     }
 
     async function bootstrapAuth() {
@@ -37,8 +35,10 @@ function App() {
       setDemoMode(launchContext.demoMode);
 
       if (launchContext.demoMode) {
+        if (mounted) {
+          setActiveTab("ozon");
+        }
         setBootstrapping(false);
-        navigate("/ozon", { replace: true });
         return;
       }
 
@@ -68,7 +68,7 @@ function App() {
         setAuth(auth.access_token, auth.user);
         setDemoModeState(false);
         setDemoMode(false);
-        navigate("/ozon", { replace: true });
+        setActiveTab("ozon");
       } catch (error) {
         if (axios.isAxiosError(error)) {
           console.error("[TelegramAuth] Auth failed:", error.response?.status, error.message);
@@ -88,23 +88,17 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [navigate, token, setAuth]);
+  }, [token, setAuth]);
 
   if (bootstrapping) {
     return <LoadingScreen text="Авторизация..." fullscreen />;
   }
 
   return (
-    <Layout demoMode={demoMode}>
-      <Routes>
-        <Route path="/" element={<Navigate to="/ozon" replace />} />
-        <Route path="/dashboard" element={<Navigate to="/ozon" replace />} />
-        <Route path="/ozon" element={<DashboardPage marketplace="ozon" />} />
-        <Route path="/wb" element={<DashboardPage marketplace="wb" />} />
-        <Route path="/queries" element={<QueriesPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/ozon" replace />} />
-      </Routes>
+    <Layout demoMode={demoMode} activeTab={activeTab} onTabChange={setActiveTab}>
+      {activeTab === "ozon" && <DashboardPage marketplace="ozon" />}
+      {activeTab === "wb" && <DashboardPage marketplace="wb" />}
+      {activeTab === "settings" && <SettingsPage />}
     </Layout>
   );
 }
