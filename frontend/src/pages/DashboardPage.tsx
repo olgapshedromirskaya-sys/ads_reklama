@@ -32,7 +32,7 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
           <h2 className="text-sm font-bold text-slate-100">СЕГОДНЯ</h2>
           <span className={`text-xs font-semibold ${accentClass}`}>{data.badge}</span>
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           <TodayCard title="💰 Выручка" value={formatCurrency(data.today.revenue)} actual={data.today.revenue} plan={data.today.revenuePlan} />
           <TodayCard title="📦 Заказы" value={formatInteger(data.today.orders)} actual={data.today.orders} plan={data.today.ordersPlan} />
           <TodayCard title="📢 Реклама" value={formatCurrency(data.today.adSpend)} actual={data.today.adSpend} plan={data.today.adSpendPlan} />
