@@ -30,6 +30,13 @@ function App() {
   useEffect(() => {
     let mounted = true;
 
+    function isNetworkAuthError(error: unknown): boolean {
+      if (axios.isAxiosError(error)) {
+        return !error.response || error.code === "ERR_NETWORK" || error.message === "Network Error";
+      }
+      return error instanceof Error && error.message.toLowerCase().includes("network error");
+    }
+
     function resolveAuthErrorMessage(error: unknown): string {
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
@@ -97,9 +104,11 @@ function App() {
       console.log("[TelegramAuth] initData detected:", Boolean(initData), "length:", initData.length);
 
       if (!initData) {
-        console.error("[TelegramAuth] initData missing; unable to continue regular auth flow");
+        console.warn("[TelegramAuth] initData missing; enabling demo mode fallback");
+        setDemoModeState(true);
+        setDemoMode(true);
         setBootstrapping(false);
-        setBootstrapError("Откройте приложение из Telegram для авторизации.");
+        setBootstrapError(null);
         return;
       }
 
@@ -124,6 +133,14 @@ function App() {
       } catch (error) {
         console.error("[TelegramAuth] Telegram auth request failed", error);
         if (!mounted) {
+          return;
+        }
+        if (isNetworkAuthError(error)) {
+          console.warn("[TelegramAuth] Network error during Telegram auth; enabling demo mode fallback");
+          setDemoModeState(true);
+          setDemoMode(true);
+          setBootstrapError(null);
+          navigate("/dashboard", { replace: true });
           return;
         }
         setBootstrapError(resolveAuthErrorMessage(error));

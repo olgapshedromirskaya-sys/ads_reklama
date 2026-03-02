@@ -17,6 +17,10 @@ import { useAuthStore } from "@/store/auth";
 type Marketplace = "wb" | "ozon";
 type EmployeeRole = "admin" | "manager";
 
+function marketplaceLabel(marketplace: Marketplace) {
+  return marketplace === "wb" ? "Wildberries" : "Ozon";
+}
+
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
@@ -98,12 +102,15 @@ export function SettingsPage() {
             <option value="wb">Wildberries</option>
             <option value="ozon">Ozon</option>
           </select>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Название аккаунта"
-            className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
-          />
+          <label className="space-y-1">
+            <div className="text-xs text-[color:var(--tg-hint-color)]">Название аккаунта</div>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Название аккаунта"
+              className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
+            />
+          </label>
 
           {marketplace === "wb" ? (
             <input
@@ -117,7 +124,7 @@ export function SettingsPage() {
               <input
                 value={clientId}
                 onChange={(event) => setClientId(event.target.value)}
-                placeholder="Client-ID"
+                placeholder="Client ID"
                 className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
               />
               <input
@@ -153,7 +160,7 @@ export function SettingsPage() {
               <div>
                 <div className="text-sm font-semibold">{account.name}</div>
                 <div className="text-xs text-[color:var(--tg-hint-color)]">
-                  Маркетплейс: {account.marketplace.toUpperCase()} • {account.is_active ? "Включена" : "Выключена"}
+                  Маркетплейс: {marketplaceLabel(account.marketplace)} • {account.is_active ? "Включена" : "Выключена"}
                 </div>
                 <div className="text-xs text-[color:var(--tg-hint-color)]">
                   Последняя синхронизация: {account.last_synced_at ? new Date(account.last_synced_at).toLocaleString() : "—"}
