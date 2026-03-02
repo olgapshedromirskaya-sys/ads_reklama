@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { listCampaigns, listQueries, pauseCampaign, type Campaign } from "@/api/endpoints";
@@ -115,11 +115,134 @@ const DIAGNOSTICS_DEMO_KEYS = new Set([
   "ozon:Рюкзак туристический:borderline-drr"
 ]);
 
+type CampaignFunnelDemoData = {
+  impressions: string;
+  ctr: string;
+  ctrBadge: "🟢" | "🟡" | "🔴";
+  clicks: string;
+  cpc: string;
+  cartCr: string;
+  cartAdds: string;
+  orderCr: string;
+  orderCrBadge: "🟢" | "🟡" | "🔴";
+  orders: string;
+  drr: string;
+  drrBadge: "🟢" | "🟡" | "🔴";
+  revenue: string;
+  romi: string;
+  romiBadge: "🟢" | "🟡" | "🔴";
+};
+
+const CAMPAIGN_FUNNEL_DEMO_DATA: Record<string, CampaignFunnelDemoData> = {
+  "wb:Кроссовки женские": {
+    impressions: "245000",
+    ctr: "3.6",
+    ctrBadge: "🟢",
+    clicks: "8820",
+    cpc: "19",
+    cartCr: "15",
+    cartAdds: "1323",
+    orderCr: "5.0",
+    orderCrBadge: "🟢",
+    orders: "441",
+    drr: "8.2",
+    drrBadge: "🟢",
+    revenue: "1985000",
+    romi: "1116",
+    romiBadge: "🟢"
+  },
+  "wb:Платья летние": {
+    impressions: "189000",
+    ctr: "3.0",
+    ctrBadge: "🟡",
+    clicks: "5670",
+    cpc: "21",
+    cartCr: "12",
+    cartAdds: "680",
+    orderCr: "3.5",
+    orderCrBadge: "🟡",
+    orders: "198",
+    drr: "17.2",
+    drrBadge: "🟡",
+    revenue: "693000",
+    romi: "482",
+    romiBadge: "🟡"
+  },
+  "wb:Джинсы slim fit": {
+    impressions: "156000",
+    ctr: "1.0",
+    ctrBadge: "🔴",
+    clicks: "1560",
+    cpc: "45",
+    cartCr: "6",
+    cartAdds: "94",
+    orderCr: "2.0",
+    orderCrBadge: "🔴",
+    orders: "31",
+    drr: "37.7",
+    drrBadge: "🔴",
+    revenue: "186000",
+    romi: "165",
+    romiBadge: "🔴"
+  },
+  "ozon:Рюкзак туристический": {
+    impressions: "120000",
+    ctr: "2.1",
+    ctrBadge: "🟡",
+    clicks: "2520",
+    cpc: "31",
+    cartCr: "15",
+    cartAdds: "378",
+    orderCr: "0.4",
+    orderCrBadge: "🔴",
+    orders: "9",
+    drr: "16.4",
+    drrBadge: "🟡",
+    revenue: "47700",
+    romi: "510",
+    romiBadge: "🟡"
+  },
+  "ozon:Термокружка 450мл": {
+    impressions: "98000",
+    ctr: "2.8",
+    ctrBadge: "🟡",
+    clicks: "2744",
+    cpc: "22",
+    cartCr: "15",
+    cartAdds: "412",
+    orderCr: "0.7",
+    orderCrBadge: "🔴",
+    orders: "18",
+    drr: "12.3",
+    drrBadge: "🟡",
+    revenue: "43200",
+    romi: "713",
+    romiBadge: "🟢"
+  },
+  "ozon:Куртка зимняя XL": {
+    impressions: "130000",
+    ctr: "3.2",
+    ctrBadge: "🟢",
+    clicks: "4160",
+    cpc: "19",
+    cartCr: "20",
+    cartAdds: "832",
+    orderCr: "1.3",
+    orderCrBadge: "🟡",
+    orders: "52",
+    drr: "7.1",
+    drrBadge: "🟢",
+    revenue: "104000",
+    romi: "1308",
+    romiBadge: "🟢"
+  }
+};
+
 export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const data = MARKETPLACE_ANALYTICS[marketplace];
   const accentClass = marketplace === "ozon" ? "text-sky-300" : "text-violet-300";
   const queryClient = useQueryClient();
-  const [expandedCampaignId, setExpandedCampaignId] = useState<number | null>(null);
+  const [expandFunnelRequest, setExpandFunnelRequest] = useState<{ campaignId: number; requestId: number } | null>(null);
   const [highlightedCampaignId, setHighlightedCampaignId] = useState<number | null>(null);
   const [minusRows, setMinusRows] = useState<Record<MarketplaceId, MinusKeywordRow[]>>(() => ({
     wb: DEMO_MINUS_ROWS.wb.map((row) => ({ ...row })),
@@ -160,11 +283,6 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
     queryMap.set(row.campaign_id, rows);
   }
 
-  const campaignIssues = new Map<number, ReturnType<typeof detectCampaignIssues>>();
-  for (const campaign of marketplaceCampaigns) {
-    campaignIssues.set(campaign.id, detectCampaignIssues(campaign, queryMap.get(campaign.id) || []));
-  }
-
   const diagnosticsRows = campaignsQuery.data
     .flatMap((campaign) =>
       detectCampaignIssues(campaign, queryMap.get(campaign.id) || []).map((issue) => ({
@@ -200,12 +318,8 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const totalMinusRows = minusRows.wb.length + minusRows.ozon.length;
   const totalMinusSpend = [...minusRows.wb, ...minusRows.ozon].reduce((sum, row) => sum + row.spend, 0);
 
-  const toggleCampaignFunnel = (campaignId: number) => {
-    setExpandedCampaignId((currentId) => (currentId === campaignId ? null : campaignId));
-  };
-
   const openCampaignFromDiagnostics = (campaignId: number) => {
-    setExpandedCampaignId(campaignId);
+    setExpandFunnelRequest({ campaignId, requestId: Date.now() });
     setHighlightedCampaignId(campaignId);
     if (highlightTimeoutRef.current) {
       window.clearTimeout(highlightTimeoutRef.current);
@@ -293,38 +407,18 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
         <div className="space-y-2">
           {activeCampaigns.map((campaign) => {
             const tone = campaignHealthTone(campaign);
-            const expanded = expandedCampaignId === campaign.id;
-            const issues = campaignIssues.get(campaign.id) || [];
+            const expandRequestId = expandFunnelRequest?.campaignId === campaign.id ? expandFunnelRequest.requestId : null;
             return (
-              <div
+              <DashboardCampaignRow
                 key={campaign.id}
-                ref={(element) => {
+                campaign={campaign}
+                tone={tone}
+                highlighted={highlightedCampaignId === campaign.id}
+                expandRequestId={expandRequestId}
+                onRef={(element) => {
                   campaignRowRefs.current[campaign.id] = element;
                 }}
-                className={`rounded-lg border px-3 py-2 transition-all duration-300 ${
-                  highlightedCampaignId === campaign.id
-                    ? "border-amber-300/70 bg-amber-500/15 ring-2 ring-amber-300/60"
-                    : "border-slate-500/30 bg-slate-700/10"
-                }`}
-              >
-                <button
-                  onClick={() => toggleCampaignFunnel(campaign.id)}
-                  className="flex w-full items-center justify-between gap-3 text-left text-sm"
-                >
-                  <span className={tone.className}>
-                    {tone.icon} {campaign.name} — ДРР {formatPercent(campaign.drr, 1)} — {tone.text}
-                  </span>
-                  <span className="shrink-0 text-xs text-[color:var(--tg-link-color)]">
-                    {expanded ? "[Свернуть ▲]" : "[Развернуть ▼]"}
-                  </span>
-                </button>
-
-                <div className={`grid transition-all duration-200 ${expanded ? "mt-3 grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
-                  <div className="overflow-hidden">
-                    <CampaignExpandableFunnel campaign={campaign} issues={issues} />
-                  </div>
-                </div>
-              </div>
+              />
             );
           })}
           {!activeCampaigns.length && <div className="text-sm text-[color:var(--tg-hint-color)]">Активных кампаний нет</div>}
@@ -509,61 +603,70 @@ function TodayCard({
   );
 }
 
-function CampaignExpandableFunnel({ campaign, issues }: { campaign: Campaign; issues: ReturnType<typeof detectCampaignIssues> }) {
-  const funnel = buildCampaignFunnelMetrics(campaign);
-  const issuesSummary = Array.from(new Set(issues.map((issue) => issueSummary(issue.id, campaign)).filter(Boolean)));
-  const cpcTone = cpcHint(funnel.cpc);
+function DashboardCampaignRow({
+  campaign,
+  tone,
+  highlighted,
+  expandRequestId,
+  onRef
+}: {
+  campaign: Campaign;
+  tone: ReturnType<typeof campaignHealthTone>;
+  highlighted: boolean;
+  expandRequestId: number | null;
+  onRef: (element: HTMLDivElement | null) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (expandRequestId !== null) {
+      setExpanded(true);
+    }
+  }, [expandRequestId]);
+
+  return (
+    <div
+      ref={onRef}
+      className={`rounded-lg border px-3 py-2 transition-all duration-300 ${
+        highlighted ? "border-amber-300/70 bg-amber-500/15 ring-2 ring-amber-300/60" : "border-slate-500/30 bg-slate-700/10"
+      }`}
+    >
+      <button onClick={() => setExpanded((current) => !current)} className="flex w-full items-center justify-between gap-3 text-left text-sm">
+        <span className={tone.className}>
+          {tone.icon} {campaign.name} — ДРР {formatPercent(campaign.drr, 1)} — {tone.text}
+        </span>
+        <span className="shrink-0 text-xs text-[color:var(--tg-link-color)]">{expanded ? "[Воронка ▲]" : "[Воронка ▼]"}</span>
+      </button>
+
+      <div className={`grid transition-all duration-200 ${expanded ? "mt-3 grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+        <div className="overflow-hidden">
+          <CampaignExpandableFunnel campaign={campaign} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CampaignExpandableFunnel({ campaign }: { campaign: Campaign }) {
+  const funnel = resolveCampaignFunnelData(campaign);
 
   return (
     <div className="rounded-lg border border-slate-300/20 bg-slate-700/10 p-3">
       <div className="space-y-1 text-sm">
-        <FunnelLine label="👁 Показы" value={formatInteger(funnel.impressions)} />
-        <FunnelLine label="↓ CTR" value={`${formatPercent(funnel.ctr, 1)} ${ctrHint(funnel.ctr)}`} valueClass={ctrColorClass(funnel.ctr)} />
-        <FunnelLine
-          label="👆 Клики"
-          value={`${formatInteger(funnel.clicks)} | CPC: ${formatCurrency(funnel.cpc)} ${cpcTone}`}
-          valueClass={funnel.cpc >= 40 ? "text-rose-300" : funnel.cpc >= 24 ? "text-amber-300" : "text-emerald-300"}
-        />
-        <FunnelLine label="↓ CR корзины" value={formatPercent(funnel.cartCr, 1)} />
-        <FunnelLine label="🛒 Корзина" value={formatInteger(funnel.cartAdds)} />
+        <FunnelLine label="👁 Показы" value={`→ ${funnel.impressions}`} />
+        <FunnelLine label="↓ CTR" value={`${funnel.ctr}% ${funnel.ctrBadge}`} valueClass={badgeColorClass(funnel.ctrBadge)} />
+        <FunnelLine label="👆 Клики" value={`→ ${funnel.clicks} | CPC: ${funnel.cpc}₽`} />
+        <FunnelLine label="↓ CR корзины" value={`${funnel.cartCr}%`} />
+        <FunnelLine label="🛒 Корзина" value={`→ ${funnel.cartAdds}`} />
         <FunnelLine
           label="↓ CR заказа"
-          value={`${formatPercent(funnel.orderCr, 1)} ${orderCrHint(funnel.orderCr)}`}
-          valueClass={crColorClass(funnel.orderCr)}
+          value={`${funnel.orderCr}% ${funnel.orderCrBadge}`}
+          valueClass={badgeColorClass(funnel.orderCrBadge)}
         />
-        <FunnelLine label="📦 Заказы" value={formatInteger(funnel.orders)} />
-        <FunnelLine
-          label="↓ ДРР"
-          value={`${formatPercent(funnel.drr, 1)} ${drrHint(funnel.drr)}`}
-          valueClass={drrColorClass(funnel.drr)}
-        />
-        <FunnelLine label="💰 Выручка" value={formatCurrency(funnel.revenue)} />
-        <FunnelLine
-          label="📊 ROMI"
-          value={`${formatPercent(funnel.romi, 0)} ${romiHint(funnel.romi)}`}
-          valueClass={romiToneClass(funnel.romi)}
-        />
-      </div>
-
-      <div
-        className={`mt-3 rounded-md border p-2 text-xs font-semibold ${
-          issuesSummary.length > 0
-            ? "border-amber-400/40 bg-amber-500/10 text-amber-200"
-            : "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
-        }`}
-      >
-        {issuesSummary.length > 0
-          ? `⚠️ ${issuesSummary.length} ${problemWord(issuesSummary.length)} в этой кампании`
-          : "✅ Проблем не обнаружено"}
-      </div>
-
-      <div className="mt-3">
-        <Link
-          to={campaignDetailPath(campaign.id, campaign.marketplace)}
-          className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
-        >
-          Перейти к кампании →
-        </Link>
+        <FunnelLine label="📦 Заказы" value={`→ ${funnel.orders}`} />
+        <FunnelLine label="↓ ДРР" value={`${funnel.drr}% ${funnel.drrBadge}`} valueClass={badgeColorClass(funnel.drrBadge)} />
+        <FunnelLine label="💰 Выручка" value={`→ ${funnel.revenue}₽`} />
+        <FunnelLine label="📊 ROMI" value={`→ ${funnel.romi}% ${funnel.romiBadge}`} valueClass={badgeColorClass(funnel.romiBadge)} />
       </div>
     </div>
   );
@@ -576,6 +679,43 @@ function FunnelLine({ label, value, valueClass = "text-slate-100" }: { label: st
       <div className={`text-sm font-semibold ${valueClass}`}>{value}</div>
     </div>
   );
+}
+
+function resolveCampaignFunnelData(campaign: Campaign): CampaignFunnelDemoData {
+  const demoData = CAMPAIGN_FUNNEL_DEMO_DATA[campaignFunnelDemoKey(campaign)];
+  if (demoData) {
+    return demoData;
+  }
+
+  const funnel = buildCampaignFunnelMetrics(campaign);
+  return {
+    impressions: String(Math.round(funnel.impressions)),
+    ctr: funnel.ctr.toFixed(1),
+    ctrBadge: funnel.ctr >= 3 ? "🟢" : funnel.ctr >= 2 ? "🟡" : "🔴",
+    clicks: String(Math.round(funnel.clicks)),
+    cpc: String(Math.round(funnel.cpc)),
+    cartCr: funnel.cartCr.toFixed(1),
+    cartAdds: String(Math.round(funnel.cartAdds)),
+    orderCr: funnel.orderCr.toFixed(1),
+    orderCrBadge: funnel.orderCr >= 5 ? "🟢" : funnel.orderCr >= 1 ? "🟡" : "🔴",
+    orders: String(Math.round(funnel.orders)),
+    drr: funnel.drr.toFixed(1),
+    drrBadge: funnel.drr <= 10 ? "🟢" : funnel.drr <= 20 ? "🟡" : "🔴",
+    revenue: String(Math.round(funnel.revenue)),
+    romi: funnel.romi.toFixed(0),
+    romiBadge: funnel.romi >= 700 ? "🟢" : funnel.romi >= 300 ? "🟡" : "🔴"
+  };
+}
+
+function campaignFunnelDemoKey(campaign: Campaign) {
+  const marketplace = campaign.marketplace || "unknown";
+  return `${marketplace}:${campaign.name}`;
+}
+
+function badgeColorClass(badge: "🟢" | "🟡" | "🔴") {
+  if (badge === "🟢") return "text-emerald-300";
+  if (badge === "🟡") return "text-amber-300";
+  return "text-rose-300";
 }
 
 function ctrHint(ctr: number) {
