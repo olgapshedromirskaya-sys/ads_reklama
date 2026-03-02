@@ -1,225 +1,185 @@
-import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { getDashboardSummary, runAutoCleanupAll } from "@/api/endpoints";
-import { canAccessExtendedFeatures } from "@/auth/roles";
-import { LoadingScreen } from "@/components/LoadingScreen";
-import { crColorClass, ctrColorClass, drrColorClass, formatCurrency, formatInteger, formatPercent } from "@/components/metricUtils";
-import { useAuthStore } from "@/store/auth";
+import {
+  crBenchmarkLabel,
+  crColorClass,
+  ctrBenchmarkLabel,
+  ctrColorClass,
+  drrBenchmarkLabel,
+  drrColorClass,
+  formatCurrency,
+  formatInteger,
+  formatPercent,
+  romiBenchmarkLabel,
+  romiColorClass
+} from "@/components/metricUtils";
+import {
+  MARKETPLACE_ANALYTICS,
+  type MarketplaceId,
+  computeFunnelMetrics,
+  detectDiagnosticIssues
+} from "@/data/marketplaceAnalytics";
 
-type ChartMetric = "impressions" | "clicks" | "orders" | "spend";
-
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function firstDayOfMonthIsoDate() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
-}
-
-const chartMetricLabels: Record<ChartMetric, string> = {
-  impressions: "Показы",
-  clicks: "Клики",
-  orders: "Заказы",
-  spend: "Расход"
-};
-
-export function DashboardPage() {
-  const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
-  const extendedAccess = canAccessExtendedFeatures(user);
-  const [dateFrom, setDateFrom] = useState(firstDayOfMonthIsoDate());
-  const [dateTo, setDateTo] = useState(todayIsoDate());
-  const [chartMetric, setChartMetric] = useState<ChartMetric>("spend");
-  const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
-
-  const summaryParams = useMemo(
-    () => ({ period: "custom" as const, date_from: dateFrom, date_to: dateTo }),
-    [dateFrom, dateTo]
-  );
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["dashboard-summary", summaryParams],
-    queryFn: () => getDashboardSummary(summaryParams),
-    refetchInterval: 60_000
-  });
-
-  const cleanupMutation = useMutation({
-    mutationFn: () => runAutoCleanupAll({ apply_now: true }),
-    onSuccess: (result) => {
-      setCleanupMessage(
-        `✅ Удалено ${result.irrelevant_found} ключей, экономия ${formatCurrency(result.budget_saved)}/день (${formatCurrency(
-          result.budget_saved * 30
-        )}/месяц)`
-      );
-      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["queries"] });
-      queryClient.invalidateQueries({ queryKey: ["queries-badge"] });
-    }
-  });
-
-  const chartData = useMemo(() => {
-    const trend = data?.trend ?? [];
-    return trend.map((item) => ({
-      ...item,
-      d: item.date.slice(5)
-    }));
-  }, [data?.trend]);
-
-  if (isLoading) {
-    return <LoadingScreen text="Загрузка дашборда..." />;
-  }
-
-  if (isError || !data) {
-    return <div className="text-sm text-red-500">Ошибка загрузки дашборда.</div>;
-  }
+export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
+  const data = MARKETPLACE_ANALYTICS[marketplace];
+  const funnel = computeFunnelMetrics(data.funnelRaw);
+  const diagnostics = detectDiagnosticIssues(data);
+  const articleRows = [...data.articles].sort((a, b) => b.drr - a.drr);
+  const accentClass = marketplace === "ozon" ? "text-sky-300" : "text-violet-300";
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--tg-hint-color)]">Период</div>
-        <div className="grid grid-cols-1 gap-2 text-xs md:grid-cols-2">
-          <label className="space-y-1">
-            <div className="text-[color:var(--tg-hint-color)]">Дата от</div>
-            <input
-              type="date"
-              value={dateFrom}
-              max={dateTo}
-              onChange={(event) => setDateFrom(event.target.value)}
-              className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
-            />
-          </label>
-          <label className="space-y-1">
-            <div className="text-[color:var(--tg-hint-color)]">Дата до</div>
-            <input
-              type="date"
-              value={dateTo}
-              min={dateFrom}
-              onChange={(event) => setDateTo(event.target.value)}
-              className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
-            />
-          </label>
+      <section className="app-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-100">СЕГОДНЯ</h2>
+          <span className={`text-xs font-semibold ${accentClass}`}>{data.badge}</span>
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <MetricCard title="Показы" value={formatInteger(data.totals.impressions)} />
-        <MetricCard title="Клики" value={formatInteger(data.totals.clicks)} />
-        <MetricCard title="CTR" value={formatPercent(data.totals.ctr, 1)} valueClass={ctrColorClass(data.totals.ctr)} />
-        <MetricCard title="CPC" value={formatCurrency(data.totals.cpc)} />
-        <MetricCard title="Заказы" value={formatInteger(data.totals.orders)} />
-        <MetricCard title="CR" value={formatPercent(data.totals.cr, 1)} valueClass={crColorClass(data.totals.cr)} />
-        <MetricCard title="Выручка" value={formatCurrency(data.totals.revenue)} />
-        <MetricCard title="Расход" value={formatCurrency(data.totals.spend)} />
-        <MetricCard title="ДРР" value={formatPercent(data.totals.drr, 1)} valueClass={drrColorClass(data.totals.drr)} />
-      </div>
-
-      <div className="rounded-xl border border-slate-300/30 p-4">
-        <div className="mb-1 text-sm font-semibold">Площадки: все (WB + Ozon)</div>
-        <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-          <InfoRow label="Расход сегодня" value={formatCurrency(data.spend_today)} />
-          <InfoRow label="Расход за неделю" value={formatCurrency(data.spend_week)} />
-          <InfoRow label="Расход за период" value={formatCurrency(data.totals.spend)} />
-          <InfoRow label="Заказы с рекламы" value={formatInteger(data.total_orders)} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <TodayCard title="💰 Выручка" value={formatCurrency(data.today.revenue)} actual={data.today.revenue} plan={data.today.revenuePlan} />
+          <TodayCard title="📦 Заказы" value={formatInteger(data.today.orders)} actual={data.today.orders} plan={data.today.ordersPlan} />
+          <TodayCard title="📢 Реклама" value={formatCurrency(data.today.adSpend)} actual={data.today.adSpend} plan={data.today.adSpendPlan} />
+          <TodayCard
+            title="🔄 Конверсия"
+            value={formatPercent(data.today.conversion, 1)}
+            actual={data.today.conversion}
+            plan={data.today.conversionPlan}
+          />
         </div>
-        <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">
-          Последняя синхронизация: {data.last_synced_at ? new Date(data.last_synced_at).toLocaleString() : "—"}
-        </div>
-      </div>
+      </section>
 
-      <div className="rounded-xl border border-slate-300/30 p-4">
-        <div className="mb-2 flex flex-wrap gap-2">
-          <span className="text-sm font-semibold">Динамика по дням</span>
-          <div className="flex gap-1 text-xs">
-            {[
-              { key: "impressions", label: "Показы" },
-              { key: "clicks", label: "Клики" },
-              { key: "orders", label: "Заказы" },
-              { key: "spend", label: "Расход" }
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setChartMetric(item.key as ChartMetric)}
-                className={`rounded-md px-2 py-1 ${
-                  chartMetric === item.key
-                    ? "bg-[color:var(--tg-button-color)] text-white"
-                    : "border border-slate-300/30 text-[color:var(--tg-hint-color)]"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+      <section className="app-card p-4">
+        <h2 className="mb-3 text-sm font-bold text-slate-100">ВОРОНКА</h2>
+        <div className="thin-scrollbar overflow-x-auto">
+          <div className="flex min-w-[1000px] items-stretch gap-2">
+            <FunnelStep title="Показы" value={formatInteger(funnel.impressions)} />
+            <FunnelStep title="CTR" value={formatPercent(funnel.ctr, 1)} toneClass={ctrColorClass(funnel.ctr)} subtitle={ctrBenchmarkLabel(funnel.ctr)} />
+            <FunnelStep title="Клики" value={formatInteger(funnel.clicks)} />
+            <FunnelStep title="CPC" value={formatCurrency(funnel.cpc)} />
+            <FunnelStep title="В корзину" value={formatInteger(funnel.cartAdds)} />
+            <FunnelStep title="CR корзины" value={formatPercent(funnel.cartCr, 1)} />
+            <FunnelStep title="Заказы" value={formatInteger(funnel.orders)} />
+            <FunnelStep title="CR" value={formatPercent(funnel.cr, 1)} toneClass={crColorClass(funnel.cr)} subtitle={crBenchmarkLabel(funnel.cr)} />
+            <FunnelStep title="Выручка" value={formatCurrency(funnel.revenue)} />
+            <FunnelStep title="ДРР" value={formatPercent(funnel.drr, 1)} toneClass={drrColorClass(funnel.drr)} subtitle={drrBenchmarkLabel(funnel.drr)} />
+            <FunnelStep title="ROMI" value={formatPercent(funnel.romi, 0)} toneClass={romiColorClass(funnel.romi)} subtitle={romiBenchmarkLabel(funnel.romi)} />
           </div>
         </div>
-        <div className="h-56">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="d" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip
-                formatter={(value, name) => {
-                  const valueText =
-                    chartMetric === "spend" ? formatCurrency(Number(value)) : formatInteger(Number(value));
-                  const metricName =
-                    typeof name === "string" && name in chartMetricLabels
-                      ? chartMetricLabels[name as ChartMetric]
-                      : chartMetricLabels[chartMetric];
-                  return [valueText, metricName];
-                }}
-              />
-              <Line type="monotone" dataKey={chartMetric} stroke="#3b82f6" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="mt-3 grid gap-1 text-[11px] text-slate-300">
+          <div>CTR = клики / показы × 100%</div>
+          <div>CPC = расход / клики</div>
+          <div>CR корзины = корзина / клики × 100%</div>
+          <div>CR заказа = заказы / клики × 100%</div>
+          <div>ДРР = расход / выручка × 100%</div>
+          <div>ROMI = (выручка - расход) / расход × 100%</div>
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-xl border border-slate-300/30 p-4">
-        <div className="mb-2 text-sm font-semibold">Авто-диагностика</div>
-        <ul className="space-y-1 text-sm">
-          {data.diagnostics.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </div>
-
-      {extendedAccess && (
-        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4">
-          <div className="text-sm font-semibold text-rose-700">
-            🔴 Обнаружено {formatInteger(data.irrelevant_alert.count)} нерелевантных запросов — сливают ~
-            {formatCurrency(data.irrelevant_alert.wasted_per_day)}/день ({formatCurrency(data.irrelevant_alert.wasted_per_month)}/мес)
-          </div>
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={() => cleanupMutation.mutate()}
-              className="rounded-md bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-              disabled={cleanupMutation.isPending}
+      <section className="app-card p-4">
+        <h2 className="mb-3 text-sm font-bold text-slate-100">ДРР</h2>
+        <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
+          <div className="flex flex-col items-center gap-3">
+            <div
+              className={`flex h-36 w-36 items-center justify-center rounded-full border-4 text-2xl font-extrabold ${
+                funnel.drr <= 10
+                  ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300"
+                  : funnel.drr <= 20
+                    ? "border-amber-400/60 bg-amber-500/20 text-amber-300"
+                    : "border-rose-400/60 bg-rose-500/20 text-rose-300"
+              }`}
             >
-              Запустить авто-очистку
-            </button>
-            {cleanupMessage && <span className="text-xs text-[color:var(--tg-hint-color)]">{cleanupMessage}</span>}
+              {formatPercent(funnel.drr, 1)}
+            </div>
+            <div className="space-y-1 text-xs text-slate-300">
+              <div>🟢 до 10% — отлично</div>
+              <div>🟡 10-20% — норма</div>
+              <div>🔴 выше 20% — много</div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-300">По артикулам (худшие сверху)</div>
+            <table className="min-w-full text-xs">
+              <thead className="text-slate-300">
+                <tr className="border-b border-slate-500/40">
+                  <th className="px-2 py-2 text-left">Артикул</th>
+                  <th className="px-2 py-2 text-right">ДРР%</th>
+                  <th className="px-2 py-2 text-right">Реклама</th>
+                  <th className="px-2 py-2 text-right">Заказы</th>
+                  <th className="px-2 py-2 text-right">СРО</th>
+                </tr>
+              </thead>
+              <tbody>
+                {articleRows.map((article) => (
+                  <tr key={article.sku} className="border-b border-slate-500/20">
+                    <td className="px-2 py-2 text-slate-100">
+                      {article.name} <span className="text-slate-400">({article.sku})</span>
+                    </td>
+                    <td className={`px-2 py-2 text-right font-semibold ${drrColorClass(article.drr)}`}>{formatPercent(article.drr, 1)}</td>
+                    <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(article.spend)}</td>
+                    <td className="px-2 py-2 text-right text-slate-200">{formatInteger(article.orders)}</td>
+                    <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(article.cpo)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+      </section>
+
+      <section className="app-card p-4">
+        <h2 className="mb-3 text-sm font-bold text-slate-100">АВТО-ДИАГНОСТИКА</h2>
+        <div className="space-y-2">
+          {diagnostics.map((issue) => (
+            <div key={issue.id} className="rounded-lg border border-rose-400/40 bg-rose-500/10 p-3">
+              <div className="text-sm font-semibold text-rose-200">{issue.title}</div>
+              <div className="mt-1 text-xs text-slate-200">{issue.cause}</div>
+              <div className="mt-1 text-xs text-slate-100">{issue.recommendation}</div>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
 
-function MetricCard({ title, value, valueClass = "" }: { title: string; value: string; valueClass?: string }) {
+function TodayCard({
+  title,
+  value,
+  actual,
+  plan
+}: {
+  title: string;
+  value: string;
+  actual: number;
+  plan: number;
+}) {
+  const progress = plan > 0 ? (actual / plan) * 100 : 0;
+  const positive = progress >= 100;
   return (
-    <div className="rounded-xl border border-slate-300/30 p-3">
-      <div className="text-xs text-[color:var(--tg-hint-color)]">{title}</div>
-      <div className={`mt-1 text-lg font-semibold ${valueClass}`}>{value}</div>
+    <div className="rounded-lg border border-slate-500/30 bg-slate-700/10 p-3">
+      <div className="text-xs text-slate-300">{title}</div>
+      <div className="mt-1 text-xl font-bold text-slate-50">{value}</div>
+      <div className={`mt-1 text-xs font-semibold ${positive ? "text-emerald-300" : "text-rose-300"}`}>
+        {positive ? "▲" : "▼"} {progress.toFixed(1)}% к плану
+      </div>
     </div>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function FunnelStep({
+  title,
+  value,
+  subtitle,
+  toneClass
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+  toneClass?: string;
+}) {
   return (
-    <div>
-      <div className="text-[10px] text-[color:var(--tg-hint-color)]">{label}</div>
-      <div className="font-semibold">{value}</div>
+    <div className="min-w-[145px] rounded-lg border border-slate-500/30 bg-slate-700/10 p-3">
+      <div className="text-[11px] uppercase tracking-wide text-slate-300">{title}</div>
+      <div className={`mt-1 text-lg font-bold ${toneClass || "text-slate-100"}`}>{value}</div>
+      {subtitle && <div className="mt-1 text-[10px] leading-tight text-slate-300">{subtitle}</div>}
     </div>
   );
 }

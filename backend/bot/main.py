@@ -26,7 +26,16 @@ RECONNECT_DELAY_SECONDS = 5
 
 def _resolve_bot_token() -> str:
     settings = get_settings()
-    return (settings.telegram_bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")).strip()
+    candidates = [
+        settings.telegram_bot_token,
+        os.getenv("TELEGRAM_BOT_TOKEN", ""),
+        os.getenv("BOT_TOKEN", ""),
+    ]
+    for candidate in candidates:
+        token = (candidate or "").strip()
+        if token:
+            return token
+    return ""
 
 
 async def _log_bot_errors(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -70,14 +79,18 @@ def main() -> None:
         logger.error("TELEGRAM_BOT_TOKEN не задан. Бот не может стартовать.")
         raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
 
-    logger.info("Bot starting with token: %s...", token[:10])
+    logger.info("Bot starting...")
     attempt = 1
     while True:
         try:
             app = build_application(token)
             logger.info("Запуск polling Telegram-бота (попытка %d)", attempt)
-            app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
-            logger.warning("Polling завершился. Повторный запуск через %d сек.", RECONNECT_DELAY_SECONDS)
+            try:
+                app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+                logger.warning("Polling завершился. Повторный запуск через %d сек.", RECONNECT_DELAY_SECONDS)
+            except Exception:
+                logger.exception("Ошибка во время run_polling (попытка %d)", attempt)
+                raise
         except KeyboardInterrupt:
             logger.info("Остановка Telegram-бота по сигналу KeyboardInterrupt.")
             break
