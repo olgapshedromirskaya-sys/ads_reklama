@@ -7,8 +7,6 @@ import { LoadingScreen } from "@/components/LoadingScreen";
 import { crColorClass, ctrColorClass, drrColorClass, formatCurrency, formatInteger, formatPercent } from "@/components/metricUtils";
 import { useAuthStore } from "@/store/auth";
 
-type DashboardMarketplace = "ozon" | "wb";
-type DashboardPeriod = "day" | "month" | "custom";
 type ChartMetric = "impressions" | "clicks" | "orders" | "spend";
 
 function todayIsoDate() {
@@ -20,27 +18,25 @@ function firstDayOfMonthIsoDate() {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
 }
 
-function marketplaceLabel(value: DashboardMarketplace) {
-  return value === "ozon" ? "Ozon" : "WB";
-}
+const chartMetricLabels: Record<ChartMetric, string> = {
+  impressions: "Показы",
+  clicks: "Клики",
+  orders: "Заказы",
+  spend: "Расход"
+};
 
 export function DashboardPage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const extendedAccess = canAccessExtendedFeatures(user);
-  const [marketplace, setMarketplace] = useState<DashboardMarketplace>("ozon");
-  const [period, setPeriod] = useState<DashboardPeriod>("month");
   const [dateFrom, setDateFrom] = useState(firstDayOfMonthIsoDate());
   const [dateTo, setDateTo] = useState(todayIsoDate());
   const [chartMetric, setChartMetric] = useState<ChartMetric>("spend");
   const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
 
   const summaryParams = useMemo(
-    () =>
-      period === "custom"
-        ? { marketplace, period, date_from: dateFrom, date_to: dateTo }
-        : { marketplace, period },
-    [marketplace, period, dateFrom, dateTo]
+    () => ({ period: "custom" as const, date_from: dateFrom, date_to: dateTo }),
+    [dateFrom, dateTo]
   );
 
   const { data, isLoading, isError } = useQuery({
@@ -82,64 +78,29 @@ export function DashboardPage() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--tg-hint-color)]">Площадка</div>
-        <div className="flex flex-wrap gap-2">
-          {(["ozon", "wb"] as const).map((item) => (
-            <button
-              key={item}
-              onClick={() => setMarketplace(item)}
-              className={`rounded-md px-3 py-2 text-sm font-semibold ${
-                marketplace === item ? "bg-[color:var(--tg-button-color)] text-white" : "border border-slate-300/30"
-              }`}
-            >
-              {marketplaceLabel(item)}
-            </button>
-          ))}
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--tg-hint-color)]">Период</div>
+        <div className="grid grid-cols-1 gap-2 text-xs md:grid-cols-2">
+          <label className="space-y-1">
+            <div className="text-[color:var(--tg-hint-color)]">Дата от</div>
+            <input
+              type="date"
+              value={dateFrom}
+              max={dateTo}
+              onChange={(event) => setDateFrom(event.target.value)}
+              className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
+            />
+          </label>
+          <label className="space-y-1">
+            <div className="text-[color:var(--tg-hint-color)]">Дата до</div>
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom}
+              onChange={(event) => setDateTo(event.target.value)}
+              className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
+            />
+          </label>
         </div>
-
-        <div className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-[color:var(--tg-hint-color)]">Период</div>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { value: "day", label: "День" },
-            { value: "month", label: "Месяц" },
-            { value: "custom", label: "Период" }
-          ].map((item) => (
-            <button
-              key={item.value}
-              onClick={() => setPeriod(item.value as DashboardPeriod)}
-              className={`rounded-md px-3 py-2 text-xs font-semibold ${
-                period === item.value ? "bg-[color:var(--tg-button-color)] text-white" : "border border-slate-300/30"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
-        {period === "custom" && (
-          <div className="mt-3 grid grid-cols-1 gap-2 text-xs md:grid-cols-2">
-            <label className="space-y-1">
-              <div className="text-[color:var(--tg-hint-color)]">Дата от</div>
-              <input
-                type="date"
-                value={dateFrom}
-                max={dateTo}
-                onChange={(event) => setDateFrom(event.target.value)}
-                className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
-              />
-            </label>
-            <label className="space-y-1">
-              <div className="text-[color:var(--tg-hint-color)]">Дата до</div>
-              <input
-                type="date"
-                value={dateTo}
-                min={dateFrom}
-                onChange={(event) => setDateTo(event.target.value)}
-                className="w-full rounded-md border border-slate-300/30 bg-transparent px-2 py-2 text-sm"
-              />
-            </label>
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -155,11 +116,11 @@ export function DashboardPage() {
       </div>
 
       <div className="rounded-xl border border-slate-300/30 p-4">
-        <div className="mb-1 text-sm font-semibold">Площадка: {marketplaceLabel(marketplace)}</div>
+        <div className="mb-1 text-sm font-semibold">Площадки: все (WB + Ozon)</div>
         <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
           <InfoRow label="Расход сегодня" value={formatCurrency(data.spend_today)} />
           <InfoRow label="Расход за неделю" value={formatCurrency(data.spend_week)} />
-          <InfoRow label="Расход за период" value={formatCurrency(data.spend_month)} />
+          <InfoRow label="Расход за период" value={formatCurrency(data.totals.spend)} />
           <InfoRow label="Заказы с рекламы" value={formatInteger(data.total_orders)} />
         </div>
         <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">
@@ -175,7 +136,7 @@ export function DashboardPage() {
               { key: "impressions", label: "Показы" },
               { key: "clicks", label: "Клики" },
               { key: "orders", label: "Заказы" },
-              { key: "spend", label: "Расходы" }
+              { key: "spend", label: "Расход" }
             ].map((item) => (
               <button
                 key={item.key}
@@ -198,9 +159,15 @@ export function DashboardPage() {
               <XAxis dataKey="d" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip
-                formatter={(value) =>
-                  chartMetric === "spend" ? formatCurrency(Number(value)) : formatInteger(Number(value))
-                }
+                formatter={(value, name) => {
+                  const valueText =
+                    chartMetric === "spend" ? formatCurrency(Number(value)) : formatInteger(Number(value));
+                  const metricName =
+                    typeof name === "string" && name in chartMetricLabels
+                      ? chartMetricLabels[name as ChartMetric]
+                      : chartMetricLabels[chartMetric];
+                  return [valueText, metricName];
+                }}
               />
               <Line type="monotone" dataKey={chartMetric} stroke="#3b82f6" strokeWidth={2} dot={false} />
             </LineChart>

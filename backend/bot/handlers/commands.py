@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from sqlalchemy import func, select
@@ -21,6 +22,7 @@ from app.models.entities import Alert, Campaign, CampaignStat, MPAccount, User, 
 from app.services.sync import pause_or_resume_campaign, run_async
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 BTN_OPEN_DASHBOARD = "🚀 Открыть дашборд"
 BTN_SUMMARY = "📈 Сводка"
@@ -181,17 +183,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     message = update.effective_message
     if message is None:
         return
+    logger.info("Получена команда /start от telegram_id=%s", update.effective_user.id if update.effective_user else None)
     user = _ensure_user(update)
     if user is None:
         return
-    webapp_button = InlineKeyboardButton("🚀 Open WebApp", web_app=WebAppInfo(url=settings.webapp_url))
+    webapp_button = InlineKeyboardButton("🚀 Открыть WebApp", web_app=WebAppInfo(url=settings.webapp_url))
     settings_button = InlineKeyboardButton(
-        "⚙️ Connect accounts",
+        "⚙️ Подключить аккаунты",
         web_app=WebAppInfo(url=f"{settings.webapp_url.rstrip('/')}/settings"),
     )
     keyboard = InlineKeyboardMarkup([[webapp_button], [settings_button]])
     text = (
-        "Welcome to MP Ads Manager.\n\n"
+        "Добро пожаловать в MP Ads Manager.\n\n"
         f"Роль: {_format_role(user.role)}.\n"
         "Используйте кнопку WebApp для дашборда и меню ниже для быстрых действий."
     )
