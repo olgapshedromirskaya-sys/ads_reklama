@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { listCampaigns, listQueries, type Campaign } from "@/api/endpoints";
+import { listCampaigns, listQueries, pauseCampaign, type Campaign } from "@/api/endpoints";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import {
   crColorClass,
@@ -10,8 +10,7 @@ import {
   formatCurrency,
   formatInteger,
   formatPercent,
-  marketplaceLabel,
-  romiColorClass
+  marketplaceLabel
 } from "@/components/metricUtils";
 import {
   buildCampaignFunnelMetrics,
@@ -119,13 +118,18 @@ const DIAGNOSTICS_DEMO_KEYS = new Set([
 export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const data = MARKETPLACE_ANALYTICS[marketplace];
   const accentClass = marketplace === "ozon" ? "text-sky-300" : "text-violet-300";
-  const [expandedFunnels, setExpandedFunnels] = useState<Record<number, boolean>>({});
+  const queryClient = useQueryClient();
+  const [expandedCampaignId, setExpandedCampaignId] = useState<number | null>(null);
+  const [highlightedCampaignId, setHighlightedCampaignId] = useState<number | null>(null);
   const [minusRows, setMinusRows] = useState<Record<MarketplaceId, MinusKeywordRow[]>>(() => ({
     wb: DEMO_MINUS_ROWS.wb.map((row) => ({ ...row })),
     ozon: DEMO_MINUS_ROWS.ozon.map((row) => ({ ...row }))
   }));
   const [removingMinusRows, setRemovingMinusRows] = useState<Record<string, boolean>>({});
   const [autoMinusMessage, setAutoMinusMessage] = useState<string | null>(null);
+  const campaignsSectionRef = useRef<HTMLElement | null>(null);
+  const campaignRowRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const highlightTimeoutRef = useRef<number | null>(null);
 
   const campaignsQuery = useQuery({
     queryKey: ["campaigns"],
@@ -134,6 +138,10 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const queriesQuery = useQuery({
     queryKey: ["dashboard-queries", marketplace],
     queryFn: () => listQueries({ marketplace, limit: 1000 })
+  });
+  const pauseMutation = useMutation({
+    mutationFn: (campaignId: number) => pauseCampaign(campaignId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["campaigns"] })
   });
 
   if (campaignsQuery.isLoading || queriesQuery.isLoading) {
@@ -166,6 +174,7 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
         demoKey: `${campaign.marketplace || "unknown"}:${campaign.name}:${getIssueKind(issue.id)}`
       }))
     )
+    .filter((row) => row.campaign.marketplace === marketplace)
     .filter((row) => DIAGNOSTICS_ORDER[row.issueKind] !== undefined)
     .filter((row) => DIAGNOSTICS_DEMO_KEYS.has(row.demoKey))
     .sort((left, right) => DIAGNOSTICS_ORDER[left.issueKind] - DIAGNOSTICS_ORDER[right.issueKind]);
@@ -192,7 +201,27 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const totalMinusSpend = [...minusRows.wb, ...minusRows.ozon].reduce((sum, row) => sum + row.spend, 0);
 
   const toggleCampaignFunnel = (campaignId: number) => {
-    setExpandedFunnels((prev) => ({ ...prev, [campaignId]: !prev[campaignId] }));
+    setExpandedCampaignId((currentId) => (currentId === campaignId ? null : campaignId));
+  };
+
+  const openCampaignFromDiagnostics = (campaignId: number) => {
+    setExpandedCampaignId(campaignId);
+    setHighlightedCampaignId(campaignId);
+    if (highlightTimeoutRef.current) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedCampaignId((currentId) => (currentId === campaignId ? null : currentId));
+    }, 2200);
+
+    window.requestAnimationFrame(() => {
+      const rowElement = campaignRowRefs.current[campaignId];
+      if (rowElement) {
+        rowElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        campaignsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
   };
 
   const removeMinusRow = (marketplaceId: MarketplaceId, rowId: string) => {
@@ -254,7 +283,7 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
         </div>
       </section>
 
-      <section className="app-card p-4">
+      <section ref={campaignsSectionRef} className="app-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-100">📋 Кампании ({activeCampaigns.length} активных)</h2>
           <Link to={campaignsPath(marketplace)} className="text-xs text-[color:var(--tg-link-color)] hover:underline">
@@ -264,12 +293,19 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
         <div className="space-y-2">
           {activeCampaigns.map((campaign) => {
             const tone = campaignHealthTone(campaign);
-            const expanded = Boolean(expandedFunnels[campaign.id]);
+            const expanded = expandedCampaignId === campaign.id;
             const issues = campaignIssues.get(campaign.id) || [];
             return (
               <div
                 key={campaign.id}
-                className="rounded-lg border border-slate-500/30 bg-slate-700/10 px-3 py-2"
+                ref={(element) => {
+                  campaignRowRefs.current[campaign.id] = element;
+                }}
+                className={`rounded-lg border px-3 py-2 transition-all duration-300 ${
+                  highlightedCampaignId === campaign.id
+                    ? "border-amber-300/70 bg-amber-500/15 ring-2 ring-amber-300/60"
+                    : "border-slate-500/30 bg-slate-700/10"
+                }`}
               >
                 <button
                   onClick={() => toggleCampaignFunnel(campaign.id)}
@@ -423,13 +459,22 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
               </div>
               <div className="mt-1 text-xs text-slate-200">{issue.cause}</div>
               <div className="mt-1 text-xs text-emerald-200">{issue.recommendation}</div>
-              <div className="mt-2">
-                <Link
-                  to={campaignDetailPath(campaign.id, campaign.marketplace)}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => openCampaignFromDiagnostics(campaign.id)}
                   className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
                 >
-                  [Перейти к кампании]
-                </Link>
+                  [Перейти к кампании ↑]
+                </button>
+                {issue.actions.some((action) => action.type === "pause") && (
+                  <button
+                    onClick={() => pauseMutation.mutate(campaign.id)}
+                    disabled={pauseMutation.isPending || campaign.status === "paused"}
+                    className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    [На паузу ⏸]
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -467,6 +512,7 @@ function TodayCard({
 function CampaignExpandableFunnel({ campaign, issues }: { campaign: Campaign; issues: ReturnType<typeof detectCampaignIssues> }) {
   const funnel = buildCampaignFunnelMetrics(campaign);
   const issuesSummary = Array.from(new Set(issues.map((issue) => issueSummary(issue.id, campaign)).filter(Boolean)));
+  const cpcTone = cpcHint(funnel.cpc);
 
   return (
     <div className="rounded-lg border border-slate-300/20 bg-slate-700/10 p-3">
@@ -475,8 +521,8 @@ function CampaignExpandableFunnel({ campaign, issues }: { campaign: Campaign; is
         <FunnelLine label="↓ CTR" value={`${formatPercent(funnel.ctr, 1)} ${ctrHint(funnel.ctr)}`} valueClass={ctrColorClass(funnel.ctr)} />
         <FunnelLine
           label="👆 Клики"
-          value={`${formatInteger(funnel.clicks)} | CPC: ${formatCurrency(funnel.cpc)}${cpcHint(funnel.cpc) ? ` ${cpcHint(funnel.cpc)}` : ""}`}
-          valueClass={funnel.cpc >= 40 ? "text-rose-300" : "text-slate-100"}
+          value={`${formatInteger(funnel.clicks)} | CPC: ${formatCurrency(funnel.cpc)} ${cpcTone}`}
+          valueClass={funnel.cpc >= 40 ? "text-rose-300" : funnel.cpc >= 24 ? "text-amber-300" : "text-emerald-300"}
         />
         <FunnelLine label="↓ CR корзины" value={formatPercent(funnel.cartCr, 1)} />
         <FunnelLine label="🛒 Корзина" value={formatInteger(funnel.cartAdds)} />
@@ -495,22 +541,21 @@ function CampaignExpandableFunnel({ campaign, issues }: { campaign: Campaign; is
         <FunnelLine
           label="📊 ROMI"
           value={`${formatPercent(funnel.romi, 0)} ${romiHint(funnel.romi)}`}
-          valueClass={romiColorClass(funnel.romi)}
+          valueClass={romiToneClass(funnel.romi)}
         />
       </div>
 
-      {issuesSummary.length > 0 && (
-        <div className="mt-3 rounded-md border border-amber-400/40 bg-amber-500/10 p-2">
-          <div className="text-xs font-semibold text-amber-200">
-            ⚠️ Обнаружено {issuesSummary.length} {problemWord(issuesSummary.length)} в этой кампании:
-          </div>
-          <ul className="mt-1 space-y-1 text-xs text-amber-100">
-            {issuesSummary.map((problem) => (
-              <li key={problem}>{problem}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <div
+        className={`mt-3 rounded-md border p-2 text-xs font-semibold ${
+          issuesSummary.length > 0
+            ? "border-amber-400/40 bg-amber-500/10 text-amber-200"
+            : "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
+        }`}
+      >
+        {issuesSummary.length > 0
+          ? `⚠️ ${issuesSummary.length} ${problemWord(issuesSummary.length)} в этой кампании`
+          : "✅ Проблем не обнаружено"}
+      </div>
 
       <div className="mt-3">
         <Link
@@ -534,32 +579,39 @@ function FunnelLine({ label, value, valueClass = "text-slate-100" }: { label: st
 }
 
 function ctrHint(ctr: number) {
-  if (ctr <= 1.2) return "🔴 ⚠️ НИЗКИЙ — проблема с карточкой";
-  if (ctr < 3) return "🟡";
+  if (ctr <= 1.2) return "🔴 ⚠️ Низкий — обновите фото/цену";
+  if (ctr <= 3) return "🟡";
   return "🟢";
 }
 
 function cpcHint(cpc: number) {
-  if (cpc >= 40) return "🔴 ⚠️ ДОРОГОЙ клик";
-  if (cpc >= 28) return "🟡";
-  return "";
+  if (cpc >= 40) return "🔴";
+  if (cpc >= 24) return "🟡";
+  return "🟢";
 }
 
 function orderCrHint(cr: number) {
-  if (cr <= 3) return "🔴 ⚠️ НИЗКАЯ конверсия";
-  if (cr < 5) return "🟡";
+  if (cr <= 3) return "🔴 ⚠️ Низкая конверсия";
+  if (cr < 5) return "🟡 ⚠️ Можно улучшить";
   return "🟢";
 }
 
 function drrHint(drr: number) {
-  if (drr >= 30) return "🔴 ⚠️ УБЫТОЧНО";
+  if (drr >= 30) return "🔴 ⚠️ Убыточно";
   if (drr >= 15) return "🟡";
   return "🟢";
 }
 
 function romiHint(romi: number) {
-  if (romi >= 300) return "🟢";
+  if (romi >= 700) return "🟢";
+  if (romi >= 300) return "🟡";
   return "🔴";
+}
+
+function romiToneClass(romi: number) {
+  if (romi >= 700) return "text-emerald-300";
+  if (romi >= 300) return "text-amber-300";
+  return "text-rose-300";
 }
 
 function getIssueKind(issueId: string) {
