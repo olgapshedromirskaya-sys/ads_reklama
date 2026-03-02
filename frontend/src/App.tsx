@@ -10,6 +10,7 @@ import { resolveLaunchContext, setDemoMode } from "@/demo/mode";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { CampaignDetailPage } from "@/pages/CampaignDetailPage";
 import { CampaignsPage } from "@/pages/CampaignsPage";
+import { QueriesPage } from "@/pages/QueriesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
 function App() {
@@ -128,6 +129,7 @@ function App() {
         <Route path="/wb/campaigns/:id" element={<CampaignDetailPage />} />
         <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
 
+        <Route path="/queries" element={<QueriesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

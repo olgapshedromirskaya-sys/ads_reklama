@@ -1,20 +1,16 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { listCampaigns, listQueries, pauseCampaign, runAutoCleanupCampaign } from "@/api/endpoints";
+import { listCampaigns, listQueries, type Campaign } from "@/api/endpoints";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import {
-  crBenchmarkLabel,
   crColorClass,
-  ctrBenchmarkLabel,
   ctrColorClass,
-  drrBenchmarkLabel,
   drrColorClass,
   formatCurrency,
   formatInteger,
   formatPercent,
   marketplaceLabel,
-  romiBenchmarkLabel,
   romiColorClass
 } from "@/components/metricUtils";
 import {
@@ -22,18 +18,114 @@ import {
   campaignDetailPath,
   campaignHealthTone,
   campaignsPath,
-  detectCampaignIssues,
-  severityClassName,
-  severityEmoji,
-  sortIssueGroups
+  detectCampaignIssues
 } from "@/data/campaignInsights";
 import { MARKETPLACE_ANALYTICS, type MarketplaceId, computeFunnelMetrics } from "@/data/marketplaceAnalytics";
+
+type MinusKeywordRow = {
+  id: string;
+  keyword: string;
+  campaign: string;
+  clicks: number;
+  orders: number;
+  spend: number;
+  reason: string;
+};
+
+const DEMO_MINUS_ROWS: Record<MarketplaceId, MinusKeywordRow[]> = {
+  wb: [
+    {
+      id: "wb-1",
+      keyword: "кроссовки мужские 46",
+      campaign: "Кроссовки женские",
+      clicks: 1200,
+      orders: 0,
+      spend: 4800,
+      reason: "Нерелевантный пол"
+    },
+    {
+      id: "wb-2",
+      keyword: "тапочки домашние",
+      campaign: "Кроссовки женские",
+      clicks: 890,
+      orders: 0,
+      spend: 3200,
+      reason: "Другая категория"
+    },
+    {
+      id: "wb-3",
+      keyword: "сапоги зимние кожаные",
+      campaign: "Платья летние",
+      clicks: 450,
+      orders: 0,
+      spend: 2100,
+      reason: "Другая категория"
+    },
+    {
+      id: "wb-4",
+      keyword: "джинсы оптом",
+      campaign: "Джинсы slim fit",
+      clicks: 380,
+      orders: 0,
+      spend: 1900,
+      reason: "Оптовый запрос"
+    },
+    {
+      id: "wb-5",
+      keyword: "джинсы б/у",
+      campaign: "Джинсы slim fit",
+      clicks: 290,
+      orders: 0,
+      spend: 1450,
+      reason: "Нецелевой запрос"
+    }
+  ],
+  ozon: [
+    {
+      id: "ozon-1",
+      keyword: "термокружка дешево",
+      campaign: "Термокружка 450мл",
+      clicks: 410,
+      orders: 0,
+      spend: 8700,
+      reason: "Ценовой фильтр"
+    },
+    {
+      id: "ozon-2",
+      keyword: "рюкзак оптом",
+      campaign: "Рюкзак туристический",
+      clicks: 340,
+      orders: 0,
+      spend: 3400,
+      reason: "Оптовый запрос"
+    }
+  ]
+};
+
+const DIAGNOSTICS_ORDER: Record<string, number> = {
+  "high-drr": 0,
+  "low-ctr": 1,
+  "low-cr": 2,
+  "borderline-drr": 3
+};
+
+const DIAGNOSTICS_DEMO_KEYS = new Set([
+  "wb:Джинсы slim fit:high-drr",
+  "wb:Джинсы slim fit:low-ctr",
+  "wb:Платья летние:low-cr",
+  "ozon:Рюкзак туристический:borderline-drr"
+]);
 
 export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const data = MARKETPLACE_ANALYTICS[marketplace];
   const accentClass = marketplace === "ozon" ? "text-sky-300" : "text-violet-300";
-  const queryClient = useQueryClient();
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [expandedFunnels, setExpandedFunnels] = useState<Record<number, boolean>>({});
+  const [minusRows, setMinusRows] = useState<Record<MarketplaceId, MinusKeywordRow[]>>(() => ({
+    wb: DEMO_MINUS_ROWS.wb.map((row) => ({ ...row })),
+    ozon: DEMO_MINUS_ROWS.ozon.map((row) => ({ ...row }))
+  }));
+  const [removingMinusRows, setRemovingMinusRows] = useState<Record<string, boolean>>({});
+  const [autoMinusMessage, setAutoMinusMessage] = useState<string | null>(null);
 
   const campaignsQuery = useQuery({
     queryKey: ["campaigns"],
@@ -42,23 +134,6 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const queriesQuery = useQuery({
     queryKey: ["dashboard-queries", marketplace],
     queryFn: () => listQueries({ marketplace, limit: 1000 })
-  });
-
-  const pauseMutation = useMutation({
-    mutationFn: (campaignId: number) => pauseCampaign(campaignId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
-      setActionMessage("Кампания поставлена на паузу");
-    }
-  });
-  const minusMutation = useMutation({
-    mutationFn: (campaignId: number) => runAutoCleanupCampaign(campaignId, { apply_now: true }),
-    onSuccess: (result) => {
-      setActionMessage(
-        `Минус-слова применены: ${result.irrelevant_found}, экономия ${formatCurrency(result.budget_saved)}/день`
-      );
-      queryClient.invalidateQueries({ queryKey: ["dashboard-queries", marketplace] });
-    }
   });
 
   if (campaignsQuery.isLoading || queriesQuery.isLoading) {
@@ -77,14 +152,23 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
     queryMap.set(row.campaign_id, rows);
   }
 
-  const issueGroups = sortIssueGroups(
-    marketplaceCampaigns
-      .map((campaign) => ({
+  const campaignIssues = new Map<number, ReturnType<typeof detectCampaignIssues>>();
+  for (const campaign of marketplaceCampaigns) {
+    campaignIssues.set(campaign.id, detectCampaignIssues(campaign, queryMap.get(campaign.id) || []));
+  }
+
+  const diagnosticsRows = campaignsQuery.data
+    .flatMap((campaign) =>
+      detectCampaignIssues(campaign, queryMap.get(campaign.id) || []).map((issue) => ({
         campaign,
-        issues: detectCampaignIssues(campaign, queryMap.get(campaign.id) || [])
+        issue,
+        issueKind: getIssueKind(issue.id),
+        demoKey: `${campaign.marketplace || "unknown"}:${campaign.name}:${getIssueKind(issue.id)}`
       }))
-      .filter((row) => row.issues.length > 0)
-  );
+    )
+    .filter((row) => DIAGNOSTICS_ORDER[row.issueKind] !== undefined)
+    .filter((row) => DIAGNOSTICS_DEMO_KEYS.has(row.demoKey))
+    .sort((left, right) => DIAGNOSTICS_ORDER[left.issueKind] - DIAGNOSTICS_ORDER[right.issueKind]);
 
   const funnelRaw = !marketplaceCampaigns.length
     ? data.funnelRaw
@@ -103,6 +187,52 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
       );
   const funnel = computeFunnelMetrics(funnelRaw);
   const articleRows = [...marketplaceCampaigns].sort((left, right) => right.drr - left.drr);
+  const currentMinusRows = minusRows[marketplace];
+  const totalMinusRows = minusRows.wb.length + minusRows.ozon.length;
+  const totalMinusSpend = [...minusRows.wb, ...minusRows.ozon].reduce((sum, row) => sum + row.spend, 0);
+
+  const toggleCampaignFunnel = (campaignId: number) => {
+    setExpandedFunnels((prev) => ({ ...prev, [campaignId]: !prev[campaignId] }));
+  };
+
+  const removeMinusRow = (marketplaceId: MarketplaceId, rowId: string) => {
+    setAutoMinusMessage(null);
+    setRemovingMinusRows((prev) => ({ ...prev, [rowId]: true }));
+    window.setTimeout(() => {
+      setMinusRows((prev) => ({
+        ...prev,
+        [marketplaceId]: prev[marketplaceId].filter((row) => row.id !== rowId)
+      }));
+      setRemovingMinusRows((prev) => {
+        const next = { ...prev };
+        delete next[rowId];
+        return next;
+      });
+    }, 200);
+  };
+
+  const removeAllMinusRows = () => {
+    if (totalMinusRows === 0) {
+      setAutoMinusMessage("✅ Нерелевантных ключей больше не найдено");
+      return;
+    }
+    const monthlySavings = totalMinusSpend * 30;
+    setMinusRows({ wb: [], ozon: [] });
+    setAutoMinusMessage(
+      "✅ Готово! Удалено " +
+        `${formatCommaNumber(totalMinusRows)} нерелевантных ключей\n` +
+        `Экономия: ~${formatCommaNumber(totalMinusSpend)}₽/день (${formatCommaNumber(monthlySavings)}₽/месяц)\n` +
+        "Минус-слова добавлены в кампании"
+    );
+  };
+
+  const addAllMinusWords = () => {
+    if (totalMinusRows === 0) {
+      setAutoMinusMessage("✅ Все минус-слова уже добавлены");
+      return;
+    }
+    setAutoMinusMessage(`✅ Добавлено ${formatCommaNumber(totalMinusRows)} ключей в минус-слова по кампаниям`);
+  };
 
   return (
     <div className="space-y-4">
@@ -134,39 +264,34 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
         <div className="space-y-2">
           {activeCampaigns.map((campaign) => {
             const tone = campaignHealthTone(campaign);
+            const expanded = Boolean(expandedFunnels[campaign.id]);
+            const issues = campaignIssues.get(campaign.id) || [];
             return (
-              <Link
+              <div
                 key={campaign.id}
-                to={campaignDetailPath(campaign.id, campaign.marketplace)}
-                className="flex items-center justify-between rounded-lg border border-slate-500/30 bg-slate-700/10 px-3 py-2 text-sm hover:border-slate-300/50"
+                className="rounded-lg border border-slate-500/30 bg-slate-700/10 px-3 py-2"
               >
-                <span className={tone.className}>
-                  {tone.icon} {campaign.name} — ДРР {formatPercent(campaign.drr, 1)} — {tone.text}
-                </span>
-                <span className="text-[color:var(--tg-link-color)]">→</span>
-              </Link>
+                <button
+                  onClick={() => toggleCampaignFunnel(campaign.id)}
+                  className="flex w-full items-center justify-between gap-3 text-left text-sm"
+                >
+                  <span className={tone.className}>
+                    {tone.icon} {campaign.name} — ДРР {formatPercent(campaign.drr, 1)} — {tone.text}
+                  </span>
+                  <span className="shrink-0 text-xs text-[color:var(--tg-link-color)]">
+                    {expanded ? "[Свернуть ▲]" : "[Развернуть ▼]"}
+                  </span>
+                </button>
+
+                <div className={`grid transition-all duration-200 ${expanded ? "mt-3 grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+                  <div className="overflow-hidden">
+                    <CampaignExpandableFunnel campaign={campaign} issues={issues} />
+                  </div>
+                </div>
+              </div>
             );
           })}
           {!activeCampaigns.length && <div className="text-sm text-[color:var(--tg-hint-color)]">Активных кампаний нет</div>}
-        </div>
-      </section>
-
-      <section className="app-card p-4">
-        <h2 className="mb-3 text-sm font-bold text-slate-100">ВОРОНКА</h2>
-        <div className="thin-scrollbar overflow-x-auto">
-          <div className="flex min-w-[1000px] items-stretch gap-2">
-            <FunnelStep title="Показы" value={formatInteger(funnel.impressions)} />
-            <FunnelStep title="CTR" value={formatPercent(funnel.ctr, 1)} toneClass={ctrColorClass(funnel.ctr)} subtitle={ctrBenchmarkLabel(funnel.ctr)} />
-            <FunnelStep title="Клики" value={formatInteger(funnel.clicks)} />
-            <FunnelStep title="CPC" value={formatCurrency(funnel.cpc)} />
-            <FunnelStep title="В корзину" value={formatInteger(funnel.cartAdds)} />
-            <FunnelStep title="CR корзины" value={formatPercent(funnel.cartCr, 1)} />
-            <FunnelStep title="Заказы" value={formatInteger(funnel.orders)} />
-            <FunnelStep title="CR" value={formatPercent(funnel.cr, 1)} toneClass={crColorClass(funnel.cr)} subtitle={crBenchmarkLabel(funnel.cr)} />
-            <FunnelStep title="Выручка" value={formatCurrency(funnel.revenue)} />
-            <FunnelStep title="ДРР" value={formatPercent(funnel.drr, 1)} toneClass={drrColorClass(funnel.drr)} subtitle={drrBenchmarkLabel(funnel.drr)} />
-            <FunnelStep title="ROMI" value={formatPercent(funnel.romi, 0)} toneClass={romiColorClass(funnel.romi)} subtitle={romiBenchmarkLabel(funnel.romi)} />
-          </div>
         </div>
       </section>
 
@@ -225,66 +350,91 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
       </section>
 
       <section className="app-card p-4">
-        <h2 className="mb-1 text-sm font-bold text-slate-100">АВТО-ДИАГНОСТИКА</h2>
-        <div className="mb-3 text-xs text-slate-300">Сортировка: 🔴 Убыточные → 🟡 Проблемные → ℹ️ Требуют внимания</div>
+        <h2 className="mb-1 text-sm font-bold text-slate-100">🚫 Авто-минусовка</h2>
+        <div className="rounded-lg border border-rose-400/40 bg-rose-500/10 p-3 text-xs text-rose-200">
+          <div className="font-semibold">🔴 Найдено {formatCommaNumber(totalMinusRows)} нерелевантных ключей</div>
+          <div>Сливают {formatCommaNumber(totalMinusSpend)}₽/день</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button onClick={removeAllMinusRows} className="rounded-md border border-rose-300/40 px-2 py-1 text-[11px]">
+              [Удалить все]
+            </button>
+            <button onClick={addAllMinusWords} className="rounded-md border border-rose-300/40 px-2 py-1 text-[11px]">
+              [Добавить все в минус-слова]
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 overflow-x-auto">
+          <table className="min-w-[980px] text-xs">
+            <thead className="text-slate-300">
+              <tr className="border-b border-slate-500/40">
+                <th className="px-2 py-2 text-left">Ключевое слово</th>
+                <th className="px-2 py-2 text-left">Кампания</th>
+                <th className="px-2 py-2 text-right">Клики</th>
+                <th className="px-2 py-2 text-right">Заказы</th>
+                <th className="px-2 py-2 text-right">Расход</th>
+                <th className="px-2 py-2 text-left">Причина</th>
+                <th className="px-2 py-2 text-left">Действие</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentMinusRows.map((row) => (
+                <tr
+                  key={row.id}
+                  className={`border-b border-slate-500/20 transition-all duration-200 ${
+                    removingMinusRows[row.id] ? "translate-x-2 opacity-0" : "translate-x-0 opacity-100"
+                  }`}
+                >
+                  <td className="px-2 py-2 text-slate-100">"{row.keyword}"</td>
+                  <td className="px-2 py-2 text-slate-200">{row.campaign}</td>
+                  <td className="px-2 py-2 text-right text-slate-200">{formatInteger(row.clicks)}</td>
+                  <td className="px-2 py-2 text-right text-slate-200">{formatInteger(row.orders)}</td>
+                  <td className="px-2 py-2 text-right text-rose-200">{formatCurrency(row.spend)}</td>
+                  <td className="px-2 py-2 text-slate-200">{row.reason}</td>
+                  <td className="px-2 py-2">
+                    <button
+                      onClick={() => removeMinusRow(marketplace, row.id)}
+                      className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
+                    >
+                      [Удалить]
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!currentMinusRows.length && (
+                <tr>
+                  <td colSpan={7} className="px-2 py-6 text-center text-emerald-300">
+                    ✅ Нерелевантные ключи для {marketplaceLabel(marketplace)} удалены
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {autoMinusMessage && <div className="mt-3 whitespace-pre-line text-xs text-emerald-300">{autoMinusMessage}</div>}
+      </section>
+
+      <section className="app-card p-4">
+        <h2 className="mb-3 text-sm font-bold text-slate-100">🔍 Авто-диагностика — обнаружено {diagnosticsRows.length} проблемы</h2>
         <div className="space-y-3">
-          {issueGroups.map(({ campaign, issues }) => (
-            <div key={campaign.id} className="rounded-xl border border-slate-300/30 p-3">
-              <div className="mb-2 text-sm font-semibold">
-                {campaign.name} <span className="text-xs text-slate-300">({marketplaceLabel(campaign.marketplace)})</span>
+          {diagnosticsRows.map(({ campaign, issue }) => (
+            <div key={issue.id} className="rounded-lg border border-slate-300/30 bg-slate-700/10 p-3">
+              <div className="text-sm font-semibold text-rose-200">
+                ❌ "{campaign.name}" ({marketplaceLabel(campaign.marketplace)}) — {issue.title}
               </div>
-              <div className="space-y-2">
-                {issues.map((issue) => (
-                  <div key={issue.id} className={`rounded-lg border p-3 ${severityClassName(issue.severity)}`}>
-                    <div className="text-sm font-semibold">
-                      {severityEmoji(issue.severity)} "{campaign.name}" ({marketplaceLabel(campaign.marketplace)}) — {issue.title}
-                    </div>
-                    <div className="mt-1 text-xs">{issue.metrics}</div>
-                    <div className="mt-1 text-xs">{issue.cause}</div>
-                    <div className="mt-1 text-xs">{issue.recommendation}</div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {issue.actions.map((action, index) => {
-                        if (action.type === "open") {
-                          return (
-                            <Link
-                              key={`${issue.id}-${action.type}-${index}`}
-                              to={campaignDetailPath(campaign.id, campaign.marketplace)}
-                              className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
-                            >
-                              {action.label}
-                            </Link>
-                          );
-                        }
-                        if (action.type === "pause") {
-                          return (
-                            <button
-                              key={`${issue.id}-${action.type}-${index}`}
-                              onClick={() => pauseMutation.mutate(campaign.id)}
-                              className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
-                            >
-                              {action.label}
-                            </button>
-                          );
-                        }
-                        return (
-                          <button
-                            key={`${issue.id}-${action.type}-${index}`}
-                            onClick={() => minusMutation.mutate(campaign.id)}
-                            className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
-                          >
-                            {action.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-1 text-xs text-slate-200">{issue.cause}</div>
+              <div className="mt-1 text-xs text-emerald-200">{issue.recommendation}</div>
+              <div className="mt-2">
+                <Link
+                  to={campaignDetailPath(campaign.id, campaign.marketplace)}
+                  className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
+                >
+                  [Перейти к кампании]
+                </Link>
               </div>
             </div>
           ))}
-          {!issueGroups.length && <div className="text-sm text-emerald-300">Проблем не обнаружено</div>}
+          {!diagnosticsRows.length && <div className="text-sm text-emerald-300">Проблем не обнаружено</div>}
         </div>
-        {actionMessage && <div className="mt-3 text-xs text-emerald-300">{actionMessage}</div>}
       </section>
     </div>
   );
@@ -314,22 +464,133 @@ function TodayCard({
   );
 }
 
-function FunnelStep({
-  title,
-  value,
-  subtitle,
-  toneClass
-}: {
-  title: string;
-  value: string;
-  subtitle?: string;
-  toneClass?: string;
-}) {
+function CampaignExpandableFunnel({ campaign, issues }: { campaign: Campaign; issues: ReturnType<typeof detectCampaignIssues> }) {
+  const funnel = buildCampaignFunnelMetrics(campaign);
+  const issuesSummary = Array.from(new Set(issues.map((issue) => issueSummary(issue.id, campaign)).filter(Boolean)));
+
   return (
-    <div className="min-w-[145px] rounded-lg border border-slate-500/30 bg-slate-700/10 p-3">
-      <div className="text-[11px] uppercase tracking-wide text-slate-300">{title}</div>
-      <div className={`mt-1 text-lg font-bold ${toneClass || "text-slate-100"}`}>{value}</div>
-      {subtitle && <div className="mt-1 text-[10px] leading-tight text-slate-300">{subtitle}</div>}
+    <div className="rounded-lg border border-slate-300/20 bg-slate-700/10 p-3">
+      <div className="space-y-1 text-sm">
+        <FunnelLine label="👁 Показы" value={formatInteger(funnel.impressions)} />
+        <FunnelLine label="↓ CTR" value={`${formatPercent(funnel.ctr, 1)} ${ctrHint(funnel.ctr)}`} valueClass={ctrColorClass(funnel.ctr)} />
+        <FunnelLine
+          label="👆 Клики"
+          value={`${formatInteger(funnel.clicks)} | CPC: ${formatCurrency(funnel.cpc)}${cpcHint(funnel.cpc) ? ` ${cpcHint(funnel.cpc)}` : ""}`}
+          valueClass={funnel.cpc >= 40 ? "text-rose-300" : "text-slate-100"}
+        />
+        <FunnelLine label="↓ CR корзины" value={formatPercent(funnel.cartCr, 1)} />
+        <FunnelLine label="🛒 Корзина" value={formatInteger(funnel.cartAdds)} />
+        <FunnelLine
+          label="↓ CR заказа"
+          value={`${formatPercent(funnel.orderCr, 1)} ${orderCrHint(funnel.orderCr)}`}
+          valueClass={crColorClass(funnel.orderCr)}
+        />
+        <FunnelLine label="📦 Заказы" value={formatInteger(funnel.orders)} />
+        <FunnelLine
+          label="↓ ДРР"
+          value={`${formatPercent(funnel.drr, 1)} ${drrHint(funnel.drr)}`}
+          valueClass={drrColorClass(funnel.drr)}
+        />
+        <FunnelLine label="💰 Выручка" value={formatCurrency(funnel.revenue)} />
+        <FunnelLine
+          label="📊 ROMI"
+          value={`${formatPercent(funnel.romi, 0)} ${romiHint(funnel.romi)}`}
+          valueClass={romiColorClass(funnel.romi)}
+        />
+      </div>
+
+      {issuesSummary.length > 0 && (
+        <div className="mt-3 rounded-md border border-amber-400/40 bg-amber-500/10 p-2">
+          <div className="text-xs font-semibold text-amber-200">
+            ⚠️ Обнаружено {issuesSummary.length} {problemWord(issuesSummary.length)} в этой кампании:
+          </div>
+          <ul className="mt-1 space-y-1 text-xs text-amber-100">
+            {issuesSummary.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-3">
+        <Link
+          to={campaignDetailPath(campaign.id, campaign.marketplace)}
+          className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
+        >
+          Перейти к кампании →
+        </Link>
+      </div>
     </div>
   );
+}
+
+function FunnelLine({ label, value, valueClass = "text-slate-100" }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+      <div className="text-xs text-slate-300">{label}</div>
+      <div className={`text-sm font-semibold ${valueClass}`}>{value}</div>
+    </div>
+  );
+}
+
+function ctrHint(ctr: number) {
+  if (ctr <= 1.2) return "🔴 ⚠️ НИЗКИЙ — проблема с карточкой";
+  if (ctr < 3) return "🟡";
+  return "🟢";
+}
+
+function cpcHint(cpc: number) {
+  if (cpc >= 40) return "🔴 ⚠️ ДОРОГОЙ клик";
+  if (cpc >= 28) return "🟡";
+  return "";
+}
+
+function orderCrHint(cr: number) {
+  if (cr <= 3) return "🔴 ⚠️ НИЗКАЯ конверсия";
+  if (cr < 5) return "🟡";
+  return "🟢";
+}
+
+function drrHint(drr: number) {
+  if (drr >= 30) return "🔴 ⚠️ УБЫТОЧНО";
+  if (drr >= 15) return "🟡";
+  return "🟢";
+}
+
+function romiHint(romi: number) {
+  if (romi >= 300) return "🟢";
+  return "🔴";
+}
+
+function getIssueKind(issueId: string) {
+  return issueId.split("-").slice(1).join("-");
+}
+
+function issueSummary(issueId: string, campaign: Campaign) {
+  const issueKind = getIssueKind(issueId);
+  if (issueKind === "low-ctr") {
+    return `❌ CTR ${formatPercent(campaign.ctr, 1)} — обновите фото/цену`;
+  }
+  if (issueKind === "low-cr") {
+    return `❌ CR ${formatPercent(campaign.cr, 1)} — карточка не убеждает`;
+  }
+  if (issueKind === "high-drr") {
+    return `❌ ДРР ${formatPercent(campaign.drr, 1)} — снизьте ставки`;
+  }
+  if (issueKind === "borderline-drr") {
+    return `⚠️ ДРР ${formatPercent(campaign.drr, 1)} — снизьте дневной бюджет`;
+  }
+  return "";
+}
+
+function problemWord(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "проблема";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "проблемы";
+  return "проблем";
+}
+
+function formatCommaNumber(value: number) {
+  return Math.round(value).toLocaleString("en-US");
 }
