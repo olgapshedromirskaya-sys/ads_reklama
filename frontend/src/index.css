@@ -3,10 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --tg-bg-color: #ffffff;
-  --tg-text-color: #111827;
-  --tg-hint-color: #6b7280;
-  --tg-link-color: #2563eb;
+  --tg-bg-color: #1a1a2e;
+  --tg-card-bg: #16213e;
+  --tg-text-color: #f8fafc;
+  --tg-hint-color: #cbd5e1;
+  --tg-link-color: #60a5fa;
   --tg-button-color: #3b82f6;
   --tg-button-text-color: #ffffff;
 }
@@ -27,4 +28,14 @@ body,
 
 .safe-bottom {
   padding-bottom: calc(env(safe-area-inset-bottom) + 4rem);
+}
+
+.app-card {
+  background: var(--tg-card-bg);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+}
+
+.thin-scrollbar {
+  scrollbar-width: thin;
 }

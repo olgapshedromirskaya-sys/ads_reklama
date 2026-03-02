@@ -1,83 +1,49 @@
-import { ArrowLeft } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { type ReactNode } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import { BottomNav } from "./BottomNav";
-
-const titleMap: Record<string, string> = {
-  "/": "Дашборд",
-  "/dashboard": "Дашборд",
-  "/campaigns": "Кампании",
-  "/queries": "Поисковые запросы",
-  "/keywords": "Ключевые слова",
-  "/budget": "Правила бюджета",
-  "/alerts": "Уведомления",
-  "/settings": "Настройки"
-};
-
-function resolveTitle(pathname: string) {
-  if (pathname.startsWith("/campaigns/")) {
-    return "Кампания";
-  }
-  return titleMap[pathname] || "Управление рекламой";
-}
-
-function shouldShowBack(pathname: string) {
-  return pathname.startsWith("/campaigns/") && pathname !== "/campaigns";
-}
 
 export function Layout({
   children,
-  demoMode = false,
-  onExitDemo
+  demoMode = false
 }: {
   children: ReactNode;
   demoMode?: boolean;
-  onExitDemo?: () => void;
 }) {
-  const navigate = useNavigate();
   const location = useLocation();
-  const backVisible = shouldShowBack(location.pathname);
+  const tabs = [
+    { to: "/ozon", label: "🔵 Ozon", activeClass: "text-sky-300 border-sky-300/60" },
+    { to: "/wb", label: "🟣 WB", activeClass: "text-violet-300 border-violet-300/60" },
+    { to: "/settings", label: "⚙️ Настройки", activeClass: "text-slate-100 border-slate-200/60" }
+  ];
 
-  useEffect(() => {
-    const webApp = window.Telegram?.WebApp;
-    if (!webApp) {
-      return;
-    }
-    const onBack = () => navigate(-1);
-    if (backVisible) {
-      webApp.BackButton.show();
-      webApp.BackButton.onClick(onBack);
-    } else {
-      webApp.BackButton.hide();
-      webApp.BackButton.offClick(onBack);
-    }
-    return () => {
-      webApp.BackButton.offClick(onBack);
-    };
-  }, [backVisible, navigate]);
+  const pageTitle = location.pathname === "/queries" ? "📊 Аналитика запросов" : "Реклама маркетплейсов";
 
   return (
     <div className="mx-auto min-h-screen max-w-3xl bg-[color:var(--tg-bg-color)] text-[color:var(--tg-text-color)] safe-bottom">
       {demoMode && (
-        <div className="pointer-events-none fixed right-3 top-3 z-50 flex flex-col items-end gap-2">
-          <span className="pointer-events-auto rounded-full bg-yellow-300 px-3 py-1 text-[10px] font-extrabold tracking-wide text-yellow-900 shadow">
+        <div className="pointer-events-none fixed right-3 top-3 z-50">
+          <span className="rounded-full bg-yellow-300 px-3 py-1 text-[10px] font-extrabold tracking-wide text-yellow-900 shadow">
             ДЕМО РЕЖИМ
           </span>
-          <button
-            onClick={onExitDemo}
-            className="pointer-events-auto rounded-md border border-yellow-400 bg-yellow-100 px-3 py-1.5 text-[11px] font-semibold text-yellow-900 shadow"
-          >
-            Подключить аккаунт WB/Ozon
-          </button>
         </div>
       )}
-      <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-slate-300/30 bg-[color:var(--tg-bg-color)] px-4 py-3">
-        {backVisible && (
-          <button onClick={() => navigate(-1)} className="rounded-md p-1 text-[color:var(--tg-text-color)]">
-            <ArrowLeft size={18} />
-          </button>
-        )}
-        <div className="text-sm font-semibold">{resolveTitle(location.pathname)}</div>
+      <header className="sticky top-0 z-30 border-b border-slate-600/40 bg-[#10192f]/95 px-4 py-3 backdrop-blur">
+        <div className="text-sm font-semibold">{pageTitle}</div>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {tabs.map((tab) => (
+            <NavLink
+              key={tab.to}
+              to={tab.to}
+              className={({ isActive }) =>
+                `rounded-lg border px-2 py-2 text-center text-xs font-semibold ${
+                  isActive ? `${tab.activeClass} bg-slate-600/20` : "border-slate-500/30 text-slate-300"
+                }`
+              }
+            >
+              {tab.label}
+            </NavLink>
+          ))}
+        </div>
       </header>
       <main className="px-4 py-4">{children}</main>
       <BottomNav />
