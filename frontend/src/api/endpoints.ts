@@ -34,6 +34,7 @@ export type Campaign = {
   cpc: number;
   orders: number;
   cr: number;
+  cart_adds?: number | null;
   revenue: number;
   drr: number;
   spend: number;
