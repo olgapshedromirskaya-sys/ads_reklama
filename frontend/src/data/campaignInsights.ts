@@ -53,7 +53,7 @@ const DEMO_CAMPAIGN_ISSUES: Record<string, IssueKind[]> = {
   "wb:Платья летние": ["low-cr"],
   "wb:Джинсы slim fit": ["low-ctr", "low-cr", "high-drr"],
   "ozon:Рюкзак туристический": ["borderline-drr"],
-  "ozon:Термокружка 450мл": ["zero-sales-keyword"],
+  "ozon:Термокружка 450мл": [],
   "ozon:Куртка зимняя XL": []
 };
 
@@ -90,11 +90,11 @@ function buildIssue(kind: IssueKind, campaign: Campaign, queryRows: QueryRow[]):
     return {
       id: `${campaign.id}-low-ctr`,
       severity: "warning",
-      title: "Много показов, мало кликов",
+      title: `CTR ${formatPercent(campaign.ctr, 1)} — низкий`,
       metrics: `CTR: ${formatPercent(campaign.ctr, 1)} | Показы: ${formatInteger(campaign.impressions)}`,
-      cause: "Причина: фото/цена/рейтинг не цепляют",
-      recommendation: "Рекомендация: Обновите главное фото, проверьте цену конкурентов",
-      actions: [{ type: "open", label: "Открыть кампанию" }]
+      cause: "Причина: фото/цена/рейтинг не цепляют покупателей",
+      recommendation: "💡 Обновите главное фото, проверьте цену конкурентов",
+      actions: [{ type: "open", label: "Перейти к кампании" }]
     };
   }
 
@@ -102,11 +102,11 @@ function buildIssue(kind: IssueKind, campaign: Campaign, queryRows: QueryRow[]):
     return {
       id: `${campaign.id}-low-cr`,
       severity: "warning",
-      title: "Много кликов, мало заказов",
+      title: `CR ${formatPercent(campaign.cr, 1)} — карточка не убеждает`,
       metrics: `CR: ${formatPercent(campaign.cr, 1)} | Клики: ${formatInteger(campaign.clicks)} | Заказы: ${formatInteger(campaign.orders)}`,
       cause: "Причина: карточка не убеждает купить",
-      recommendation: "Рекомендация: Улучшите карточку товара (контент, отзывы, цену)",
-      actions: [{ type: "open", label: "Открыть кампанию" }]
+      recommendation: "💡 Добавьте отзывы, улучшите описание и галерею",
+      actions: [{ type: "open", label: "Перейти к кампании" }]
     };
   }
 
@@ -114,12 +114,12 @@ function buildIssue(kind: IssueKind, campaign: Campaign, queryRows: QueryRow[]):
     return {
       id: `${campaign.id}-high-drr`,
       severity: "critical",
-      title: `ДРР ${campaign.drr.toFixed(1)}% — убыточна`,
+      title: `ДРР ${formatPercent(campaign.drr, 1)} — убыточна`,
       metrics: `Расход: ${formatCurrency(campaign.spend)} | Выручка: ${formatCurrency(campaign.revenue)}`,
       cause: "Причина: высокая ставка или низкая маржа",
-      recommendation: "Рекомендация: Снизьте ставки или поставьте на паузу",
+      recommendation: "💡 Снизьте ставку на 30% или поставьте на паузу",
       actions: [
-        { type: "open", label: "Открыть кампанию" },
+        { type: "open", label: "Перейти к кампании" },
         { type: "pause", label: "Поставить на паузу" }
       ]
     };
@@ -128,12 +128,12 @@ function buildIssue(kind: IssueKind, campaign: Campaign, queryRows: QueryRow[]):
   if (kind === "borderline-drr") {
     return {
       id: `${campaign.id}-borderline-drr`,
-      severity: "info",
-      title: `ДРР ${campaign.drr.toFixed(1)}% — на грани`,
+      severity: "warning",
+      title: `ДРР ${formatPercent(campaign.drr, 1)} — на грани`,
       metrics: `Расход: ${formatCurrency(campaign.spend)} | Выручка: ${formatCurrency(campaign.revenue)}`,
-      cause: "Причина: рентабельность падает из-за ставок",
-      recommendation: "Рекомендация: Проверьте ставки и маржинальность, чтобы не уйти в минус",
-      actions: [{ type: "open", label: "Открыть кампанию" }]
+      cause: "Причина: ставка высоковата для текущей маржи",
+      recommendation: "💡 Снизьте дневной бюджет на 20%",
+      actions: [{ type: "open", label: "Перейти к кампании" }]
     };
   }
 

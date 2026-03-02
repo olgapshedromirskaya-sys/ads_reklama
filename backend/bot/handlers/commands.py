@@ -42,6 +42,27 @@ def _dashboard_inline_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+def _diagnostics_inline_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🚀 Открыть дашборд", web_app=WebAppInfo(url=settings.webapp_url))]]
+    )
+
+
+def _auto_minus_inline_keyboard() -> InlineKeyboardMarkup:
+    base_url = settings.webapp_url.rstrip("/")
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "✅ Применить авто-очистку",
+                    web_app=WebAppInfo(url=f"{base_url}/queries"),
+                ),
+                InlineKeyboardButton("🚀 Открыть дашборд", web_app=WebAppInfo(url=settings.webapp_url)),
+            ]
+        ]
+    )
+
+
 async def _send_in_development_message(update: Update) -> None:
     message = update.effective_message
     if message is None:
@@ -93,29 +114,20 @@ async def _send_diagnostics_report(update: Update) -> None:
     message = update.effective_message
     if message is None:
         return
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "🚫 Запустить авто-очистку",
-                    web_app=WebAppInfo(url=f"{settings.webapp_url.rstrip('/')}/queries"),
-                )
-            ],
-            [InlineKeyboardButton("🚀 Открыть дашборд", web_app=WebAppInfo(url=settings.webapp_url))],
-        ]
-    )
     await message.reply_text(
         "🔍 Авто-диагностика\n\n"
-        "❌ Обнаружено 3 проблемы:\n\n"
-        "1. Джинсы slim fit (WB)\n"
-        "   CTR 1.0% — низкий\n"
-        "   Проверь фото и цену\n\n"
-        "2. 7 ключей с 0 продажами\n"
-        "   Сливают 12,300₽/день\n\n"
-        "3. ДРР 37.7% у кампании\n"
-        "   Работаете в убыток\n\n"
-        "[🚫 Запустить авто-очистку] [🚀 Открыть дашборд]",
-        reply_markup=keyboard,
+        "Обнаружено 4 проблемы:\n\n"
+        "🔴 Джинсы slim fit (WB)\n"
+        "- ДРР 37.7% — убыточна\n"
+        "- CTR 1.0% — низкий, смени фото\n\n"
+        "🟡 Платья летние (WB)\n"
+        "- CR 3.5% — карточка не убеждает\n\n"
+        "🟡 Рюкзак туристический (Ozon)\n"
+        "- ДРР 16.4% — на грани, снизь ставку\n\n"
+        "💡 Рекомендация дня:\n"
+        "Поставь Джинсы slim fit на паузу — теряешь 70,200₽ на убыточной кампании\n\n"
+        "[🚀 Открыть дашборд]",
+        reply_markup=_diagnostics_inline_keyboard(),
     )
 
 
@@ -148,23 +160,20 @@ async def _send_auto_minus_result(update: Update) -> None:
     message = update.effective_message
     if message is None:
         return
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    "Применить минус-слова",
-                    web_app=WebAppInfo(url=f"{settings.webapp_url.rstrip('/')}/queries"),
-                )
-            ]
-        ]
-    )
     await message.reply_text(
-        "🤖 Авто-минусовка запущена...\n"
-        "Найдено нерелевантных ключей: 19\n"
-        "Сливали: 12,300₽/день\n"
-        "Сгенерировано минус-слов: 12\n"
-        "[Применить минус-слова]",
-        reply_markup=keyboard,
+        "🚫 Авто-минусовка\n\n"
+        "WB — найдено 5 нерелевантных ключей:\n"
+        "- кроссовки мужские 46 — 1,200 кликов, 0 заказов, 4,800₽/день\n"
+        "- тапочки домашние — 890 кликов, 0 заказов, 3,200₽/день\n"
+        "- сапоги зимние — 450 кликов, 0 заказов, 2,100₽/день\n"
+        "- джинсы оптом — 380 кликов, 0 заказов, 1,900₽/день\n"
+        "- джинсы б/у — 290 кликов, 0 заказов, 1,450₽/день\n\n"
+        "Ozon — найдено 2 нерелевантных ключа:\n"
+        "- термокружка дешево — 410 кликов, 0 заказов, 8,700₽/день\n"
+        "- рюкзак оптом — 340 кликов, 0 заказов, 3,400₽/день\n\n"
+        "Итого сливают: 25,550₽/день (766,500₽/мес)\n\n"
+        "[✅ Применить авто-очистку] [🚀 Открыть дашборд]",
+        reply_markup=_auto_minus_inline_keyboard(),
     )
 
 
