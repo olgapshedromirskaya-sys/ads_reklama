@@ -1,5 +1,6 @@
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Layout, type AppTab } from "@/components/Layout";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { telegramLogin } from "@/api/endpoints";
@@ -7,15 +8,28 @@ import { useTelegramTheme } from "@/hooks/useTelegramTheme";
 import { useAuthStore } from "@/store/auth";
 import { resolveLaunchContext, setDemoMode } from "@/demo/mode";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { CampaignDetailPage } from "@/pages/CampaignDetailPage";
+import { CampaignsPage } from "@/pages/CampaignsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
 function App() {
   useTelegramTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
   const token = useAuthStore((state) => state.token);
   const setAuth = useAuthStore((state) => state.setAuth);
   const [demoMode, setDemoModeState] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(true);
-  const [activeTab, setActiveTab] = useState<AppTab>("ozon");
+
+  const activeTab = useMemo<AppTab>(() => {
+    if (location.pathname.startsWith("/settings")) {
+      return "settings";
+    }
+    if (location.pathname.startsWith("/wb")) {
+      return "wb";
+    }
+    return "ozon";
+  }, [location.pathname]);
 
   useEffect(() => {
     let mounted = true;
@@ -24,7 +38,6 @@ function App() {
       if (!mounted) return;
       setDemoModeState(true);
       setDemoMode(true);
-      setActiveTab("ozon");
     }
 
     async function bootstrapAuth() {
@@ -35,9 +48,6 @@ function App() {
       setDemoMode(launchContext.demoMode);
 
       if (launchContext.demoMode) {
-        if (mounted) {
-          setActiveTab("ozon");
-        }
         setBootstrapping(false);
         return;
       }
@@ -68,7 +78,6 @@ function App() {
         setAuth(auth.access_token, auth.user);
         setDemoModeState(false);
         setDemoMode(false);
-        setActiveTab("ozon");
       } catch (error) {
         if (axios.isAxiosError(error)) {
           console.error("[TelegramAuth] Auth failed:", error.response?.status, error.message);
@@ -95,10 +104,33 @@ function App() {
   }
 
   return (
-    <Layout demoMode={demoMode} activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === "ozon" && <DashboardPage marketplace="ozon" />}
-      {activeTab === "wb" && <DashboardPage marketplace="wb" />}
-      {activeTab === "settings" && <SettingsPage />}
+    <Layout
+      demoMode={demoMode}
+      activeTab={activeTab}
+      onTabChange={(tab) => {
+        if (tab === "settings") {
+          navigate("/settings");
+          return;
+        }
+        navigate(tab === "wb" ? "/wb" : "/");
+      }}
+    >
+      <Routes>
+        <Route path="/" element={<DashboardPage marketplace="ozon" />} />
+        <Route path="/ozon" element={<DashboardPage marketplace="ozon" />} />
+        <Route path="/wb" element={<DashboardPage marketplace="wb" />} />
+
+        <Route path="/ozon/campaigns" element={<CampaignsPage marketplaceFilter="ozon" />} />
+        <Route path="/wb/campaigns" element={<CampaignsPage marketplaceFilter="wb" />} />
+        <Route path="/campaigns" element={<CampaignsPage />} />
+
+        <Route path="/ozon/campaigns/:id" element={<CampaignDetailPage />} />
+        <Route path="/wb/campaigns/:id" element={<CampaignDetailPage />} />
+        <Route path="/campaigns/:id" element={<CampaignDetailPage />} />
+
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Layout>
   );
 }

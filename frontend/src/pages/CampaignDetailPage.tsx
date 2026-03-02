@@ -1,27 +1,28 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useParams } from "react-router-dom";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { getCampaign, getCampaignStats, listQueries, pauseCampaign, resumeCampaign, runAutoCleanupCampaign } from "@/api/endpoints";
+import { CampaignFunnelPanel } from "@/components/CampaignFunnelPanel";
+import { crColorClass, ctrColorClass, drrColorClass, formatCurrency, formatInteger, formatPercent, marketplaceLabel } from "@/components/metricUtils";
 import {
-  getCampaign,
-  getCampaignStats,
-  listQueries,
-  runAutoCleanupCampaign,
-  setCampaignAutoMinus
-} from "@/api/endpoints";
-import { canAccessExtendedFeatures } from "@/auth/roles";
-import { crColorClass, ctrColorClass, drrColorClass, formatCurrency, formatInteger, formatPercent } from "@/components/metricUtils";
+  campaignsPath,
+  campaignDetailPath,
+  detectCampaignIssues,
+  severityClassName,
+  severityEmoji
+} from "@/data/campaignInsights";
 import { LoadingScreen } from "@/components/LoadingScreen";
-import { useAuthStore } from "@/store/auth";
+
+type DetailTab = "funnel" | "daily" | "keywords" | "diagnostics";
+type ChartMetric = "impressions" | "clicks" | "orders" | "spend" | "drr";
 
 export function CampaignDetailPage() {
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
-  const extendedAccess = canAccessExtendedFeatures(user);
   const { id } = useParams<{ id: string }>();
   const campaignId = Number(id);
-  const [chartMetric, setChartMetric] = useState<"impressions" | "clicks" | "orders" | "spend">("spend");
+  const [activeTab, setActiveTab] = useState<DetailTab>("funnel");
+  const [chartMetric, setChartMetric] = useState<ChartMetric>("spend");
   const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
 
   const campaignQuery = useQuery({
@@ -36,237 +37,310 @@ export function CampaignDetailPage() {
   });
   const queriesQuery = useQuery({
     queryKey: ["campaign-queries-top", campaignId],
-    queryFn: () => listQueries({ campaign_id: campaignId, limit: 200 }),
-    enabled: Number.isFinite(campaignId) && extendedAccess
+    queryFn: () => listQueries({ campaign_id: campaignId, limit: 300 }),
+    enabled: Number.isFinite(campaignId)
   });
 
-  const toggleAutoMinusMutation = useMutation({
-    mutationFn: (enabled: boolean) => setCampaignAutoMinus(campaignId, enabled),
+  const pauseMutation = useMutation({
+    mutationFn: (targetCampaignId: number) => pauseCampaign(targetCampaignId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     }
   });
-
+  const resumeMutation = useMutation({
+    mutationFn: (targetCampaignId: number) => resumeCampaign(targetCampaignId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign", campaignId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    }
+  });
   const cleanupMutation = useMutation({
-    mutationFn: () => runAutoCleanupCampaign(campaignId, { apply_now: true }),
+    mutationFn: (targetCampaignId: number) => runAutoCleanupCampaign(targetCampaignId, { apply_now: true }),
     onSuccess: (result) => {
       setCleanupMessage(
-        `✅ Удалено ${result.irrelevant_found} ключей, экономия ${formatCurrency(result.budget_saved)}/день (${formatCurrency(
-          result.budget_saved * 30
-        )}/месяц)`
+        `✅ Добавлено ${result.irrelevant_found} ключей в минус-слова, потенциальная экономия ${formatCurrency(result.budget_saved)}/день`
       );
-      queryClient.invalidateQueries({ queryKey: ["queries"] });
-      queryClient.invalidateQueries({ queryKey: ["queries-badge"] });
+      queryClient.invalidateQueries({ queryKey: ["campaign-queries-top", campaignId] });
     }
   });
 
-  const statsRows = statsQuery.data ?? [];
+  const chartData = useMemo(
+    () =>
+      (statsQuery.data || []).map((row) => ({
+        ...row,
+        day: row.date.slice(5)
+      })),
+    [statsQuery.data]
+  );
+  const sortedKeywords = useMemo(() => [...(queriesQuery.data || [])].sort((left, right) => right.spend - left.spend), [queriesQuery.data]);
+  const issues = useMemo(() => {
+    if (!campaignQuery.data) return [];
+    return detectCampaignIssues(campaignQuery.data, queriesQuery.data || []);
+  }, [campaignQuery.data, queriesQuery.data]);
 
-  const chartData = statsRows.map((row) => ({
-    ...row,
-    day: row.date.slice(5)
-  }));
-
-  const metrics = useMemo(() => {
-    if (!statsRows.length) {
-      return {
-        impressions: 0,
-        clicks: 0,
-        orders: 0,
-        spend: 0,
-        revenue: 0,
-        ctr: 0,
-        cpc: 0,
-        cr: 0,
-        drr: 0
-      };
-    }
-    const totals = statsRows.reduce(
-      (acc, row) => {
-        acc.impressions += row.impressions;
-        acc.clicks += row.clicks;
-        acc.orders += row.orders;
-        acc.spend += row.spend;
-        acc.revenue += row.revenue;
-        return acc;
-      },
-      { impressions: 0, clicks: 0, orders: 0, spend: 0, revenue: 0 }
-    );
-    const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
-    const cpc = totals.clicks > 0 ? totals.spend / totals.clicks : 0;
-    const cr = totals.clicks > 0 ? (totals.orders / totals.clicks) * 100 : 0;
-    const drr = totals.revenue > 0 ? (totals.spend / totals.revenue) * 100 : totals.spend > 0 ? 999 : 0;
-    return { ...totals, ctr, cpc, cr, drr };
-  }, [statsRows]);
-
-  const warnings = useMemo(() => {
-    const items: string[] = [];
-    if (metrics.impressions > 50000 && metrics.ctr < 1) {
-      items.push("⚠️ Много показов, мало кликов — проверь фото/цену/рейтинг");
-    }
-    if (metrics.clicks > 500 && metrics.cr < 3) {
-      items.push("⚠️ Много кликов, мало заказов — карточка не убеждает");
-    }
-    if (metrics.drr > 35) {
-      items.push("🔴 ДРР выше 35% — кампания убыточна");
-    }
-    return items;
-  }, [metrics]);
-
-  if (campaignQuery.isLoading || statsQuery.isLoading || (extendedAccess && queriesQuery.isLoading)) {
+  if (campaignQuery.isLoading || statsQuery.isLoading || queriesQuery.isLoading) {
     return <LoadingScreen text="Загрузка кампании..." />;
   }
-  if (!campaignQuery.data || !statsQuery.data || (extendedAccess && !queriesQuery.data)) {
+  if (!campaignQuery.data || !statsQuery.data || !queriesQuery.data) {
     return <div className="text-sm text-red-500">Ошибка загрузки кампании.</div>;
   }
+
+  const campaign = campaignQuery.data;
 
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="text-sm font-semibold">{campaignQuery.data.name}</div>
-        <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">
-          {campaignQuery.data.type || "—"} • {campaignQuery.data.status === "active" ? "Активна" : "На паузе"}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-base font-semibold">{campaign.name}</div>
+            <div className="mt-1 text-xs text-[color:var(--tg-hint-color)]">
+              {marketplaceLabel(campaign.marketplace)} • {campaign.status === "active" ? "🟢 Активна" : "⏸️ На паузе"}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => (campaign.status === "active" ? pauseMutation.mutate(campaign.id) : resumeMutation.mutate(campaign.id))}
+              className="rounded-md border border-slate-300/30 px-3 py-2 text-xs font-semibold"
+            >
+              {campaign.status === "active" ? "Пауза" : "Возобновить"}
+            </button>
+            <Link
+              to={campaignsPath(campaign.marketplace)}
+              className="rounded-md border border-slate-300/30 px-3 py-2 text-xs font-semibold"
+            >
+              Назад к кампаниям
+            </Link>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <MetricCard title="Показы" value={formatInteger(metrics.impressions)} />
-        <MetricCard title="Клики" value={formatInteger(metrics.clicks)} />
-        <MetricCard title="CTR" value={formatPercent(metrics.ctr, 1)} valueClass={ctrColorClass(metrics.ctr)} />
-        <MetricCard title="CPC" value={formatCurrency(metrics.cpc)} />
-        <MetricCard title="Заказы" value={formatInteger(metrics.orders)} />
-        <MetricCard title="CR" value={formatPercent(metrics.cr, 1)} valueClass={crColorClass(metrics.cr)} />
-        <MetricCard title="Расход" value={formatCurrency(metrics.spend)} />
-        <MetricCard title="Выручка" value={formatCurrency(metrics.revenue)} />
-        <MetricCard title="ДРР" value={formatPercent(metrics.drr, 1)} valueClass={drrColorClass(metrics.drr)} />
+      <div className="rounded-xl border border-slate-300/30 p-2">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <TabButton tab="funnel" currentTab={activeTab} onClick={setActiveTab} label="Воронка" />
+          <TabButton tab="daily" currentTab={activeTab} onClick={setActiveTab} label="По дням" />
+          <TabButton tab="keywords" currentTab={activeTab} onClick={setActiveTab} label="Ключевые слова" />
+          <TabButton tab="diagnostics" currentTab={activeTab} onClick={setActiveTab} label="Диагностика" />
+        </div>
       </div>
 
-      {extendedAccess && (
+      {activeTab === "funnel" && <CampaignFunnelPanel campaign={campaign} issuesCount={issues.length} />}
+
+      {activeTab === "daily" && (
         <div className="rounded-xl border border-slate-300/30 p-3">
-          <div className="mb-2 text-sm font-semibold">Настройки кампании</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => toggleAutoMinusMutation.mutate(!campaignQuery.data.auto_minus_enabled)}
-              className={`rounded-md px-3 py-2 text-xs font-semibold ${
-                campaignQuery.data.auto_minus_enabled ? "bg-emerald-600 text-white" : "border border-slate-300/30"
-              }`}
-            >
-              Авто-минусовка {campaignQuery.data.auto_minus_enabled ? "ВКЛ" : "ВЫКЛ"}
-            </button>
-            <button
-              onClick={() => cleanupMutation.mutate()}
-              className="rounded-md border border-rose-500/50 px-3 py-2 text-xs font-semibold text-rose-700"
-            >
-              Авто-очистка
-            </button>
-            {cleanupMessage && <span className="text-xs text-[color:var(--tg-hint-color)]">{cleanupMessage}</span>}
+          <div className="mb-2 flex flex-wrap gap-1">
+            {[
+              { key: "impressions", label: "Показы" },
+              { key: "clicks", label: "Клики" },
+              { key: "orders", label: "Заказы" },
+              { key: "spend", label: "Расход" },
+              { key: "drr", label: "ДРР" }
+            ].map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setChartMetric(item.key as ChartMetric)}
+                className={`rounded-md px-2 py-1 text-[11px] ${
+                  chartMetric === item.key
+                    ? "bg-[color:var(--tg-button-color)] text-white"
+                    : "border border-slate-300/30 text-[color:var(--tg-hint-color)]"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="h-60">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip
+                  formatter={(value) => {
+                    const numericValue = Number(value);
+                    if (chartMetric === "spend") return formatCurrency(numericValue);
+                    if (chartMetric === "drr") return formatPercent(numericValue, 1);
+                    return formatInteger(numericValue);
+                  }}
+                />
+                <Line type="monotone" dataKey={chartMetric} stroke="#3b82f6" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 flex flex-wrap gap-1">
-          <span className="text-sm font-semibold">Метрики по дням (30 дней)</span>
-          {[
-            { key: "impressions", label: "Показы" },
-            { key: "clicks", label: "Клики" },
-            { key: "orders", label: "Заказы" },
-            { key: "spend", label: "Расходы" }
-          ].map((item) => (
-            <button
-              key={item.key}
-              onClick={() => setChartMetric(item.key as "impressions" | "clicks" | "orders" | "spend")}
-              className={`rounded-md px-2 py-1 text-[11px] ${
-                chartMetric === item.key
-                  ? "bg-[color:var(--tg-button-color)] text-white"
-                  : "border border-slate-300/30 text-[color:var(--tg-hint-color)]"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <div className="h-60">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(value) => (chartMetric === "spend" ? formatCurrency(Number(value)) : formatInteger(Number(value)))} />
-              <Line type="monotone" dataKey={chartMetric} stroke="#3b82f6" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-300/30 p-3">
-        <div className="mb-2 text-sm font-semibold">Предупреждения</div>
-        <ul className="space-y-1 text-sm">
-          {warnings.length === 0 && <li className="text-[color:var(--tg-hint-color)]">Критичных проблем не обнаружено</li>}
-          {warnings.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </div>
-
-      {extendedAccess && (
+      {activeTab === "keywords" && (
         <div className="rounded-xl border border-slate-300/30 p-3">
-          <div className="mb-2 text-sm font-semibold">Ключевые слова и запросы</div>
+          <div className="mb-2 text-sm font-semibold">Ключевые слова кампании</div>
           <div className="overflow-x-auto">
-            <table className="min-w-[980px] table-auto border-collapse text-xs">
+            <table className="min-w-[1120px] table-auto border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-500/10">
-                  <th className="px-2 py-2 text-left">Запрос</th>
+                  <th className="px-2 py-2 text-left">Ключ</th>
                   <th className="px-2 py-2">Показы</th>
-                  <th className="px-2 py-2">Клики</th>
                   <th className="px-2 py-2">CTR</th>
+                  <th className="px-2 py-2">Клики</th>
                   <th className="px-2 py-2">CPC</th>
                   <th className="px-2 py-2">Заказы</th>
                   <th className="px-2 py-2">CR</th>
                   <th className="px-2 py-2">Расход</th>
-                  <th className="px-2 py-2">Выручка</th>
                   <th className="px-2 py-2">ДРР</th>
+                  <th className="px-2 py-2">Статус</th>
                 </tr>
               </thead>
               <tbody>
-                {[...(queriesQuery.data || [])]
-                  .sort((a, b) => b.spend - a.spend)
-                  .slice(0, 50)
-                  .map((row) => (
+                {sortedKeywords.map((row) => {
+                  const status = keywordStatus(row);
+                  return (
                     <tr key={row.id} className="border-t border-slate-300/20">
                       <td className="px-2 py-2">{row.query}</td>
                       <td className="px-2 py-2 text-center">{formatInteger(row.impressions)}</td>
+                      <td className={`px-2 py-2 text-center font-semibold ${ctrColorClass(row.ctr)}`}>{formatPercent(row.ctr, 1)}</td>
                       <td className="px-2 py-2 text-center">{formatInteger(row.clicks)}</td>
-                      <td className={`px-2 py-2 text-center font-semibold ${ctrColorClass(row.ctr)}`}>
-                        {formatPercent(row.ctr, 1)}
-                      </td>
                       <td className="px-2 py-2 text-center">{formatCurrency(row.cpc)}</td>
                       <td className="px-2 py-2 text-center">{formatInteger(row.orders)}</td>
-                      <td className={`px-2 py-2 text-center font-semibold ${crColorClass(row.cr)}`}>
-                        {formatPercent(row.cr, 1)}
-                      </td>
+                      <td className={`px-2 py-2 text-center font-semibold ${crColorClass(row.cr)}`}>{formatPercent(row.cr, 1)}</td>
                       <td className="px-2 py-2 text-center">{formatCurrency(row.spend)}</td>
-                      <td className="px-2 py-2 text-center">{formatCurrency(row.revenue)}</td>
-                      <td className={`px-2 py-2 text-center font-semibold ${drrColorClass(row.drr)}`}>
-                        {formatPercent(row.drr, 1)}
+                      <td className={`px-2 py-2 text-center font-semibold ${drrColorClass(row.drr)}`}>{formatPercent(row.drr, 1)}</td>
+                      <td className={`px-2 py-2 ${status.toneClass}`}>
+                        <div>{status.label}</div>
+                        <div className="text-[11px] opacity-80">{status.recommendation}</div>
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
+                {!sortedKeywords.length && (
+                  <tr>
+                    <td colSpan={10} className="px-2 py-8 text-center text-[color:var(--tg-hint-color)]">
+                      Нет данных по ключевым словам
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeTab === "diagnostics" && (
+        <div className="rounded-xl border border-slate-300/30 p-3">
+          <div className="mb-2 text-sm font-semibold">Диагностика кампании</div>
+          <div className="space-y-2">
+            {issues.length === 0 && <div className="text-sm text-emerald-300">Критичных проблем не обнаружено</div>}
+            {issues.map((issue) => (
+              <div key={issue.id} className={`rounded-lg border p-3 ${severityClassName(issue.severity)}`}>
+                <div className="text-sm font-semibold">
+                  {severityEmoji(issue.severity)} "{campaign.name}" ({marketplaceLabel(campaign.marketplace)}) — {issue.title}
+                </div>
+                <div className="mt-1 text-xs">{issue.metrics}</div>
+                <div className="mt-1 text-xs">{issue.cause}</div>
+                <div className="mt-1 text-xs">{issue.recommendation}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {issue.actions.map((action, index) => {
+                    if (action.type === "open") {
+                      return (
+                        <Link
+                          key={`${issue.id}-${action.type}-${index}`}
+                          to={campaignDetailPath(campaign.id, campaign.marketplace)}
+                          className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
+                        >
+                          {action.label}
+                        </Link>
+                      );
+                    }
+                    if (action.type === "pause") {
+                      return (
+                        <button
+                          key={`${issue.id}-${action.type}-${index}`}
+                          onClick={() => pauseMutation.mutate(campaign.id)}
+                          className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
+                        >
+                          {action.label}
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        key={`${issue.id}-${action.type}-${index}`}
+                        onClick={() => cleanupMutation.mutate(campaign.id)}
+                        className="rounded-md border border-slate-300/30 px-2 py-1 text-[11px]"
+                      >
+                        {action.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          {cleanupMessage && <div className="mt-3 text-xs text-emerald-300">{cleanupMessage}</div>}
         </div>
       )}
     </div>
   );
 }
 
-function MetricCard({ title, value, valueClass = "" }: { title: string; value: string; valueClass?: string }) {
+function TabButton({
+  tab,
+  currentTab,
+  onClick,
+  label
+}: {
+  tab: DetailTab;
+  currentTab: DetailTab;
+  onClick: (tab: DetailTab) => void;
+  label: string;
+}) {
   return (
-    <div className="rounded-xl border border-slate-300/30 p-3">
-      <div className="text-xs text-[color:var(--tg-hint-color)]">{title}</div>
-      <div className={`mt-1 text-lg font-semibold ${valueClass}`}>{value}</div>
-    </div>
+    <button
+      onClick={() => onClick(tab)}
+      className={`rounded-md px-3 py-2 text-xs font-semibold ${
+        currentTab === tab ? "bg-[color:var(--tg-button-color)] text-white" : "border border-slate-300/30"
+      }`}
+    >
+      {label}
+    </button>
   );
+}
+
+function keywordStatus(row: {
+  clicks: number;
+  orders: number;
+  drr: number;
+  cr: number;
+}) {
+  if (row.orders === 0 && row.clicks >= 100) {
+    return {
+      label: "🔴 Нерелевантный",
+      recommendation: "Добавить в минус-слова",
+      toneClass: "text-rose-300"
+    };
+  }
+  if (row.drr >= 35) {
+    return {
+      label: "🔴 Убыточный",
+      recommendation: "Снизить ставку или остановить",
+      toneClass: "text-rose-300"
+    };
+  }
+  if (row.cr <= 3 && row.clicks > 200) {
+    return {
+      label: "🟡 Низкая конверсия",
+      recommendation: "Улучшить карточку товара",
+      toneClass: "text-amber-300"
+    };
+  }
+  if (row.drr >= 15) {
+    return {
+      label: "🟡 Требует внимания",
+      recommendation: "Контролировать ставки",
+      toneClass: "text-amber-300"
+    };
+  }
+  return {
+    label: "🟢 Норм",
+    recommendation: "Оставить без изменений",
+    toneClass: "text-emerald-300"
+  };
 }

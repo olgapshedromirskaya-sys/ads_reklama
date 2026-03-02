@@ -18,6 +18,7 @@ export type DemoCampaign = {
   cpc: number;
   orders: number;
   cr: number;
+  cart_adds?: number;
   revenue: number;
   drr: number;
   spend: number;
@@ -292,7 +293,8 @@ const initialCampaigns: DemoCampaign[] = [
     cpc: 18.5,
     orders: 441,
     cr: 5.0,
-    revenue: 1989900,
+    cart_adds: 1323,
+    revenue: 1985000,
     drr: 8.2,
     spend: 163170,
     created_at: isoDateDaysAgo(120),
@@ -314,7 +316,8 @@ const initialCampaigns: DemoCampaign[] = [
     cpc: 21.0,
     orders: 198,
     cr: 3.5,
-    revenue: 692300,
+    cart_adds: 680,
+    revenue: 693000,
     drr: 17.2,
     spend: 119070,
     created_at: isoDateDaysAgo(100),
@@ -322,24 +325,94 @@ const initialCampaigns: DemoCampaign[] = [
   },
   {
     id: 103,
-    account_id: 2,
-    external_id: "OZ-103",
+    account_id: 1,
+    external_id: "WB-103",
     name: "Джинсы slim fit",
     type: "search",
     status: "active",
     daily_budget: 9000,
     auto_minus_enabled: true,
-    marketplace: "ozon",
+    marketplace: "wb",
     impressions: 156000,
     clicks: 1560,
     ctr: 1.0,
     cpc: 45.0,
     orders: 31,
     cr: 2.0,
-    revenue: 186200,
+    cart_adds: 94,
+    revenue: 186000,
     drr: 37.7,
     spend: 70200,
     created_at: isoDateDaysAgo(80),
+    updated_at: getNowIso()
+  },
+  {
+    id: 201,
+    account_id: 2,
+    external_id: "OZ-201",
+    name: "Рюкзак туристический",
+    type: "search",
+    status: "active",
+    daily_budget: 10000,
+    auto_minus_enabled: true,
+    marketplace: "ozon",
+    impressions: 120000,
+    clicks: 3600,
+    ctr: 3.0,
+    cpc: 20.0,
+    orders: 220,
+    cr: 6.1,
+    cart_adds: 540,
+    revenue: 439000,
+    drr: 16.4,
+    spend: 72000,
+    created_at: isoDateDaysAgo(75),
+    updated_at: getNowIso()
+  },
+  {
+    id: 202,
+    account_id: 2,
+    external_id: "OZ-202",
+    name: "Термокружка 450мл",
+    type: "search",
+    status: "active",
+    daily_budget: 8000,
+    auto_minus_enabled: true,
+    marketplace: "ozon",
+    impressions: 98000,
+    clicks: 2744,
+    ctr: 2.8,
+    cpc: 19.0,
+    orders: 150,
+    cr: 5.5,
+    cart_adds: 412,
+    revenue: 423000,
+    drr: 12.3,
+    spend: 52000,
+    created_at: isoDateDaysAgo(70),
+    updated_at: getNowIso()
+  },
+  {
+    id: 203,
+    account_id: 2,
+    external_id: "OZ-203",
+    name: "Куртка зимняя XL",
+    type: "search",
+    status: "active",
+    daily_budget: 9000,
+    auto_minus_enabled: false,
+    marketplace: "ozon",
+    impressions: 130000,
+    clicks: 3250,
+    ctr: 2.5,
+    cpc: 18.0,
+    orders: 190,
+    cr: 5.8,
+    cart_adds: 488,
+    revenue: 824000,
+    drr: 7.1,
+    spend: 58500,
+    created_at: isoDateDaysAgo(68),
     updated_at: getNowIso()
   }
 ];
@@ -356,24 +429,21 @@ type QuerySeed = {
 };
 
 const querySeeds: QuerySeed[] = [
-  { query: "кроссовки женские", campaign_id: 101, marketplace: "wb", impressions: 64200, clicks: 2480, spend: 44500, orders: 142, label: "relevant" },
-  { query: "кроссовки белые женские", campaign_id: 101, marketplace: "wb", impressions: 53200, clicks: 1940, spend: 35600, orders: 101, label: "relevant" },
-  { query: "кеды женские", campaign_id: 101, marketplace: "wb", impressions: 38100, clicks: 1410, spend: 26100, orders: 64, label: "relevant" },
-  { query: "обувь для бега женская", campaign_id: 101, marketplace: "wb", impressions: 30200, clicks: 970, spend: 17400, orders: 41, label: "relevant" },
-  { query: "кроссовки на платформе", campaign_id: 101, marketplace: "wb", impressions: 22100, clicks: 560, spend: 10200, orders: 18, label: "pending" },
-  { query: "кроссовки весна", campaign_id: 101, marketplace: "wb", impressions: 17300, clicks: 310, spend: 5900, orders: 7, label: "pending" },
-  { query: "кроссовки мужские 46", campaign_id: 101, marketplace: "wb", impressions: 240000, clicks: 1200, spend: 4800, orders: 0, label: "not_relevant" },
-  { query: "тапочки домашние", campaign_id: 101, marketplace: "wb", impressions: 142000, clicks: 890, spend: 3200, orders: 0, label: "not_relevant" },
-  { query: "сапоги зимние", campaign_id: 101, marketplace: "wb", impressions: 78000, clicks: 450, spend: 2100, orders: 0, label: "not_relevant" },
-  { query: "босоножки детские", campaign_id: 101, marketplace: "wb", impressions: 25500, clicks: 110, spend: 600, orders: 0, label: "not_relevant" },
-  { query: "рабочие ботинки", campaign_id: 101, marketplace: "wb", impressions: 18200, clicks: 95, spend: 500, orders: 0, label: "not_relevant" },
-  { query: "туфли мужские классика", campaign_id: 101, marketplace: "wb", impressions: 22400, clicks: 130, spend: 600, orders: 0, label: "not_relevant" },
-  { query: "берцы армейские", campaign_id: 101, marketplace: "wb", impressions: 19300, clicks: 120, spend: 500, orders: 0, label: "not_relevant" },
-  { query: "платья летние", campaign_id: 102, marketplace: "wb", impressions: 90100, clicks: 2920, spend: 61200, orders: 98, label: "relevant" },
-  { query: "платье в цветок", campaign_id: 102, marketplace: "wb", impressions: 67100, clicks: 1870, spend: 39100, orders: 66, label: "relevant" },
-  { query: "платье короткое", campaign_id: 102, marketplace: "wb", impressions: 31800, clicks: 540, spend: 9200, orders: 14, label: "pending" },
-  { query: "джинсы slim fit", campaign_id: 103, marketplace: "ozon", impressions: 80400, clicks: 840, spend: 39300, orders: 19, label: "pending" },
-  { query: "джинсы мужские slim", campaign_id: 103, marketplace: "ozon", impressions: 75600, clicks: 720, spend: 30900, orders: 12, label: "pending" }
+  { query: "кроссовки женские", campaign_id: 101, marketplace: "wb", impressions: 95000, clicks: 3420, spend: 63000, orders: 186, label: "relevant" },
+  { query: "кроссовки для бега", campaign_id: 101, marketplace: "wb", impressions: 78000, clicks: 2550, spend: 47000, orders: 133, label: "relevant" },
+  { query: "кеды женские", campaign_id: 101, marketplace: "wb", impressions: 42000, clicks: 1230, spend: 24000, orders: 61, label: "pending" },
+  { query: "платья летние", campaign_id: 102, marketplace: "wb", impressions: 92000, clicks: 2810, spend: 59000, orders: 94, label: "relevant" },
+  { query: "платье в цветок", campaign_id: 102, marketplace: "wb", impressions: 61000, clicks: 1690, spend: 36000, orders: 59, label: "relevant" },
+  { query: "платье короткое", campaign_id: 102, marketplace: "wb", impressions: 36000, clicks: 540, spend: 24070, orders: 45, label: "pending" },
+  { query: "джинсы slim fit", campaign_id: 103, marketplace: "wb", impressions: 98000, clicks: 980, spend: 43000, orders: 19, label: "pending" },
+  { query: "джинсы мужские slim", campaign_id: 103, marketplace: "wb", impressions: 58000, clicks: 580, spend: 27200, orders: 12, label: "pending" },
+  { query: "рюкзак туристический", campaign_id: 201, marketplace: "ozon", impressions: 76000, clicks: 2280, spend: 45000, orders: 150, label: "relevant" },
+  { query: "рюкзак походный", campaign_id: 201, marketplace: "ozon", impressions: 44000, clicks: 1320, spend: 27000, orders: 70, label: "relevant" },
+  { query: "термокружка 450мл", campaign_id: 202, marketplace: "ozon", impressions: 70000, clicks: 2000, spend: 36000, orders: 120, label: "relevant" },
+  { query: "термокружка дешево", campaign_id: 202, marketplace: "ozon", impressions: 32000, clicks: 410, spend: 8700, orders: 0, label: "not_relevant" },
+  { query: "термостакан металл", campaign_id: 202, marketplace: "ozon", impressions: 18000, clicks: 334, spend: 7300, orders: 30, label: "pending" },
+  { query: "куртка зимняя xl", campaign_id: 203, marketplace: "ozon", impressions: 82000, clicks: 2050, spend: 36000, orders: 132, label: "relevant" },
+  { query: "куртка зимняя мужская", campaign_id: 203, marketplace: "ozon", impressions: 48000, clicks: 1200, spend: 22500, orders: 58, label: "relevant" }
 ];
 
 function campaignAov(campaignId: number) {
@@ -576,58 +646,65 @@ function compareValue(left: DemoQueryRow, right: DemoQueryRow, key: string) {
 }
 
 function buildCleanupResult(campaign: DemoCampaign, applyNow = false): DemoCleanupResult {
-  if (campaign.id === 101) {
+  const irrelevantQueries = queries.filter((item) => item.campaign_id === campaign.id && item.label === "not_relevant");
+  const budgetWasted = irrelevantQueries.reduce((acc, item) => acc + item.spend, 0);
+  const budgetSaved = Math.round(budgetWasted * 0.35);
+  const minusWords = Array.from(
+    new Set(
+      irrelevantQueries
+        .flatMap((item) => item.query.toLowerCase().split(" "))
+        .filter((word) => word.length > 3)
+    )
+  ).slice(0, 8);
+
+  if (campaign.id === 202) {
     return {
       campaign_id: campaign.id,
       campaign_name: campaign.name,
       auto_minus_enabled: campaign.auto_minus_enabled,
-      irrelevant_found: 15,
-      minus_words: [...DEMO_MINUS_WORDS],
-      budget_wasted: 58800,
-      budget_saved: 8400,
+      irrelevant_found: 1,
+      minus_words: ["дешево", ...minusWords].slice(0, 8),
+      budget_wasted: Math.round(Math.max(8700, budgetWasted)),
+      budget_saved: Math.round(Math.max(1200, budgetSaved)),
       auto_applied: applyNow || campaign.auto_minus_enabled,
       apply_failed: 0,
-      queries: queries
-        .filter((item) => item.campaign_id === campaign.id && item.label === "not_relevant")
-        .map((item) => ({
-          query: item.query,
-          impressions: item.impressions,
-          clicks: item.clicks,
-          ctr: item.ctr,
-          cpc: item.cpc,
-          orders: item.orders,
-          spend: item.spend,
-          revenue: item.revenue,
-          drr: item.drr,
-          rules_triggered: ["правило 1", "правило 4"]
-        }))
+      queries: irrelevantQueries.map((item) => ({
+        query: item.query,
+        impressions: item.impressions,
+        clicks: item.clicks,
+        ctr: item.ctr,
+        cpc: item.cpc,
+        orders: item.orders,
+        spend: item.spend,
+        revenue: item.revenue,
+        drr: item.drr,
+        rules_triggered: ["правило 2", "правило 4"]
+      }))
     };
   }
-  if (campaign.id === 102) {
-    return {
-      campaign_id: campaign.id,
-      campaign_name: campaign.name,
-      auto_minus_enabled: campaign.auto_minus_enabled,
-      irrelevant_found: 2,
-      minus_words: ["выпускной", "вечерние"],
-      budget_wasted: 6300,
-      budget_saved: 900,
-      auto_applied: applyNow || campaign.auto_minus_enabled,
-      apply_failed: 0,
-      queries: []
-    };
-  }
+
   return {
     campaign_id: campaign.id,
     campaign_name: campaign.name,
     auto_minus_enabled: campaign.auto_minus_enabled,
-    irrelevant_found: 2,
-    minus_words: ["детские", "теплые"],
-    budget_wasted: 21000,
-    budget_saved: 3000,
+    irrelevant_found: irrelevantQueries.length,
+    minus_words: minusWords,
+    budget_wasted: Math.round(budgetWasted),
+    budget_saved: Math.round(budgetSaved),
     auto_applied: applyNow || campaign.auto_minus_enabled,
     apply_failed: 0,
-    queries: []
+    queries: irrelevantQueries.map((item) => ({
+      query: item.query,
+      impressions: item.impressions,
+      clicks: item.clicks,
+      ctr: item.ctr,
+      cpc: item.cpc,
+      orders: item.orders,
+      spend: item.spend,
+      revenue: item.revenue,
+      drr: item.drr,
+      rules_triggered: ["правило 4"]
+    }))
   };
 }
 
@@ -838,11 +915,20 @@ export async function runAutoCleanupCampaign(campaignId: number, params?: { days
 
 export async function runAutoCleanupAll(params?: { days?: number; apply_now?: boolean; only_auto_enabled?: boolean }) {
   const results = campaigns.map((campaign) => buildCleanupResult(campaign, Boolean(params?.apply_now)));
+  const totals = results.reduce(
+    (acc, row) => {
+      acc.irrelevant_found += row.irrelevant_found;
+      acc.budget_wasted += row.budget_wasted;
+      acc.budget_saved += row.budget_saved;
+      return acc;
+    },
+    { irrelevant_found: 0, budget_wasted: 0, budget_saved: 0 }
+  );
   return clone({
-    campaigns_processed: 3,
-    irrelevant_found: 19,
-    budget_wasted: 86100,
-    budget_saved: 12300,
+    campaigns_processed: campaigns.length,
+    irrelevant_found: totals.irrelevant_found,
+    budget_wasted: totals.budget_wasted,
+    budget_saved: totals.budget_saved,
     results
   });
 }
