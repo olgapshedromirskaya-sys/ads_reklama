@@ -276,33 +276,32 @@ async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if telegram_user is None:
         return
 
-    if telegram_user.id == OWNER_TELEGRAM_ID and _is_start_command(update):
-        context.user_data["bot_role"] = BotUserRole.OWNER.value
-        context.user_data["bot_telegram_id"] = OWNER_TELEGRAM_ID
-        context.user_data["bot_user_telegram_id"] = OWNER_TELEGRAM_ID
-        context.user_data["bot_username"] = telegram_user.username
-        context.user_data["bot_full_name"] = _telegram_display_name(update)
-        return
-
     with SessionLocal() as db:
         bot_user = get_active_bot_user(db, telegram_user.id)
+
         if bot_user is None:
-            owner = get_active_owner_bot_user(db)
-            if owner is None and _is_start_command(update):
-                bot_user = BotUser(
-                    telegram_id=telegram_user.id,
-                    username=telegram_user.username,
-                    full_name=_telegram_display_name(update),
-                    role=BotUserRole.OWNER,
-                    added_by=telegram_user.id,
-                    is_active=True,
-                )
-                db.add(bot_user)
+            # Только OWNER_TELEGRAM_ID может стать владельцем автоматически
+            if telegram_user.id == OWNER_TELEGRAM_ID:
+                existing = db.get(BotUser, telegram_user.id)
+                if existing is None:
+                    bot_user = BotUser(
+                        telegram_id=telegram_user.id,
+                        username=telegram_user.username,
+                        full_name=_telegram_display_name(update),
+                        role=BotUserRole.OWNER,
+                        added_by=telegram_user.id,
+                        is_active=True,
+                    )
+                    db.add(bot_user)
+                else:
+                    existing.is_active = True
+                    existing.role = BotUserRole.OWNER
+                    bot_user = existing
                 ensure_internal_user_for_bot_user(db, bot_user, owner_bot_user=bot_user)
                 db.commit()
                 db.refresh(bot_user)
-                context.user_data["just_became_owner"] = True
             else:
+                # Все остальные незарегистрированные — доступ закрыт
                 await _send_access_closed(update)
                 raise ApplicationHandlerStop
         else:
@@ -321,6 +320,7 @@ async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         context.user_data["bot_role"] = bot_user.role.value
         context.user_data["bot_telegram_id"] = int(bot_user.telegram_id)
+        context.user_data["bot_user_telegram_id"] = int(bot_user.telegram_id)
         context.user_data["bot_username"] = bot_user.username
         context.user_data["bot_full_name"] = bot_user.full_name
 
@@ -331,21 +331,18 @@ async def _send_in_development_message(update: Update) -> None:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
-    if message is not None and message.from_user and message.from_user.id == OWNER_TELEGRAM_ID:
-        await show_full_owner_menu(message)
-        return
     if message is None:
         return
     logger.info("Received /start from telegram_id=%s", update.effective_user.id if update.effective_user else None)
 
     role = _role_from_context(context)
-    if context.user_data.pop("just_became_owner", False):
-        await message.reply_text(OWNER_ASSIGNED_TEXT)
-
-    await message.reply_text(
-        "👋 Добро пожаловать!\nРеклама маркетплейсов — управление и аналитика",
-        reply_markup=_build_main_menu(role),
-    )
+    if role == BotUserRole.OWNER:
+        await show_full_owner_menu(message)
+    else:
+        await message.reply_text(
+            "👋 Добро пожаловать!\nРеклама маркетплейсов — управление и аналитика",
+            reply_markup=_build_main_menu(role),
+        )
 
 
 async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -514,16 +511,26 @@ async def _send_auto_minus_result(update: Update) -> None:
 
 async def _show_employee_management(update: Update) -> None:
     with SessionLocal() as db:
-        owner = get_active_owner_bot_user(db)
-    owner_label = _format_user_label(owner) if owner else "ID —"
+        from sqlalchemy import case as sa_case
+        role_order = sa_case(
+            (BotUser.role == BotUserRole.OWNER, 0),
+            (BotUser.role == BotUserRole.ADMIN, 1),
+            else_=2,
+        )
+        from sqlalchemy import select as sa_select
+        employees = db.execute(
+            sa_select(BotUser).where(BotUser.is_active.is_(True)).order_by(role_order.asc(), BotUser.added_at.asc())
+        ).scalars().all()
+
+    lines: list[str] = ["👥 Управление сотрудниками\n", "Текущие сотрудники:"]
+    for emp in employees:
+        icon = ROLE_TO_ICON.get(emp.role, "👤")
+        title = ROLE_TO_TITLE.get(emp.role, "Сотрудник")
+        lines.append(f"{icon} {_format_user_label(emp)} — {title}")
+
     await _reply_text(
         update,
-        "👥 Управление сотрудниками\n\n"
-        "Текущие сотрудники:\n"
-        f"👑 {owner_label} — Руководитель\n\n"
-        "Добавить сотрудника:\n"
-        "[➕ Добавить сотрудника]\n"
-        "[📋 Список сотрудников]",
+        "\n".join(lines),
         reply_markup=_employee_management_keyboard(),
     )
 
@@ -887,10 +894,10 @@ async def team_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if role == BotUserRole.OWNER:
         await _show_employee_management(update)
         return
-    if role == BotUserRole.MANAGER:
-        await _send_manager_denied(update)
+    if role == BotUserRole.ADMIN:
+        await _show_employee_list(update)
         return
-    await _send_owner_only_denied(update)
+    await _send_manager_denied(update)
 
 
 async def add_employee_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
