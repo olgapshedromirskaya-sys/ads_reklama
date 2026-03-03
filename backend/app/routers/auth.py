@@ -93,6 +93,7 @@ def _serialize_auth_user(bot_user: BotUser) -> dict[str, Any]:
     }
 
 
+@setup_router.get("/setup/owner")
 @setup_router.post("/setup/owner")
 async def setup_owner(db: AsyncSessionAdapter = Depends(get_async_db)) -> dict[str, str]:
     # Always ensure 545972485 is owner
