@@ -20,9 +20,14 @@ class AsyncSessionAdapter:
 
 
 @asynccontextmanager
-async def get_db() -> AsyncIterator[AsyncSessionAdapter]:
+async def AsyncSessionLocal() -> AsyncIterator[AsyncSessionAdapter]:
     db = SessionLocal()
     try:
         yield AsyncSessionAdapter(db)
     finally:
         db.close()
+
+
+async def get_db() -> AsyncIterator[AsyncSessionAdapter]:
+    async with AsyncSessionLocal() as db:
+        yield db
