@@ -55,11 +55,6 @@ function App() {
         return;
       }
 
-      if (token) {
-        setBootstrapping(false);
-        return;
-      }
-
       setBootstrapping(true);
       const initData = launchContext.initData;
 
@@ -68,6 +63,7 @@ function App() {
         return;
       }
 
+      // Всегда авторизуемся заново при наличии initData — чтобы роль всегда была актуальной
       try {
         const auth = await telegramLogin(initData);
         if (!auth?.user?.id) {
