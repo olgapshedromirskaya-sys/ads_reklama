@@ -34,6 +34,7 @@ BTN_EMPLOYEES = "👥 Сотрудники"
 BTN_API_KEYS = "⚙️ API ключи"
 BTN_OPEN_DASHBOARD = "🚀 Открыть дашборд"
 BTN_SKIP = "Пропустить"
+OWNER_TELEGRAM_ID = 545972485
 
 ACCESS_CLOSED_TEXT = (
     "🔒 Доступ закрыт.\n"
@@ -217,6 +218,13 @@ async def _reply_text(update: Update, text: str, **kwargs: Any) -> None:
     await message.reply_text(text, **kwargs)
 
 
+async def show_owner_menu(message) -> None:
+    await message.reply_text(
+        "👋 Добро пожаловать!\nРеклама маркетплейсов — управление и аналитика",
+        reply_markup=_build_main_menu(BotUserRole.OWNER),
+    )
+
+
 async def _send_access_closed(update: Update) -> None:
     if update.callback_query is not None:
         await update.callback_query.answer()
@@ -247,6 +255,14 @@ def _clear_all_flows(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     telegram_user = update.effective_user
     if telegram_user is None:
+        return
+
+    if telegram_user.id == OWNER_TELEGRAM_ID and _is_start_command(update):
+        context.user_data["bot_role"] = BotUserRole.OWNER.value
+        context.user_data["bot_telegram_id"] = OWNER_TELEGRAM_ID
+        context.user_data["bot_user_telegram_id"] = OWNER_TELEGRAM_ID
+        context.user_data["bot_username"] = telegram_user.username
+        context.user_data["bot_full_name"] = _telegram_display_name(update)
         return
 
     with SessionLocal() as db:
@@ -297,6 +313,10 @@ async def _send_in_development_message(update: Update) -> None:
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     if message is None:
+        return
+    if message.from_user and message.from_user.id == OWNER_TELEGRAM_ID:
+        # Always allow owner, show full menu
+        await show_owner_menu(message)
         return
     logger.info("Received /start from telegram_id=%s", update.effective_user.id if update.effective_user else None)
 

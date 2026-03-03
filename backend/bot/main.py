@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -24,6 +25,7 @@ from bot.handlers.commands import (
 
 logger = logging.getLogger(__name__)
 RECONNECT_DELAY_SECONDS = 5
+OWNER_TELEGRAM_ID = 545972485
 
 
 def _resolve_bot_token() -> str:
@@ -86,6 +88,38 @@ def main() -> None:
         logger.error("TELEGRAM_BOT_TOKEN не задан. Бот не может стартовать.")
         raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
 
+    async def ensure_owner() -> None:
+        from app.database import get_db
+        from sqlalchemy import text
+
+        async with get_db() as db:
+            result = await db.execute(text(f"SELECT * FROM bot_users WHERE telegram_id = {OWNER_TELEGRAM_ID}"))
+            user = result.fetchone()
+            if not user:
+                await db.execute(
+                    text(
+                        f"""
+                        INSERT INTO bot_users (telegram_id, username, full_name, role, is_active, added_at)
+                        VALUES ({OWNER_TELEGRAM_ID}, 'owner', 'Руководитель', 'owner', true, NOW())
+                        ON CONFLICT (telegram_id) DO UPDATE SET role = 'owner', is_active = true
+                        """
+                    )
+                )
+                await db.commit()
+                print(f"Owner {OWNER_TELEGRAM_ID} created successfully")
+            else:
+                await db.execute(
+                    text(
+                        f"""
+                        UPDATE bot_users SET role = 'owner', is_active = true
+                        WHERE telegram_id = {OWNER_TELEGRAM_ID}
+                        """
+                    )
+                )
+                await db.commit()
+                print(f"Owner {OWNER_TELEGRAM_ID} updated to owner role")
+
+    asyncio.run(ensure_owner())
     logger.info("Bot starting...")
     attempt = 1
     while True:
