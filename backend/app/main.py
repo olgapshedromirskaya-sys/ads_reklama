@@ -33,6 +33,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     openapi_url="/openapi.json",
+    redirect_slashes=False,
 )
 
 app.add_middleware(
