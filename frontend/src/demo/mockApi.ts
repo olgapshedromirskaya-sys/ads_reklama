@@ -1,6 +1,6 @@
 type Marketplace = "wb" | "ozon";
 type QueryLabel = "relevant" | "not_relevant" | "pending";
-type UserRole = "director" | "admin" | "manager";
+type UserRole = "owner" | "admin" | "manager";
 
 export type DemoCampaign = {
   id: number;
@@ -149,12 +149,13 @@ export type DemoAccount = {
 };
 
 export type DemoTeamMember = {
-  id: number;
   telegram_id: number;
   username?: string | null;
+  full_name: string;
   role: UserRole;
-  owner_id?: number | null;
-  created_at: string;
+  added_by?: number | null;
+  added_at: string;
+  is_active: boolean;
 };
 
 export type DemoBudgetRule = {
@@ -537,20 +538,31 @@ let accounts: DemoAccount[] = [
 
 let teamMembers: DemoTeamMember[] = [
   {
-    id: 1,
-    telegram_id: 100200300,
-    username: "admin_demo",
-    role: "admin",
-    owner_id: 1,
-    created_at: isoDateDaysAgo(30)
+    telegram_id: 100200299,
+    username: "owner_demo",
+    full_name: "Owner Demo",
+    role: "owner",
+    added_by: 100200299,
+    added_at: isoDateDaysAgo(60),
+    is_active: true
   },
   {
-    id: 2,
+    telegram_id: 100200300,
+    username: "admin_demo",
+    full_name: "Admin Demo",
+    role: "admin",
+    added_by: 100200299,
+    added_at: isoDateDaysAgo(30),
+    is_active: true
+  },
+  {
     telegram_id: 100200301,
     username: "manager_demo",
+    full_name: "Manager Demo",
     role: "manager",
-    owner_id: 1,
-    created_at: isoDateDaysAgo(12)
+    added_by: 100200299,
+    added_at: isoDateDaysAgo(12),
+    is_active: true
   }
 ];
 
@@ -974,32 +986,51 @@ export async function listAccounts() {
   return clone(accounts);
 }
 
-export async function listTeamMembers() {
+export async function listEmployees() {
   return clone(teamMembers);
 }
 
-export async function addTeamMember(payload: {
+export async function addEmployee(payload: {
   telegram_id: number;
-  username?: string;
+  username?: string | null;
+  full_name?: string | null;
   role: "admin" | "manager";
 }) {
   const member: DemoTeamMember = {
-    id: nextTeamMemberId,
     telegram_id: payload.telegram_id,
     username: payload.username || null,
+    full_name: payload.full_name || payload.username || `User ${payload.telegram_id}`,
     role: payload.role,
-    owner_id: 1,
-    created_at: getNowIso()
+    added_by: 100200299,
+    added_at: getNowIso(),
+    is_active: true
   };
   nextTeamMemberId += 1;
   teamMembers = [member, ...teamMembers.filter((item) => item.telegram_id !== payload.telegram_id)];
   return clone(member);
 }
 
-export async function removeTeamMember(memberId: number) {
+export async function removeEmployee(telegramId: number) {
   const before = teamMembers.length;
-  teamMembers = teamMembers.filter((item) => item.id !== memberId);
+  teamMembers = teamMembers.filter((item) => item.telegram_id !== telegramId || item.role === "owner");
   return { removed: before !== teamMembers.length ? 1 : 0 };
+}
+
+export async function listTeamMembers() {
+  return listEmployees();
+}
+
+export async function addTeamMember(payload: {
+  telegram_id: number;
+  username?: string | null;
+  full_name?: string | null;
+  role: "admin" | "manager";
+}) {
+  return addEmployee(payload);
+}
+
+export async function removeTeamMember(telegramId: number) {
+  return removeEmployee(telegramId);
 }
 
 export async function connectAccount(payload: {

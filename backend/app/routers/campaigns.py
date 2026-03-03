@@ -5,7 +5,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, get_scope_user_id, require_admin_or_director
+from app.core.deps import get_current_user, get_scope_user_id
 from app.models.entities import Campaign, CampaignStat, MPAccount, Marketplace, QueryLabel, QueryLabelStatus, SearchQuery, User
 from app.schemas.campaigns import (
     CampaignAutoMinusToggleOut,
@@ -237,7 +237,7 @@ def campaign_stats(
 @router.post("/{campaign_id}/pause")
 def pause_campaign(
     campaign_id: int,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     scope_user_id = get_scope_user_id(current_user)
@@ -251,7 +251,7 @@ def pause_campaign(
 @router.post("/{campaign_id}/resume")
 def resume_campaign(
     campaign_id: int,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     scope_user_id = get_scope_user_id(current_user)
@@ -266,7 +266,7 @@ def resume_campaign(
 def toggle_campaign_auto_minus(
     campaign_id: int,
     payload: CampaignAutoMinusToggleRequest,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CampaignAutoMinusToggleOut:
     scope_user_id = get_scope_user_id(current_user)

@@ -2,25 +2,32 @@ import type { UserRole } from "@/api/endpoints";
 
 type UserLike = {
   role?: UserRole | null;
-  owner_id?: number | null;
 } | null | undefined;
 
 export function resolveUserRole(user: UserLike): UserRole {
-  if (user?.role === "admin" || user?.role === "manager" || user?.role === "director") {
+  if (user?.role === "owner" || user?.role === "admin" || user?.role === "manager") {
     return user.role;
   }
-  return "director";
+  return "manager";
 }
 
 export function canAccessExtendedFeatures(user: UserLike): boolean {
-  return resolveUserRole(user) !== "manager";
+  return Boolean(resolveUserRole(user));
 }
 
 export function canManageTeam(user: UserLike): boolean {
-  return resolveUserRole(user) === "director" && !user?.owner_id;
+  return resolveUserRole(user) === "owner";
 }
 
 export function canViewTeam(user: UserLike): boolean {
+  return resolveUserRole(user) === "owner";
+}
+
+export function canManageApiKeys(user: UserLike): boolean {
   const role = resolveUserRole(user);
-  return role === "director" || role === "admin";
+  return role === "owner" || role === "admin";
+}
+
+export function canSeePlanFact(user: UserLike): boolean {
+  return resolveUserRole(user) !== "manager";
 }

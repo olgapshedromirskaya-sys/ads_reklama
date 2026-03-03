@@ -9,7 +9,7 @@ from sqlalchemy import and_, asc, desc, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.db import get_db
-from app.core.deps import get_scope_user_id, require_admin_or_director
+from app.core.deps import get_current_user, get_scope_user_id
 from app.models.entities import Campaign, CampaignStat, MPAccount, Marketplace, MinusWord, QueryLabel, QueryLabelStatus, SearchQuery, User
 from app.schemas.queries import (
     AutoCleanupAllOut,
@@ -133,7 +133,7 @@ def list_queries(
     sort_by: str = Query(default="date"),
     sort_dir: str = Query(default="desc"),
     limit: int = Query(default=500, ge=1, le=5000),
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[SearchQueryOut]:
     scope_user_id = get_scope_user_id(current_user)
@@ -236,7 +236,7 @@ def list_queries(
 @router.post("/labels/bulk", response_model=BulkLabelUpdateResponse)
 def update_labels_bulk(
     payload: BulkLabelUpdateRequest,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> BulkLabelUpdateResponse:
     scope_user_id = get_scope_user_id(current_user)
@@ -265,7 +265,7 @@ def update_labels_bulk(
 @router.post("/minus-words/generate", response_model=list[str])
 def generate_minus_words_for_campaign(
     payload: MinusWordsGenerateRequest,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[str]:
     scope_user_id = get_scope_user_id(current_user)
@@ -280,7 +280,7 @@ def generate_minus_words_for_campaign(
 @router.post("/minus-words/{campaign_id}/apply", response_model=MinusWordsApplyResponse)
 async def apply_minus_words(
     campaign_id: int,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MinusWordsApplyResponse:
     scope_user_id = get_scope_user_id(current_user)
@@ -330,7 +330,7 @@ def run_auto_cleanup_for_campaign(
     campaign_id: int,
     days: int = Query(default=7, ge=1, le=60),
     apply_now: bool = Query(default=False),
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AutoCleanupResultOut:
     scope_user_id = get_scope_user_id(current_user)
@@ -344,7 +344,7 @@ def run_auto_cleanup_for_all_campaigns(
     days: int = Query(default=7, ge=1, le=60),
     apply_now: bool = Query(default=False),
     only_auto_enabled: bool = Query(default=False),
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AutoCleanupAllOut:
     scope_user_id = get_scope_user_id(current_user)
@@ -370,7 +370,7 @@ def run_auto_cleanup_for_all_campaigns(
 @router.get("/minus-words/{campaign_id}", response_model=list[MinusWordOut])
 def list_minus_words(
     campaign_id: int,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[MinusWord]:
     scope_user_id = get_scope_user_id(current_user)
@@ -382,7 +382,7 @@ def list_minus_words(
 def query_trends(
     query: str,
     days: int = Query(default=30, ge=1, le=180),
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[QueryTrendPoint]:
     scope_user_id = get_scope_user_id(current_user)
@@ -414,7 +414,7 @@ def query_trends(
 @router.get("/export.xlsx")
 def export_queries_xlsx(
     campaign_id: int | None = Query(default=None),
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Response:
     scope_user_id = get_scope_user_id(current_user)

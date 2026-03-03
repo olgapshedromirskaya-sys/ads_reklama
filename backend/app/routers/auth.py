@@ -1,5 +1,5 @@
-import logging
 import json
+import logging
 from json import JSONDecodeError
 from typing import Any
 from urllib.parse import parse_qsl
@@ -9,9 +9,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_current_user, get_scope_user_id, require_admin_or_director, require_director
+from app.core.deps import (
+    get_current_bot_user,
+    get_current_user,
+    get_scope_user_id,
+    require_admin_or_director,
+    require_director,
+)
 from app.core.security import create_access_token, validate_telegram_init_data
-from app.models.entities import MPAccount, User, UserRole
+from app.models.entities import BotUser, MPAccount, User, UserRole
 from app.schemas.auth import (
     AccountCreate,
     AccountOut,
@@ -21,6 +27,7 @@ from app.schemas.auth import (
     TelegramLoginRequest,
     TelegramUserOut,
 )
+from app.services.bot_users import build_full_name, ensure_internal_user_for_bot_user, get_active_bot_user, get_active_owner_bot_user
 from app.services.sync import refresh_user_data, run_async
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -73,13 +80,13 @@ def _can_fallback_to_init_data_user(exc: HTTPException) -> bool:
     return exc.status_code == status.HTTP_401_UNAUTHORIZED and str(exc.detail) in signature_error_details
 
 
-def _serialize_auth_user(user: User) -> dict[str, Any]:
+def _serialize_auth_user(bot_user: BotUser) -> dict[str, Any]:
     return {
-        "id": int(user.id),
-        "telegram_id": int(user.telegram_id),
-        "username": user.username,
-        "role": user.role.value,
-        "owner_id": user.owner_id,
+        "id": int(bot_user.telegram_id),
+        "telegram_id": int(bot_user.telegram_id),
+        "username": bot_user.username,
+        "name": bot_user.full_name,
+        "role": bot_user.role.value,
     }
 
 
@@ -89,11 +96,15 @@ def telegram_login(payload: TelegramLoginRequest, db: Session = Depends(get_db))
     init_data_user = _extract_init_data_user_payload(payload.init_data)
     telegram_id = int(init_data_user["id"])
     username = init_data_user.get("username")
+    first_name = init_data_user.get("first_name")
+    last_name = init_data_user.get("last_name")
 
     try:
         identity = validate_telegram_init_data(payload.init_data)
         telegram_id = identity.telegram_id
         username = identity.username
+        first_name = identity.first_name
+        last_name = identity.last_name
     except HTTPException as exc:
         if _can_fallback_to_init_data_user(exc):
             logger.warning(
@@ -103,20 +114,24 @@ def telegram_login(payload: TelegramLoginRequest, db: Session = Depends(get_db))
         else:
             raise
 
-    user = db.execute(select(User).where(User.telegram_id == telegram_id)).scalar_one_or_none()
-    if user is None:
-        user = User(telegram_id=telegram_id, username=username)
-        db.add(user)
-    else:
-        user.username = username
+    bot_user = get_active_bot_user(db, telegram_id)
+    if bot_user is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ закрыт")
+
+    bot_user.username = username or bot_user.username
+    bot_user.full_name = build_full_name(first_name, last_name, bot_user.username, telegram_id)
+
+    owner_bot_user = get_active_owner_bot_user(db)
+    user = ensure_internal_user_for_bot_user(db, bot_user, owner_bot_user=owner_bot_user)
     db.commit()
     db.refresh(user)
+    db.refresh(bot_user)
 
-    token = create_access_token({"user_id": user.id, "telegram_id": user.telegram_id})
+    token = create_access_token({"user_id": user.id, "telegram_id": user.telegram_id, "role": bot_user.role.value})
     response_payload = {
         "access_token": token,
         "token_type": "bearer",
-        "user": _serialize_auth_user(user),
+        "user": _serialize_auth_user(bot_user),
     }
     auth_response = AuthResponse.model_validate(response_payload)
     logger.info("Returning /api/auth/telegram response JSON: %s", auth_response.model_dump_json())
@@ -124,8 +139,12 @@ def telegram_login(payload: TelegramLoginRequest, db: Session = Depends(get_db))
 
 
 @router.get("/me", response_model=TelegramUserOut)
-def me(current_user: User = Depends(get_current_user)) -> TelegramUserOut:
-    return TelegramUserOut.model_validate(current_user)
+def me(
+    current_user: User = Depends(get_current_user),
+    current_bot_user: BotUser = Depends(get_current_bot_user),
+) -> TelegramUserOut:
+    del current_user
+    return TelegramUserOut.model_validate(_serialize_auth_user(current_bot_user))
 
 
 @router.get("/accounts", response_model=list[AccountOut])

@@ -7,8 +7,8 @@ type AuthUser = {
   id: number;
   telegram_id: number;
   username?: string | null;
-  role?: "director" | "admin" | "manager";
-  owner_id?: number | null;
+  name: string;
+  role?: "owner" | "admin" | "manager";
 };
 
 type AuthState = {

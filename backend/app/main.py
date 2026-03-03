@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers import alerts, auth, budget, campaigns, keywords, queries
+from app.routers import alerts, auth, budget, campaigns, keywords, queries, users
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -50,6 +50,7 @@ for router_prefix in router_prefixes:
     app.include_router(keywords.router, prefix=router_prefix)
     app.include_router(budget.router, prefix=router_prefix)
     app.include_router(alerts.router, prefix=router_prefix)
+    app.include_router(users.router, prefix=router_prefix)
 
 logger.info("Mounted API routers with prefixes: %s", router_prefixes)
 

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import get_scope_user_id, require_admin_or_director
+from app.core.deps import get_current_user, get_scope_user_id
 from app.models.entities import KeywordPosition, MPAccount, User, WatchlistKeyword
 from app.schemas.keywords import KeywordPositionOut, WatchlistKeywordCreate, WatchlistKeywordOut
 
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/keywords", tags=["keywords"])
 
 @router.get("/watchlist", response_model=list[WatchlistKeywordOut])
 def list_watchlist(
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[WatchlistKeyword]:
     scope_user_id = get_scope_user_id(current_user)
@@ -29,7 +29,7 @@ def list_watchlist(
 @router.post("/watchlist", response_model=WatchlistKeywordOut)
 def create_watchlist(
     payload: WatchlistKeywordCreate,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WatchlistKeyword:
     scope_user_id = get_scope_user_id(current_user)
@@ -53,7 +53,7 @@ def create_watchlist(
 @router.delete("/watchlist/{watchlist_id}")
 def delete_watchlist(
     watchlist_id: int,
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     scope_user_id = get_scope_user_id(current_user)
@@ -73,7 +73,7 @@ def delete_watchlist(
 def list_keyword_positions(
     watchlist_id: int,
     days: int = Query(default=30, ge=1, le=365),
-    current_user: User = Depends(require_admin_or_director),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[KeywordPosition]:
     scope_user_id = get_scope_user_id(current_user)
