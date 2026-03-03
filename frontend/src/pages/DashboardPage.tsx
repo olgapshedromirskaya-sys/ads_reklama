@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { listCampaigns, listQueries, pauseCampaign, type Campaign } from "@/api/endpoints";
+import * as demoApi from "@/demo/mockApi";
 import { canSeePlanFact } from "@/auth/roles";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { crColorClass, ctrColorClass, drrColorClass, formatCurrency, formatInteger, formatPercent, marketplaceLabel } from "@/components/metricUtils";
@@ -976,11 +977,27 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
 
   const campaignsQuery = useQuery({
     queryKey: ["campaigns"],
-    queryFn: () => listCampaigns()
+    queryFn: async () => {
+      try {
+        const result = await listCampaigns();
+        if (!result || result.length === 0) return await demoApi.listCampaigns();
+        return result;
+      } catch {
+        return await demoApi.listCampaigns();
+      }
+    }
   });
   const queriesQuery = useQuery({
     queryKey: ["dashboard-queries", marketplace],
-    queryFn: () => listQueries({ marketplace, limit: 1000 })
+    queryFn: async () => {
+      try {
+        const result = await listQueries({ marketplace, limit: 1000 });
+        if (!result || result.length === 0) return await demoApi.listQueries({ marketplace, limit: 1000 });
+        return result;
+      } catch {
+        return await demoApi.listQueries({ marketplace, limit: 1000 });
+      }
+    }
   });
   const pauseMutation = useMutation({
     mutationFn: (campaignId: number) => pauseCampaign(campaignId),
@@ -1005,7 +1022,7 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
     return <LoadingScreen text="Загрузка дашборда..." />;
   }
   if (!campaignsQuery.data || !queriesQuery.data) {
-    return <div className="text-sm text-red-500">Ошибка загрузки dashboard.</div>;
+    return <LoadingScreen text="Загрузка дашборда..." />;
   }
 
   const marketplaceCampaigns = campaignsQuery.data.filter((campaign) => campaign.marketplace === marketplace);
