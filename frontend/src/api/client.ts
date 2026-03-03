@@ -13,6 +13,10 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // Добавляем trailing slash если его нет чтобы избежать 307 редиректа
+  if (config.url && !config.url.endsWith("/") && !config.url.includes("?")) {
+    config.url = config.url + "/";
+  }
   return config;
 });
 
