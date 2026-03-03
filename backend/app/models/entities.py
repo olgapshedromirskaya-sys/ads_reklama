@@ -56,6 +56,28 @@ class UserRole(str, enum.Enum):
     MANAGER = "manager"
 
 
+class BotUserRole(str, enum.Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    MANAGER = "manager"
+
+
+class BotUser(Base):
+    __tablename__ = "bot_users"
+
+    telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[BotUserRole] = mapped_column(Enum(BotUserRole, name="bot_user_role_enum"), nullable=False)
+    added_by: Mapped[int | None] = mapped_column(
+        ForeignKey("bot_users.telegram_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class User(Base):
     __tablename__ = "users"
 

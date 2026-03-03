@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.entities import Marketplace, UserRole
+from app.models.entities import BotUserRole, Marketplace, UserRole
 
 
 class TelegramLoginRequest(BaseModel):
@@ -10,22 +10,19 @@ class TelegramLoginRequest(BaseModel):
 
 
 class TelegramUserOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     telegram_id: int
     username: str | None
-    role: UserRole
-    owner_id: int | None
-    created_at: datetime
+    name: str
+    role: BotUserRole
 
 
 class AuthUserOut(BaseModel):
     id: int
     telegram_id: int
     username: str | None
-    role: UserRole
-    owner_id: int | None
+    name: str
+    role: BotUserRole
 
 
 class AuthResponse(BaseModel):

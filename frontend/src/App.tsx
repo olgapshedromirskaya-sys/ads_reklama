@@ -21,6 +21,7 @@ function App() {
   const setAuth = useAuthStore((state) => state.setAuth);
   const [demoMode, setDemoModeState] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   const activeTab = useMemo<AppTab>(() => {
     if (location.pathname.startsWith("/settings")) {
@@ -49,6 +50,7 @@ function App() {
       setDemoMode(launchContext.demoMode);
 
       if (launchContext.demoMode) {
+        setAccessDenied(false);
         setBootstrapping(false);
         return;
       }
@@ -77,11 +79,20 @@ function App() {
 
         localStorage.setItem("mp-ads-jwt", auth.access_token);
         setAuth(auth.access_token, auth.user);
+        setAccessDenied(false);
         setDemoModeState(false);
         setDemoMode(false);
       } catch (error) {
         if (axios.isAxiosError(error)) {
           console.error("[TelegramAuth] Auth failed:", error.response?.status, error.message);
+          if (error.response?.status === 403) {
+            if (mounted) {
+              setAccessDenied(true);
+              setDemoModeState(false);
+            }
+            setDemoMode(false);
+            return;
+          }
         } else {
           console.error("[TelegramAuth] Auth failed:", error);
         }
@@ -102,6 +113,17 @@ function App() {
 
   if (bootstrapping) {
     return <LoadingScreen text="Авторизация..." fullscreen />;
+  }
+
+  if (accessDenied) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center bg-[color:var(--tg-bg-color)] px-6 text-center">
+        <div className="app-card max-w-lg p-6">
+          <div className="mb-2 text-xl font-bold text-slate-100">🔒 Доступ закрыт</div>
+          <p className="text-sm text-slate-300">Этот бот и дашборд являются приватными. Обратитесь к руководителю для получения доступа.</p>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { listCampaigns, listQueries, pauseCampaign, type Campaign } from "@/api/endpoints";
+import { canSeePlanFact } from "@/auth/roles";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { crColorClass, ctrColorClass, drrColorClass, formatCurrency, formatInteger, formatPercent, marketplaceLabel } from "@/components/metricUtils";
 import { buildCampaignFunnelMetrics, campaignsPath, campaignHealthTone, detectCampaignIssues } from "@/data/campaignInsights";
 import { MARKETPLACE_ANALYTICS, type MarketplaceId, computeFunnelMetrics } from "@/data/marketplaceAnalytics";
+import { useAuthStore } from "@/store/auth";
 
 type DashboardTab = "overview" | "positions";
 type PositionPeriod = "today" | "yesterday" | "dayBeforeYesterday" | "week";
@@ -932,6 +934,8 @@ const WB_PLACEMENT_DATA: WbPlacementRow[] = [
 ];
 
 export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
+  const user = useAuthStore((state) => state.user);
+  const showPlanFact = canSeePlanFact(user);
   const data = MARKETPLACE_ANALYTICS[marketplace];
   const accentClass = marketplace === "ozon" ? "text-sky-300" : "text-violet-300";
   const queryClient = useQueryClient();
@@ -1424,95 +1428,97 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
             </div>
           </section>
 
-          <section className="app-card p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-100">📊 План/Факт</h2>
-              <span className={`text-xs font-semibold ${accentClass}`}>{data.badge}</span>
-            </div>
+          {showPlanFact && (
+            <section className="app-card p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold text-slate-100">📊 План/Факт</h2>
+                <span className={`text-xs font-semibold ${accentClass}`}>{data.badge}</span>
+              </div>
 
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
-                <div className="text-sm font-semibold text-slate-100">💰 Рекламный бюджет {marketplaceCode}:</div>
-                <div className="mt-2 text-xs text-slate-300">
-                  Потрачено: {formatCurrency(planActual.spent)} из {formatCurrency(planTarget.monthlyBudget)}
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
+                  <div className="text-sm font-semibold text-slate-100">💰 Рекламный бюджет {marketplaceCode}:</div>
+                  <div className="mt-2 text-xs text-slate-300">
+                    Потрачено: {formatCurrency(planActual.spent)} из {formatCurrency(planTarget.monthlyBudget)}
+                  </div>
+                  <div className="mt-1 font-mono text-xs text-slate-200">
+                    [{buildTextProgressBar(budgetProgress)}] {formatPercent(budgetProgress, 1)}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-300">
+                    День месяца: {planActual.dayOfMonth} из {planActual.daysInMonth} ({formatPercent(timeProgress, 1)} времени прошло)
+                  </div>
+                  <div className={`mt-1 text-xs font-semibold ${budgetStatus.className}`}>Статус: {budgetStatus.text}</div>
+                  <div className="mt-1 text-xs text-slate-200">
+                    Прогноз к концу месяца: ~{formatCurrency(planActual.forecastBudget)}
+                  </div>
                 </div>
-                <div className="mt-1 font-mono text-xs text-slate-200">
-                  [{buildTextProgressBar(budgetProgress)}] {formatPercent(budgetProgress, 1)}
-                </div>
-                <div className="mt-1 text-xs text-slate-300">
-                  День месяца: {planActual.dayOfMonth} из {planActual.daysInMonth} ({formatPercent(timeProgress, 1)} времени прошло)
-                </div>
-                <div className={`mt-1 text-xs font-semibold ${budgetStatus.className}`}>Статус: {budgetStatus.text}</div>
-                <div className="mt-1 text-xs text-slate-200">
-                  Прогноз к концу месяца: ~{formatCurrency(planActual.forecastBudget)}
+
+                <div className="rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
+                  <div className="text-sm font-semibold text-slate-100">📦 Заказы {marketplaceCode}:</div>
+                  <div className="mt-2 text-xs text-slate-300">
+                    Получено: {formatInteger(planActual.orders)} из {formatInteger(planTarget.monthlyOrders)}
+                  </div>
+                  <div className="mt-1 font-mono text-xs text-slate-200">
+                    [{buildTextProgressBar(ordersProgress)}] {formatPercent(ordersProgress, 1)}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-300">
+                    По плану на {planActual.dayOfMonth}й день: {formatInteger(plannedOrdersByToday)}
+                  </div>
+                  <div className={`mt-1 text-xs font-semibold ${ordersStatus.className}`}>Статус: {ordersStatus.text}</div>
+                  <div className="mt-1 text-xs text-slate-200">
+                    Прогноз к концу месяца: ~{formatInteger(planActual.forecastOrders)} {orderWord(planActual.forecastOrders)}
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
-                <div className="text-sm font-semibold text-slate-100">📦 Заказы {marketplaceCode}:</div>
-                <div className="mt-2 text-xs text-slate-300">
-                  Получено: {formatInteger(planActual.orders)} из {formatInteger(planTarget.monthlyOrders)}
-                </div>
-                <div className="mt-1 font-mono text-xs text-slate-200">
-                  [{buildTextProgressBar(ordersProgress)}] {formatPercent(ordersProgress, 1)}
-                </div>
-                <div className="mt-1 text-xs text-slate-300">
-                  По плану на {planActual.dayOfMonth}й день: {formatInteger(plannedOrdersByToday)}
-                </div>
-                <div className={`mt-1 text-xs font-semibold ${ordersStatus.className}`}>Статус: {ordersStatus.text}</div>
-                <div className="mt-1 text-xs text-slate-200">
-                  Прогноз к концу месяца: ~{formatInteger(planActual.forecastOrders)} {orderWord(planActual.forecastOrders)}
-                </div>
+              <div className="mt-3">
+                <button onClick={openPlanEditor} className="rounded-md border border-slate-300/40 px-3 py-2 text-xs font-semibold">
+                  ⚙️ Изменить план
+                </button>
               </div>
-            </div>
 
-            <div className="mt-3">
-              <button onClick={openPlanEditor} className="rounded-md border border-slate-300/40 px-3 py-2 text-xs font-semibold">
-                ⚙️ Изменить план
-              </button>
-            </div>
-
-            {planEditorOpen && (
-              <div className="mt-3 rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
-                <div className="mb-2 text-xs font-semibold text-slate-200">Редактирование плана</div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <label className="text-xs text-slate-300">
-                    Рекламный бюджет на месяц:
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={planDraft.budget}
-                      onChange={(event) => setPlanDraft((prev) => ({ ...prev, budget: event.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-400/30 bg-transparent px-2 py-2 text-sm text-slate-100"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-300">
-                    Заказы на месяц:
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={planDraft.orders}
-                      onChange={(event) => setPlanDraft((prev) => ({ ...prev, orders: event.target.value }))}
-                      className="mt-1 w-full rounded-md border border-slate-400/30 bg-transparent px-2 py-2 text-sm text-slate-100"
-                    />
-                  </label>
+              {planEditorOpen && (
+                <div className="mt-3 rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
+                  <div className="mb-2 text-xs font-semibold text-slate-200">Редактирование плана</div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <label className="text-xs text-slate-300">
+                      Рекламный бюджет на месяц:
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={planDraft.budget}
+                        onChange={(event) => setPlanDraft((prev) => ({ ...prev, budget: event.target.value }))}
+                        className="mt-1 w-full rounded-md border border-slate-400/30 bg-transparent px-2 py-2 text-sm text-slate-100"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-300">
+                      Заказы на месяц:
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={planDraft.orders}
+                        onChange={(event) => setPlanDraft((prev) => ({ ...prev, orders: event.target.value }))}
+                        className="mt-1 w-full rounded-md border border-slate-400/30 bg-transparent px-2 py-2 text-sm text-slate-100"
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={savePlan} className="rounded-md border border-emerald-300/40 px-3 py-1.5 text-xs text-emerald-200">
+                      Сохранить план
+                    </button>
+                    <button
+                      onClick={() => setPlanEditorOpen(false)}
+                      className="rounded-md border border-slate-300/40 px-3 py-1.5 text-xs text-slate-200"
+                    >
+                      Отмена
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-3 flex gap-2">
-                  <button onClick={savePlan} className="rounded-md border border-emerald-300/40 px-3 py-1.5 text-xs text-emerald-200">
-                    Сохранить план
-                  </button>
-                  <button
-                    onClick={() => setPlanEditorOpen(false)}
-                    className="rounded-md border border-slate-300/40 px-3 py-1.5 text-xs text-slate-200"
-                  >
-                    Отмена
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
 
-            {planMessage && <div className="mt-3 text-xs text-emerald-300">{planMessage}</div>}
-          </section>
+              {planMessage && <div className="mt-3 text-xs text-emerald-300">{planMessage}</div>}
+            </section>
+          )}
 
           <section ref={campaignsSectionRef} className="app-card p-4">
             <div className="mb-3 flex items-center justify-between">

@@ -2,14 +2,14 @@ import { apiClient } from "./client";
 import { isDemoMode } from "@/demo/mode";
 import * as demoApi from "@/demo/mockApi";
 
-export type UserRole = "director" | "admin" | "manager";
+export type UserRole = "owner" | "admin" | "manager";
 
 export type TelegramUser = {
   id: number;
   telegram_id: number;
   username?: string | null;
+  name: string;
   role: UserRole;
-  owner_id?: number | null;
 };
 
 export type AuthResponse = {
@@ -173,12 +173,23 @@ export type Account = {
 };
 
 export type TeamMember = {
-  id: number;
   telegram_id: number;
   username?: string | null;
+  full_name: string;
   role: UserRole;
-  owner_id?: number | null;
-  created_at: string;
+  added_by?: number | null;
+  added_at?: string;
+  is_active?: boolean;
+};
+
+export type Employee = {
+  telegram_id: number;
+  username?: string | null;
+  full_name: string;
+  role: UserRole;
+  added_by?: number | null;
+  added_at: string;
+  is_active: boolean;
 };
 
 export type BudgetRule = {
@@ -379,32 +390,50 @@ export async function listAccounts() {
   return data;
 }
 
-export async function listTeamMembers() {
+export async function listEmployees() {
   if (isDemoMode()) {
-    return demoApi.listTeamMembers();
+    return demoApi.listEmployees();
   }
-  const { data } = await apiClient.get<TeamMember[]>("/auth/team/members");
+  const { data } = await apiClient.get<Employee[]>("/users/list");
   return data;
+}
+
+export async function addEmployee(payload: {
+  telegram_id: number;
+  username?: string | null;
+  full_name?: string | null;
+  role: Exclude<UserRole, "owner">;
+}) {
+  if (isDemoMode()) {
+    return demoApi.addEmployee(payload);
+  }
+  const { data } = await apiClient.post<Employee>("/users/add-employee", payload);
+  return data;
+}
+
+export async function removeEmployee(telegramId: number) {
+  if (isDemoMode()) {
+    return demoApi.removeEmployee(telegramId);
+  }
+  const { data } = await apiClient.delete<{ removed: number }>(`/users/${telegramId}`);
+  return data;
+}
+
+export async function listTeamMembers() {
+  return listEmployees();
 }
 
 export async function addTeamMember(payload: {
   telegram_id: number;
-  username?: string;
-  role: Exclude<UserRole, "director">;
+  username?: string | null;
+  full_name?: string | null;
+  role: Exclude<UserRole, "owner">;
 }) {
-  if (isDemoMode()) {
-    return demoApi.addTeamMember(payload);
-  }
-  const { data } = await apiClient.post<TeamMember>("/auth/team/members", payload);
-  return data;
+  return addEmployee(payload);
 }
 
-export async function removeTeamMember(memberId: number) {
-  if (isDemoMode()) {
-    return demoApi.removeTeamMember(memberId);
-  }
-  const { data } = await apiClient.delete<{ removed: number }>(`/auth/team/members/${memberId}`);
-  return data;
+export async function removeTeamMember(telegramId: number) {
+  return removeEmployee(telegramId);
 }
 
 export async function connectAccount(payload: {

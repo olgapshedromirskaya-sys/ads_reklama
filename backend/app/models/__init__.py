@@ -1,5 +1,7 @@
 from app.models.entities import (
     Alert,
+    BotUser,
+    BotUserRole,
     BudgetAction,
     BudgetRule,
     BudgetRuleType,
@@ -19,6 +21,8 @@ from app.models.entities import (
 
 __all__ = [
     "Alert",
+    "BotUser",
+    "BotUserRole",
     "BudgetAction",
     "BudgetRule",
     "BudgetRuleType",

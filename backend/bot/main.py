@@ -3,12 +3,14 @@ import os
 import time
 
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from app.core.config import get_settings
 from bot.handlers.commands import (
+    access_guard,
     add_employee_command,
     alerts_command,
+    callback_menu_handler,
     campaigns_command,
     dashboard_command,
     pause_command,
@@ -52,6 +54,9 @@ async def _log_bot_errors(update: object, context: ContextTypes.DEFAULT_TYPE) ->
 def build_application(token: str) -> Application:
     application = Application.builder().token(token).build()
 
+    application.add_handler(MessageHandler(filters.ALL, access_guard), group=-1)
+    application.add_handler(CallbackQueryHandler(access_guard), group=-1)
+
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("dashboard", dashboard_command))
     application.add_handler(CommandHandler("summary", summary_command))
@@ -60,8 +65,10 @@ def build_application(token: str) -> Application:
     application.add_handler(CommandHandler("pause", pause_command))
     application.add_handler(CommandHandler("resume", resume_command))
     application.add_handler(CommandHandler("team", team_command))
+    application.add_handler(CommandHandler("adduser", add_employee_command))
     application.add_handler(CommandHandler("add_employee", add_employee_command))
     application.add_handler(CommandHandler("remove_employee", remove_employee_command))
+    application.add_handler(CallbackQueryHandler(callback_menu_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_menu_handler))
     application.add_error_handler(_log_bot_errors)
     return application
