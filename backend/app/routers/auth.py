@@ -110,6 +110,53 @@ async def setup_owner(db: AsyncSessionAdapter = Depends(get_async_db)) -> dict[s
     return {"status": "ok", "message": "Owner 545972485 set successfully"}
 
 
+@setup_router.get("/setup/cleanup")
+@setup_router.post("/setup/cleanup")
+async def cleanup_unauthorized_users(db: AsyncSessionAdapter = Depends(get_async_db)) -> dict:
+    """
+    Деактивирует всех пользователей кроме owner (545972485).
+    Гарантирует что owner активен и имеет роль owner.
+    Вызывать однократно для очистки БД.
+    """
+    # Деактивируем всех незарегистрированных (не owner)
+    result_deactivate = await db.execute(
+        text(
+            """
+            UPDATE bot_users
+            SET is_active = false
+            WHERE telegram_id != 545972485
+              AND role != 'owner'
+            """
+        )
+    )
+    # Убедимся что owner активен
+    await db.execute(
+        text(
+            """
+            INSERT INTO bot_users (telegram_id, username, full_name, role, is_active, added_at)
+            VALUES (545972485, 'owner', 'Руководитель', 'owner', true, NOW())
+            ON CONFLICT (telegram_id) DO UPDATE SET role = 'owner', is_active = true
+            """
+        )
+    )
+    # Показываем кто остался активным
+    result_active = await db.execute(
+        text("SELECT telegram_id, username, role, is_active FROM bot_users WHERE is_active = true ORDER BY added_at")
+    )
+    active_users = [
+        {"telegram_id": row[0], "username": row[1], "role": row[2], "is_active": row[3]}
+        for row in result_active.fetchall()
+    ]
+    await db.commit()
+    deactivated_count = result_deactivate.rowcount if hasattr(result_deactivate, "rowcount") else 0
+    return {
+        "status": "ok",
+        "deactivated": deactivated_count,
+        "active_users": active_users,
+        "message": f"Очищено {deactivated_count} незарегистрированных пользователей. Активных: {len(active_users)}",
+    }
+
+
 @router.post("/telegram", response_model=AuthResponse)
 def telegram_login(payload: TelegramLoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
     logger.info("Received /api/auth/telegram request init_data_length=%d", len(payload.init_data))
