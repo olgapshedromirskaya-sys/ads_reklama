@@ -36,6 +36,30 @@ type PositionKeywordRow = {
   positionsByDay: [number, number, number, number, number, number, number];
 };
 
+type PositionSnapshot = {
+  position: number;
+  change: number;
+  bid: number;
+};
+
+type WbPositionKeywordRow = {
+  keyword: string;
+  placementLabel: "🔍 Поиск" | "📦 Полки";
+  orders: number;
+  snapshots: {
+    today: PositionSnapshot;
+    yesterday: PositionSnapshot;
+    dayBeforeYesterday: PositionSnapshot;
+  };
+  positionsByDay: [number, number, number, number, number, number, number];
+  bidsByDay: [number, number, number, number, number, number, number];
+};
+
+type WbPositionCampaignData = {
+  campaign: string;
+  keywords: WbPositionKeywordRow[];
+};
+
 type CampaignFunnelDemoData = {
   impressions: string;
   ctr: string;
@@ -97,21 +121,29 @@ type PlacementChannel = {
   drrBadge: "🟢" | "🟡" | "🔴";
 };
 
+type WbPlacementPeriod = "today" | "yesterday" | "week" | "custom";
+
 type PlacementHistoryPoint = {
   date: string;
-  searchImpressions: number;
-  shelvesImpressions: number;
-  searchOrders: number;
-  shelvesOrders: number;
-  searchBid: number;
-  shelvesBid: number;
+  isoDate: string;
+  search: PlacementChannel;
+  shelves: PlacementChannel;
+};
+
+type WbTopKeywordRow = {
+  keyword: string;
+  impressions: number;
+  orders: number;
+  bid: number;
+  placement: "🔍 Поиск" | "📦 Полки";
+  position: string;
 };
 
 type WbPlacementRow = {
   campaign: string;
   search: PlacementChannel;
   shelves: PlacementChannel;
-  history?: PlacementHistoryPoint[];
+  history: PlacementHistoryPoint[];
   conclusion?: string;
 };
 
@@ -224,38 +256,7 @@ const DEMO_MINUS_ARCHIVE_ROWS: MinusArchiveRow[] = [
 ];
 
 const POSITION_DEMO_DATA: Record<MarketplaceId, PositionKeywordRow[]> = {
-  wb: [
-    {
-      keyword: "кроссовки женские",
-      positionsByDay: [8, 6, 5, 4, 3, 3, 3],
-      bid: 220
-    },
-    {
-      keyword: "кроссовки на платформе",
-      positionsByDay: [10, 11, 12, 13, 12, 12, 12],
-      bid: 180
-    },
-    {
-      keyword: "белые кроссовки",
-      positionsByDay: [5, 5, 6, 7, 8, 7, 7],
-      bid: 195
-    },
-    {
-      keyword: "кроссовки nike женские",
-      positionsByDay: [20, 21, 22, 23, 24, 24, 24],
-      bid: 150
-    },
-    {
-      keyword: "платья летние",
-      positionsByDay: [9, 8, 7, 6, 5, 5, 5],
-      bid: 210
-    },
-    {
-      keyword: "джинсы slim fit",
-      positionsByDay: [15, 16, 18, 20, 22, 22, 22],
-      bid: 155
-    }
-  ],
+  wb: [],
   ozon: [
     {
       keyword: "рюкзак туристический",
@@ -272,6 +273,228 @@ const POSITION_DEMO_DATA: Record<MarketplaceId, PositionKeywordRow[]> = {
       positionsByDay: [6, 5, 5, 4, 4, 4, 4],
       bid: 210
     }
+  ]
+};
+
+const WB_POSITION_DATA: WbPositionCampaignData[] = [
+  {
+    campaign: "Кроссовки женские",
+    keywords: [
+      {
+        keyword: "кроссовки женские",
+        placementLabel: "🔍 Поиск",
+        orders: 187,
+        snapshots: {
+          today: { position: 3, change: 1, bid: 220 },
+          yesterday: { position: 4, change: 0, bid: 220 },
+          dayBeforeYesterday: { position: 4, change: 1, bid: 218 }
+        },
+        positionsByDay: [4, 4, 3, 3, 3, 3, 3],
+        bidsByDay: [210, 212, 215, 218, 220, 220, 220]
+      },
+      {
+        keyword: "кроссовки на платформе",
+        placementLabel: "🔍 Поиск",
+        orders: 94,
+        snapshots: {
+          today: { position: 12, change: 0, bid: 220 },
+          yesterday: { position: 12, change: 0, bid: 220 },
+          dayBeforeYesterday: { position: 12, change: 1, bid: 218 }
+        },
+        positionsByDay: [13, 13, 12, 12, 12, 12, 12],
+        bidsByDay: [205, 208, 210, 215, 218, 220, 220]
+      },
+      {
+        keyword: "белые кроссовки",
+        placementLabel: "🔍 Поиск",
+        orders: 62,
+        snapshots: {
+          today: { position: 7, change: -1, bid: 210 },
+          yesterday: { position: 6, change: 2, bid: 210 },
+          dayBeforeYesterday: { position: 8, change: -1, bid: 205 }
+        },
+        positionsByDay: [6, 6, 7, 7, 8, 6, 7],
+        bidsByDay: [198, 200, 202, 205, 208, 210, 210]
+      },
+      {
+        keyword: "кроссовки женские летние",
+        placementLabel: "📦 Полки",
+        orders: 24,
+        snapshots: {
+          today: { position: 5, change: 2, bid: 195 },
+          yesterday: { position: 7, change: -1, bid: 192 },
+          dayBeforeYesterday: { position: 6, change: 1, bid: 190 }
+        },
+        positionsByDay: [8, 8, 7, 6, 6, 7, 5],
+        bidsByDay: [180, 182, 185, 188, 190, 192, 195]
+      },
+      {
+        keyword: "кроссовки на танкетке",
+        placementLabel: "📦 Полки",
+        orders: 13,
+        snapshots: {
+          today: { position: 8, change: 0, bid: 180 },
+          yesterday: { position: 8, change: 0, bid: 180 },
+          dayBeforeYesterday: { position: 8, change: 0, bid: 178 }
+        },
+        positionsByDay: [9, 9, 8, 8, 8, 8, 8],
+        bidsByDay: [170, 172, 174, 176, 178, 180, 180]
+      }
+    ]
+  },
+  {
+    campaign: "Платья летние",
+    keywords: [
+      {
+        keyword: "платья летние",
+        placementLabel: "🔍 Поиск",
+        orders: 98,
+        snapshots: {
+          today: { position: 5, change: 1, bid: 210 },
+          yesterday: { position: 6, change: 0, bid: 208 },
+          dayBeforeYesterday: { position: 6, change: 1, bid: 205 }
+        },
+        positionsByDay: [7, 7, 6, 6, 6, 6, 5],
+        bidsByDay: [198, 200, 202, 205, 205, 208, 210]
+      },
+      {
+        keyword: "сарафан летний",
+        placementLabel: "🔍 Поиск",
+        orders: 41,
+        snapshots: {
+          today: { position: 14, change: 0, bid: 200 },
+          yesterday: { position: 14, change: -1, bid: 198 },
+          dayBeforeYesterday: { position: 13, change: 1, bid: 195 }
+        },
+        positionsByDay: [15, 15, 14, 14, 13, 14, 14],
+        bidsByDay: [190, 192, 194, 195, 195, 198, 200]
+      },
+      {
+        keyword: "платья на лето 2026",
+        placementLabel: "🔍 Поиск",
+        orders: 18,
+        snapshots: {
+          today: { position: 19, change: 0, bid: 190 },
+          yesterday: { position: 19, change: -1, bid: 188 },
+          dayBeforeYesterday: { position: 18, change: 0, bid: 185 }
+        },
+        positionsByDay: [20, 20, 19, 19, 18, 19, 19],
+        bidsByDay: [178, 180, 182, 184, 185, 188, 190]
+      },
+      {
+        keyword: "платье миди летнее",
+        placementLabel: "📦 Полки",
+        orders: 6,
+        snapshots: {
+          today: { position: 7, change: 1, bid: 170 },
+          yesterday: { position: 8, change: 0, bid: 168 },
+          dayBeforeYesterday: { position: 8, change: 1, bid: 165 }
+        },
+        positionsByDay: [9, 9, 8, 8, 8, 8, 7],
+        bidsByDay: [160, 162, 163, 164, 165, 168, 170]
+      },
+      {
+        keyword: "платье с цветами",
+        placementLabel: "📦 Полки",
+        orders: 2,
+        snapshots: {
+          today: { position: 11, change: -1, bid: 160 },
+          yesterday: { position: 10, change: 0, bid: 158 },
+          dayBeforeYesterday: { position: 10, change: 1, bid: 155 }
+        },
+        positionsByDay: [11, 11, 10, 10, 10, 10, 11],
+        bidsByDay: [150, 152, 153, 154, 155, 158, 160]
+      }
+    ]
+  },
+  {
+    campaign: "Джинсы slim fit",
+    keywords: [
+      {
+        keyword: "джинсы slim fit",
+        placementLabel: "🔍 Поиск",
+        orders: 12,
+        snapshots: {
+          today: { position: 22, change: -3, bid: 155 },
+          yesterday: { position: 19, change: 1, bid: 153 },
+          dayBeforeYesterday: { position: 20, change: -1, bid: 150 }
+        },
+        positionsByDay: [16, 17, 18, 19, 20, 19, 22],
+        bidsByDay: [145, 146, 148, 149, 150, 153, 155]
+      },
+      {
+        keyword: "джинсы мужские зауженные",
+        placementLabel: "🔍 Поиск",
+        orders: 9,
+        snapshots: {
+          today: { position: 28, change: -2, bid: 150 },
+          yesterday: { position: 26, change: 1, bid: 148 },
+          dayBeforeYesterday: { position: 27, change: -1, bid: 146 }
+        },
+        positionsByDay: [24, 25, 25, 26, 27, 26, 28],
+        bidsByDay: [140, 141, 143, 145, 146, 148, 150]
+      },
+      {
+        keyword: "джинсы скинни",
+        placementLabel: "🔍 Поиск",
+        orders: 6,
+        snapshots: {
+          today: { position: 31, change: -4, bid: 145 },
+          yesterday: { position: 27, change: 2, bid: 143 },
+          dayBeforeYesterday: { position: 29, change: -1, bid: 141 }
+        },
+        positionsByDay: [25, 26, 27, 28, 29, 27, 31],
+        bidsByDay: [135, 136, 138, 139, 141, 143, 145]
+      },
+      {
+        keyword: "джинсы зауженные черные",
+        placementLabel: "📦 Полки",
+        orders: 3,
+        snapshots: {
+          today: { position: 15, change: 0, bid: 135 },
+          yesterday: { position: 15, change: 0, bid: 133 },
+          dayBeforeYesterday: { position: 15, change: -1, bid: 132 }
+        },
+        positionsByDay: [16, 15, 15, 14, 15, 15, 15],
+        bidsByDay: [126, 128, 129, 131, 132, 133, 135]
+      },
+      {
+        keyword: "брюки slim fit",
+        placementLabel: "📦 Полки",
+        orders: 1,
+        snapshots: {
+          today: { position: 18, change: -1, bid: 120 },
+          yesterday: { position: 17, change: 1, bid: 119 },
+          dayBeforeYesterday: { position: 18, change: -1, bid: 118 }
+        },
+        positionsByDay: [16, 16, 17, 17, 18, 17, 18],
+        bidsByDay: [112, 114, 115, 116, 118, 119, 120]
+      }
+    ]
+  }
+];
+
+const WB_TOP_KEYWORDS: Record<string, WbTopKeywordRow[]> = {
+  "Кроссовки женские": [
+    { keyword: "кроссовки женские", impressions: 89_000, orders: 187, bid: 220, placement: "🔍 Поиск", position: "поз.3" },
+    { keyword: "кроссовки на платформе", impressions: 45_000, orders: 94, bid: 220, placement: "🔍 Поиск", position: "поз.12" },
+    { keyword: "белые кроссовки", impressions: 28_000, orders: 62, bid: 210, placement: "🔍 Поиск", position: "поз.7" },
+    { keyword: "кроссовки женские летние", impressions: 12_000, orders: 24, bid: 195, placement: "📦 Полки", position: "поз.5" },
+    { keyword: "кроссовки на танкетке", impressions: 6_000, orders: 13, bid: 180, placement: "📦 Полки", position: "поз.8" }
+  ],
+  "Платья летние": [
+    { keyword: "платья летние", impressions: 67_000, orders: 98, bid: 210, placement: "🔍 Поиск", position: "поз.5" },
+    { keyword: "сарафан летний", impressions: 34_000, orders: 41, bid: 200, placement: "🔍 Поиск", position: "поз.14" },
+    { keyword: "платья на лето 2026", impressions: 22_000, orders: 18, bid: 190, placement: "🔍 Поиск", position: "поз.19" },
+    { keyword: "платье миди летнее", impressions: 11_000, orders: 6, bid: 170, placement: "📦 Полки", position: "поз.7" },
+    { keyword: "платье с цветами", impressions: 6_000, orders: 2, bid: 160, placement: "📦 Полки", position: "поз.11" }
+  ],
+  "Джинсы slim fit": [
+    { keyword: "джинсы slim fit", impressions: 48_000, orders: 12, bid: 155, placement: "🔍 Поиск", position: "поз.22" },
+    { keyword: "джинсы мужские зауженные", impressions: 31_000, orders: 9, bid: 150, placement: "🔍 Поиск", position: "поз.28" },
+    { keyword: "джинсы скинни", impressions: 19_000, orders: 6, bid: 145, placement: "🔍 Поиск", position: "поз.31" },
+    { keyword: "джинсы зауженные черные", impressions: 8_000, orders: 3, bid: 135, placement: "📦 Полки", position: "поз.15" },
+    { keyword: "брюки slim fit", impressions: 4_000, orders: 1, bid: 120, placement: "📦 Полки", position: "поз.18" }
   ]
 };
 
@@ -520,13 +743,48 @@ const WB_PLACEMENT_DATA: WbPlacementRow[] = [
       drrBadge: "🟡"
     },
     history: [
-      { date: "24.02", searchImpressions: 25_000, shelvesImpressions: 9_000, searchOrders: 54, shelvesOrders: 8, searchBid: 215, shelvesBid: 175 },
-      { date: "25.02", searchImpressions: 26_000, shelvesImpressions: 9_200, searchOrders: 57, shelvesOrders: 9, searchBid: 218, shelvesBid: 175 },
-      { date: "26.02", searchImpressions: 25_500, shelvesImpressions: 8_800, searchOrders: 55, shelvesOrders: 8, searchBid: 218, shelvesBid: 178 },
-      { date: "27.02", searchImpressions: 27_000, shelvesImpressions: 9_500, searchOrders: 60, shelvesOrders: 10, searchBid: 220, shelvesBid: 180 },
-      { date: "28.02", searchImpressions: 26_500, shelvesImpressions: 9_100, searchOrders: 58, shelvesOrders: 9, searchBid: 220, shelvesBid: 180 },
-      { date: "01.03", searchImpressions: 25_800, shelvesImpressions: 9_300, searchOrders: 56, shelvesOrders: 9, searchBid: 220, shelvesBid: 180 },
-      { date: "02.03", searchImpressions: 24_200, shelvesImpressions: 8_100, searchOrders: 40, shelvesOrders: 8, searchBid: 220, shelvesBid: 180 }
+      {
+        date: "24.02",
+        isoDate: "2026-02-24",
+        search: { bid: 215, impressions: 25_000, clicks: 1_000, ctr: 4.0, ctrBadge: "🟢", adOrders: 54, adSales: 46, drr: 7.4, drrBadge: "🟢" },
+        shelves: { bid: 175, impressions: 9_000, clicks: 225, ctr: 2.5, ctrBadge: "🟡", adOrders: 8, adSales: 7, drr: 15.2, drrBadge: "🟡" }
+      },
+      {
+        date: "25.02",
+        isoDate: "2026-02-25",
+        search: { bid: 218, impressions: 26_000, clicks: 1_040, ctr: 4.0, ctrBadge: "🟢", adOrders: 57, adSales: 48, drr: 7.2, drrBadge: "🟢" },
+        shelves: { bid: 175, impressions: 9_200, clicks: 230, ctr: 2.5, ctrBadge: "🟡", adOrders: 9, adSales: 8, drr: 14.9, drrBadge: "🟡" }
+      },
+      {
+        date: "26.02",
+        isoDate: "2026-02-26",
+        search: { bid: 218, impressions: 25_500, clicks: 1_010, ctr: 4.0, ctrBadge: "🟢", adOrders: 55, adSales: 47, drr: 7.3, drrBadge: "🟢" },
+        shelves: { bid: 178, impressions: 8_800, clicks: 220, ctr: 2.5, ctrBadge: "🟡", adOrders: 8, adSales: 7, drr: 15.1, drrBadge: "🟡" }
+      },
+      {
+        date: "27.02",
+        isoDate: "2026-02-27",
+        search: { bid: 220, impressions: 27_000, clicks: 1_080, ctr: 4.0, ctrBadge: "🟢", adOrders: 60, adSales: 51, drr: 7.0, drrBadge: "🟢" },
+        shelves: { bid: 180, impressions: 9_500, clicks: 238, ctr: 2.5, ctrBadge: "🟡", adOrders: 10, adSales: 8, drr: 14.8, drrBadge: "🟡" }
+      },
+      {
+        date: "28.02",
+        isoDate: "2026-02-28",
+        search: { bid: 220, impressions: 26_500, clicks: 1_060, ctr: 4.0, ctrBadge: "🟢", adOrders: 58, adSales: 49, drr: 7.1, drrBadge: "🟢" },
+        shelves: { bid: 180, impressions: 9_100, clicks: 228, ctr: 2.5, ctrBadge: "🟡", adOrders: 9, adSales: 8, drr: 14.9, drrBadge: "🟡" }
+      },
+      {
+        date: "01.03",
+        isoDate: "2026-03-01",
+        search: { bid: 220, impressions: 25_800, clicks: 1_030, ctr: 4.0, ctrBadge: "🟢", adOrders: 56, adSales: 47, drr: 7.1, drrBadge: "🟢" },
+        shelves: { bid: 180, impressions: 9_300, clicks: 233, ctr: 2.5, ctrBadge: "🟡", adOrders: 9, adSales: 8, drr: 14.8, drrBadge: "🟡" }
+      },
+      {
+        date: "02.03",
+        isoDate: "2026-03-02",
+        search: { bid: 220, impressions: 24_200, clicks: 968, ctr: 4.0, ctrBadge: "🟢", adOrders: 40, adSales: 34, drr: 7.5, drrBadge: "🟢" },
+        shelves: { bid: 180, impressions: 8_100, clicks: 203, ctr: 2.5, ctrBadge: "🟡", adOrders: 8, adSales: 6, drr: 15.4, drrBadge: "🟡" }
+      }
     ],
     conclusion:
       "💡 Поиск эффективнее Полок: ДРР 7.1% vs 14.8%. Рекомендуем увеличить ставку поиска и снизить бюджет полок."
@@ -554,7 +812,52 @@ const WB_PLACEMENT_DATA: WbPlacementRow[] = [
       adSales: 26,
       drr: 21.1,
       drrBadge: "🔴"
-    }
+    },
+    history: [
+      {
+        date: "24.02",
+        isoDate: "2026-02-24",
+        search: { bid: 200, impressions: 20_000, clicks: 600, ctr: 3.0, ctrBadge: "🟡", adOrders: 22, adSales: 18, drr: 16.2, drrBadge: "🟡" },
+        shelves: { bid: 160, impressions: 7_000, clicks: 210, ctr: 3.0, ctrBadge: "🟡", adOrders: 4, adSales: 3, drr: 22.4, drrBadge: "🔴" }
+      },
+      {
+        date: "25.02",
+        isoDate: "2026-02-25",
+        search: { bid: 202, impressions: 20_500, clicks: 615, ctr: 3.0, ctrBadge: "🟡", adOrders: 24, adSales: 19, drr: 16.0, drrBadge: "🟡" },
+        shelves: { bid: 162, impressions: 7_100, clicks: 213, ctr: 3.0, ctrBadge: "🟡", adOrders: 4, adSales: 3, drr: 22.1, drrBadge: "🔴" }
+      },
+      {
+        date: "26.02",
+        isoDate: "2026-02-26",
+        search: { bid: 205, impressions: 21_200, clicks: 636, ctr: 3.0, ctrBadge: "🟡", adOrders: 25, adSales: 20, drr: 15.9, drrBadge: "🟡" },
+        shelves: { bid: 164, impressions: 7_200, clicks: 216, ctr: 3.0, ctrBadge: "🟡", adOrders: 5, adSales: 4, drr: 21.8, drrBadge: "🔴" }
+      },
+      {
+        date: "27.02",
+        isoDate: "2026-02-27",
+        search: { bid: 208, impressions: 21_500, clicks: 645, ctr: 3.0, ctrBadge: "🟡", adOrders: 26, adSales: 21, drr: 15.8, drrBadge: "🟡" },
+        shelves: { bid: 166, impressions: 7_300, clicks: 219, ctr: 3.0, ctrBadge: "🟡", adOrders: 5, adSales: 4, drr: 21.5, drrBadge: "🔴" }
+      },
+      {
+        date: "28.02",
+        isoDate: "2026-02-28",
+        search: { bid: 210, impressions: 21_000, clicks: 630, ctr: 3.0, ctrBadge: "🟡", adOrders: 24, adSales: 19, drr: 15.8, drrBadge: "🟡" },
+        shelves: { bid: 168, impressions: 7_150, clicks: 215, ctr: 3.0, ctrBadge: "🟡", adOrders: 5, adSales: 4, drr: 21.1, drrBadge: "🔴" }
+      },
+      {
+        date: "01.03",
+        isoDate: "2026-03-01",
+        search: { bid: 210, impressions: 20_600, clicks: 618, ctr: 3.0, ctrBadge: "🟡", adOrders: 22, adSales: 18, drr: 16.1, drrBadge: "🟡" },
+        shelves: { bid: 170, impressions: 7_050, clicks: 212, ctr: 3.0, ctrBadge: "🟡", adOrders: 5, adSales: 4, drr: 21.3, drrBadge: "🔴" }
+      },
+      {
+        date: "02.03",
+        isoDate: "2026-03-02",
+        search: { bid: 210, impressions: 19_800, clicks: 594, ctr: 3.0, ctrBadge: "🟡", adOrders: 22, adSales: 17, drr: 16.4, drrBadge: "🟡" },
+        shelves: { bid: 170, impressions: 7_000, clicks: 210, ctr: 3.0, ctrBadge: "🟡", adOrders: 5, adSales: 4, drr: 21.6, drrBadge: "🔴" }
+      }
+    ],
+    conclusion: "💡 Поиск держится в норме, Полки тянут ДРР вверх. Контролируйте ставки в Полках."
   },
   {
     campaign: "Джинсы slim fit",
@@ -579,7 +882,52 @@ const WB_PLACEMENT_DATA: WbPlacementRow[] = [
       adSales: 6,
       drr: 50.0,
       drrBadge: "🔴"
-    }
+    },
+    history: [
+      {
+        date: "24.02",
+        isoDate: "2026-02-24",
+        search: { bid: 145, impressions: 16_000, clicks: 160, ctr: 1.0, ctrBadge: "🔴", adOrders: 5, adSales: 3, drr: 28.5, drrBadge: "🔴" },
+        shelves: { bid: 112, impressions: 6_800, clicks: 68, ctr: 1.0, ctrBadge: "🔴", adOrders: 2, adSales: 1, drr: 43.0, drrBadge: "🔴" }
+      },
+      {
+        date: "25.02",
+        isoDate: "2026-02-25",
+        search: { bid: 146, impressions: 16_200, clicks: 162, ctr: 1.0, ctrBadge: "🔴", adOrders: 4, adSales: 3, drr: 29.6, drrBadge: "🔴" },
+        shelves: { bid: 114, impressions: 6_850, clicks: 69, ctr: 1.0, ctrBadge: "🔴", adOrders: 1, adSales: 1, drr: 44.5, drrBadge: "🔴" }
+      },
+      {
+        date: "26.02",
+        isoDate: "2026-02-26",
+        search: { bid: 148, impressions: 16_400, clicks: 164, ctr: 1.0, ctrBadge: "🔴", adOrders: 3, adSales: 2, drr: 30.8, drrBadge: "🔴" },
+        shelves: { bid: 115, impressions: 6_900, clicks: 69, ctr: 1.0, ctrBadge: "🔴", adOrders: 1, adSales: 1, drr: 45.3, drrBadge: "🔴" }
+      },
+      {
+        date: "27.02",
+        isoDate: "2026-02-27",
+        search: { bid: 149, impressions: 16_700, clicks: 167, ctr: 1.0, ctrBadge: "🔴", adOrders: 3, adSales: 2, drr: 31.4, drrBadge: "🔴" },
+        shelves: { bid: 116, impressions: 6_950, clicks: 70, ctr: 1.0, ctrBadge: "🔴", adOrders: 1, adSales: 1, drr: 46.2, drrBadge: "🔴" }
+      },
+      {
+        date: "28.02",
+        isoDate: "2026-02-28",
+        search: { bid: 150, impressions: 16_900, clicks: 169, ctr: 1.0, ctrBadge: "🔴", adOrders: 3, adSales: 2, drr: 31.8, drrBadge: "🔴" },
+        shelves: { bid: 118, impressions: 7_000, clicks: 70, ctr: 1.0, ctrBadge: "🔴", adOrders: 1, adSales: 1, drr: 47.0, drrBadge: "🔴" }
+      },
+      {
+        date: "01.03",
+        isoDate: "2026-03-01",
+        search: { bid: 153, impressions: 17_100, clicks: 171, ctr: 1.0, ctrBadge: "🔴", adOrders: 2, adSales: 1, drr: 32.0, drrBadge: "🔴" },
+        shelves: { bid: 119, impressions: 7_050, clicks: 71, ctr: 1.0, ctrBadge: "🔴", adOrders: 1, adSales: 1, drr: 48.2, drrBadge: "🔴" }
+      },
+      {
+        date: "02.03",
+        isoDate: "2026-03-02",
+        search: { bid: 155, impressions: 17_300, clicks: 173, ctr: 1.0, ctrBadge: "🔴", adOrders: 2, adSales: 1, drr: 32.1, drrBadge: "🔴" },
+        shelves: { bid: 120, impressions: 7_100, clicks: 71, ctr: 1.0, ctrBadge: "🔴", adOrders: 1, adSales: 1, drr: 50.0, drrBadge: "🔴" }
+      }
+    ],
+    conclusion: "💡 Полки убыточны: ДРР 50%. Рекомендуем отключить Полки и перераспределить бюджет в Поиск."
   }
 ];
 
@@ -589,6 +937,15 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const queryClient = useQueryClient();
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>("overview");
   const [positionPeriod, setPositionPeriod] = useState<PositionPeriod>("today");
+  const [selectedWbCampaign, setSelectedWbCampaign] = useState<string>(WB_PLACEMENT_DATA[0]?.campaign || "");
+  const [wbPlacementPeriod, setWbPlacementPeriod] = useState<WbPlacementPeriod>("today");
+  const [placementCustomDate, setPlacementCustomDate] = useState<string>(() => {
+    const firstCampaign = WB_PLACEMENT_DATA[0];
+    if (!firstCampaign || !firstCampaign.history.length) {
+      return "2026-03-02";
+    }
+    return firstCampaign.history[firstCampaign.history.length - 1].isoDate;
+  });
   const [expandFunnelRequest, setExpandFunnelRequest] = useState<{ campaignId: number; requestId: number } | null>(null);
   const [highlightedCampaignId, setHighlightedCampaignId] = useState<number | null>(null);
   const [minusRows, setMinusRows] = useState<Record<MarketplaceId, MinusKeywordRow[]>>(() => ({
@@ -689,6 +1046,12 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
   const articleRows = [...marketplaceCampaigns].sort((left, right) => right.drr - left.drr);
   const positionRows = POSITION_DEMO_DATA[marketplace];
   const periodIndexes = resolvePositionPeriodIndexes(positionPeriod);
+  const wbCampaignNames = WB_PLACEMENT_DATA.map((row) => row.campaign);
+  const selectedWbPlacement = WB_PLACEMENT_DATA.find((row) => row.campaign === selectedWbCampaign) || WB_PLACEMENT_DATA[0];
+  const selectedWbPositionCampaign = WB_POSITION_DATA.find((row) => row.campaign === selectedWbCampaign) || WB_POSITION_DATA[0];
+  const selectedWbPositionRows = selectedWbPositionCampaign?.keywords || [];
+  const selectedWbTopKeywords = WB_TOP_KEYWORDS[selectedWbCampaign] || [];
+  const selectedWbPlacementSnapshot = resolvePlacementSnapshot(selectedWbPlacement, wbPlacementPeriod, placementCustomDate);
   const currentMinusRows = minusRows[marketplace];
   const totalMinusRows = minusRows.wb.length + minusRows.ozon.length;
   const totalMinusSpend = [...minusRows.wb, ...minusRows.ozon].reduce((sum, row) => sum + row.spend, 0);
@@ -857,9 +1220,27 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
       {dashboardTab === "positions" ? (
         <section className="app-card p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-slate-100">📍 Позиции по ключевым запросам</h2>
+            <h2 className="text-sm font-bold text-slate-100">
+              {marketplace === "wb" ? "📍 Позиции по ключам (WB)" : "📍 Позиции по ключевым запросам"}
+            </h2>
             <span className={`text-xs font-semibold ${accentClass}`}>{data.badge}</span>
           </div>
+
+          {marketplace === "wb" && (
+            <div className="mb-3">
+              <select
+                value={selectedWbCampaign}
+                onChange={(event) => setSelectedWbCampaign(event.target.value)}
+                className="w-full rounded-md border border-slate-400/30 bg-slate-700/10 px-3 py-2 text-sm text-slate-100"
+              >
+                {wbCampaignNames.map((campaignName) => (
+                  <option key={campaignName} value={campaignName} className="bg-slate-900 text-slate-100">
+                    {campaignName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="mb-3 flex flex-wrap gap-2">
             <PeriodButton label="Сегодня" active={positionPeriod === "today"} onClick={() => setPositionPeriod("today")} />
@@ -873,68 +1254,139 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
           </div>
 
           <div className="overflow-x-auto">
-            <table className={positionPeriod === "week" ? "min-w-[1080px] text-xs" : "min-w-[680px] text-xs"}>
-              <thead className="bg-slate-500/10 text-slate-300">
-                {positionPeriod === "week" ? (
-                  <tr>
-                    <th className="px-2 py-2 text-left">Ключевое слово</th>
-                    {POSITION_WEEK_DATES.map((dateLabel) => (
-                      <th key={dateLabel} className="px-2 py-2 text-right">
-                        {dateLabel}
-                      </th>
-                    ))}
-                    <th className="px-2 py-2 text-left">Мини-тренд</th>
-                    <th className="px-2 py-2 text-right">Ставка</th>
-                  </tr>
-                ) : (
-                  <tr>
-                    <th className="px-2 py-2 text-left">Ключевое слово</th>
-                    <th className="px-2 py-2 text-right">{positionColumnLabel(positionPeriod)}</th>
-                    <th className="px-2 py-2 text-right">Изменение</th>
-                    <th className="px-2 py-2 text-right">Ставка</th>
-                  </tr>
-                )}
-              </thead>
-              <tbody>
-                {positionRows.map((row) => {
-                  const current = row.positionsByDay[periodIndexes.currentIndex];
-                  const previous = periodIndexes.previousIndex === null ? undefined : row.positionsByDay[periodIndexes.previousIndex];
-                  return (
-                    <tr key={row.keyword} className="border-t border-slate-500/20">
-                      <td className="px-2 py-2 text-slate-100">{row.keyword}</td>
-                      {positionPeriod === "week" ? (
-                        <>
-                          {row.positionsByDay.map((value, index) => (
-                            <td key={`${row.keyword}-${POSITION_WEEK_DATES[index]}`} className="px-2 py-2 text-right text-slate-200">
-                              {value}
-                            </td>
-                          ))}
-                          <td className="px-2 py-2">
-                            <PositionSparkline values={row.positionsByDay} />
-                          </td>
-                          <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(row.bid)}</td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="px-2 py-2 text-right text-slate-200">{current}</td>
-                          <td className="px-2 py-2 text-right">
-                            <PositionChangeIndicator current={current} previous={previous} />
-                          </td>
-                          <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(row.bid)}</td>
-                        </>
-                      )}
+            {marketplace === "wb" ? (
+              <table className={positionPeriod === "week" ? "min-w-[1180px] text-xs" : "min-w-[860px] text-xs"}>
+                <thead className="bg-slate-500/10 text-slate-300">
+                  {positionPeriod === "week" ? (
+                    <tr>
+                      <th className="px-2 py-2 text-left">Ключ</th>
+                      {POSITION_WEEK_DATES.map((dateLabel) => (
+                        <th key={dateLabel} className="px-2 py-2 text-center">
+                          {dateLabel}
+                        </th>
+                      ))}
+                      <th className="px-2 py-2 text-left">Размещение</th>
+                      <th className="px-2 py-2 text-right">Заказы</th>
                     </tr>
-                  );
-                })}
-                {!positionRows.length && (
-                  <tr>
-                    <td colSpan={positionPeriod === "week" ? 10 : 4} className="px-2 py-8 text-center text-slate-400">
-                      Нет данных по выбранному периоду
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    <tr>
+                      <th className="px-2 py-2 text-left">Ключ</th>
+                      <th className="px-2 py-2 text-right">Позиция</th>
+                      <th className="px-2 py-2 text-right">Изменение</th>
+                      <th className="px-2 py-2 text-right">Ставка</th>
+                      <th className="px-2 py-2 text-left">Размещение</th>
+                      <th className="px-2 py-2 text-right">Заказы</th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody>
+                  {selectedWbPositionRows.map((row) => {
+                    const snapshot = resolveWbPositionSnapshot(row, positionPeriod);
+                    return (
+                      <tr key={`${selectedWbCampaign}-${row.keyword}`} className="border-t border-slate-500/20">
+                        <td className="px-2 py-2 text-slate-100">{row.keyword}</td>
+                        {positionPeriod === "week" ? (
+                          <>
+                            {row.positionsByDay.map((value, index) => (
+                              <td key={`${row.keyword}-${POSITION_WEEK_DATES[index]}`} className="px-2 py-2 text-center text-slate-200">
+                                <div className="font-semibold">{value}</div>
+                                <div className="text-[10px] text-slate-400">{formatCurrency(row.bidsByDay[index])}</div>
+                              </td>
+                            ))}
+                            <td className="px-2 py-2 text-slate-200">{row.placementLabel}</td>
+                            <td className="px-2 py-2 text-right text-slate-200">
+                              {formatInteger(row.orders)} {orderWord(row.orders)}
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-2 py-2 text-right text-slate-200">{snapshot.position}</td>
+                            <td className="px-2 py-2 text-right">
+                              <PositionDeltaIndicator delta={snapshot.change} />
+                            </td>
+                            <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(snapshot.bid)}</td>
+                            <td className="px-2 py-2 text-slate-200">{row.placementLabel}</td>
+                            <td className="px-2 py-2 text-right text-slate-200">
+                              {formatInteger(row.orders)} заказов
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {!selectedWbPositionRows.length && (
+                    <tr>
+                      <td colSpan={positionPeriod === "week" ? 10 : 6} className="px-2 py-8 text-center text-slate-400">
+                        Нет данных по выбранной кампании
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : (
+              <table className={positionPeriod === "week" ? "min-w-[1080px] text-xs" : "min-w-[680px] text-xs"}>
+                <thead className="bg-slate-500/10 text-slate-300">
+                  {positionPeriod === "week" ? (
+                    <tr>
+                      <th className="px-2 py-2 text-left">Ключевое слово</th>
+                      {POSITION_WEEK_DATES.map((dateLabel) => (
+                        <th key={dateLabel} className="px-2 py-2 text-right">
+                          {dateLabel}
+                        </th>
+                      ))}
+                      <th className="px-2 py-2 text-left">Мини-тренд</th>
+                      <th className="px-2 py-2 text-right">Ставка</th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th className="px-2 py-2 text-left">Ключевое слово</th>
+                      <th className="px-2 py-2 text-right">{positionColumnLabel(positionPeriod)}</th>
+                      <th className="px-2 py-2 text-right">Изменение</th>
+                      <th className="px-2 py-2 text-right">Ставка</th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody>
+                  {positionRows.map((row) => {
+                    const current = row.positionsByDay[periodIndexes.currentIndex];
+                    const previous = periodIndexes.previousIndex === null ? undefined : row.positionsByDay[periodIndexes.previousIndex];
+                    return (
+                      <tr key={row.keyword} className="border-t border-slate-500/20">
+                        <td className="px-2 py-2 text-slate-100">{row.keyword}</td>
+                        {positionPeriod === "week" ? (
+                          <>
+                            {row.positionsByDay.map((value, index) => (
+                              <td key={`${row.keyword}-${POSITION_WEEK_DATES[index]}`} className="px-2 py-2 text-right text-slate-200">
+                                {value}
+                              </td>
+                            ))}
+                            <td className="px-2 py-2">
+                              <PositionSparkline values={row.positionsByDay} />
+                            </td>
+                            <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(row.bid)}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-2 py-2 text-right text-slate-200">{current}</td>
+                            <td className="px-2 py-2 text-right">
+                              <PositionChangeIndicator current={current} previous={previous} />
+                            </td>
+                            <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(row.bid)}</td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {!positionRows.length && (
+                    <tr>
+                      <td colSpan={positionPeriod === "week" ? 10 : 4} className="px-2 py-8 text-center text-slate-400">
+                        Нет данных по выбранному периоду
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
       ) : (
@@ -1283,150 +1735,222 @@ export function DashboardPage({ marketplace }: { marketplace: MarketplaceId }) {
 
           {marketplace === "wb" && (
             <section className="app-card p-4">
-              <h2 className="mb-3 text-sm font-bold text-slate-100">📍 Размещение рекламы</h2>
-              <div className="space-y-4">
-                {WB_PLACEMENT_DATA.map((placement) => (
-                  <div key={placement.campaign} className="rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
-                    <div className="text-sm font-semibold text-slate-100">{placement.campaign}</div>
-                    <div className="mt-2 overflow-x-auto">
-                      <table className="min-w-[760px] text-xs">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold text-slate-100">📍 Размещение рекламы</h2>
+                <span className={`text-xs font-semibold ${accentClass}`}>{data.badge}</span>
+              </div>
+
+              <div className="mb-3">
+                <select
+                  value={selectedWbCampaign}
+                  onChange={(event) => setSelectedWbCampaign(event.target.value)}
+                  className="w-full rounded-md border border-slate-400/30 bg-slate-700/10 px-3 py-2 text-sm text-slate-100"
+                >
+                  {wbCampaignNames.map((campaignName) => (
+                    <option key={`placement-${campaignName}`} value={campaignName} className="bg-slate-900 text-slate-100">
+                      {campaignName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mb-3 flex flex-wrap gap-2">
+                <PeriodButton label="Сегодня" active={wbPlacementPeriod === "today"} onClick={() => setWbPlacementPeriod("today")} />
+                <PeriodButton label="Вчера" active={wbPlacementPeriod === "yesterday"} onClick={() => setWbPlacementPeriod("yesterday")} />
+                <PeriodButton label="7 дней" active={wbPlacementPeriod === "week"} onClick={() => setWbPlacementPeriod("week")} />
+                <PeriodButton label="Выбрать дату" active={wbPlacementPeriod === "custom"} onClick={() => setWbPlacementPeriod("custom")} />
+              </div>
+
+              {wbPlacementPeriod === "custom" && (
+                <div className="mb-3">
+                  <input
+                    type="date"
+                    value={placementCustomDate}
+                    min={selectedWbPlacement.history[0]?.isoDate}
+                    max={selectedWbPlacement.history[selectedWbPlacement.history.length - 1]?.isoDate}
+                    onChange={(event) => setPlacementCustomDate(event.target.value)}
+                    className="w-full rounded-md border border-slate-400/30 bg-slate-700/10 px-3 py-2 text-sm text-slate-100"
+                  />
+                </div>
+              )}
+
+              <div className="rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
+                <div className="text-sm font-semibold text-slate-100">{selectedWbPlacement.campaign}</div>
+                <div className="mb-2 mt-1 text-[11px] text-slate-400">{selectedWbPlacementSnapshot.label}</div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[760px] text-xs">
+                    <thead className="text-slate-300">
+                      <tr className="border-b border-slate-500/30">
+                        <th className="px-2 py-2 text-left"></th>
+                        <th className="px-2 py-2 text-right">🔍 Поиск</th>
+                        <th className="px-2 py-2 text-right">📦 Полки</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <PlacementMetricRow
+                        label="Ставка"
+                        searchValue={formatCurrency(selectedWbPlacementSnapshot.search.bid)}
+                        shelvesValue={formatCurrency(selectedWbPlacementSnapshot.shelves.bid)}
+                      />
+                      <PlacementMetricRow
+                        label="Показы"
+                        searchValue={formatInteger(selectedWbPlacementSnapshot.search.impressions)}
+                        shelvesValue={formatInteger(selectedWbPlacementSnapshot.shelves.impressions)}
+                      />
+                      <PlacementMetricRow
+                        label="Клики"
+                        searchValue={formatInteger(selectedWbPlacementSnapshot.search.clicks)}
+                        shelvesValue={formatInteger(selectedWbPlacementSnapshot.shelves.clicks)}
+                      />
+                      <PlacementMetricRow
+                        label="CTR"
+                        searchValue={`${formatPercent(selectedWbPlacementSnapshot.search.ctr, 1)} ${selectedWbPlacementSnapshot.search.ctrBadge}`}
+                        shelvesValue={`${formatPercent(selectedWbPlacementSnapshot.shelves.ctr, 1)} ${selectedWbPlacementSnapshot.shelves.ctrBadge}`}
+                        searchClass={placementToneClass(selectedWbPlacementSnapshot.search.ctrBadge)}
+                        shelvesClass={placementToneClass(selectedWbPlacementSnapshot.shelves.ctrBadge)}
+                      />
+                      <PlacementMetricRow
+                        label="Заказы с рекламы"
+                        searchValue={formatInteger(selectedWbPlacementSnapshot.search.adOrders)}
+                        shelvesValue={formatInteger(selectedWbPlacementSnapshot.shelves.adOrders)}
+                      />
+                      <PlacementMetricRow
+                        label="Продажи с рекламы"
+                        searchValue={formatInteger(selectedWbPlacementSnapshot.search.adSales)}
+                        shelvesValue={formatInteger(selectedWbPlacementSnapshot.shelves.adSales)}
+                      />
+                      <PlacementMetricRow
+                        label="ДРР"
+                        searchValue={`${formatPercent(selectedWbPlacementSnapshot.search.drr, 1)} ${selectedWbPlacementSnapshot.search.drrBadge}`}
+                        shelvesValue={`${formatPercent(selectedWbPlacementSnapshot.shelves.drr, 1)} ${selectedWbPlacementSnapshot.shelves.drrBadge}`}
+                        searchClass={placementToneClass(selectedWbPlacementSnapshot.search.drrBadge)}
+                        shelvesClass={placementToneClass(selectedWbPlacementSnapshot.shelves.drrBadge)}
+                      />
+                    </tbody>
+                  </table>
+                </div>
+
+                {wbPlacementPeriod === "week" && (
+                  <div className="mt-3">
+                    <div className="mb-2 flex flex-wrap gap-2 text-xs">
+                      <button
+                        onClick={() => setPlacementHistoryMode("impressions")}
+                        className={`rounded-md border px-2 py-1 ${
+                          placementHistoryMode === "impressions"
+                            ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
+                            : "border-slate-400/30 text-slate-300"
+                        }`}
+                      >
+                        📊 Показы
+                      </button>
+                      <button
+                        onClick={() => setPlacementHistoryMode("orders")}
+                        className={`rounded-md border px-2 py-1 ${
+                          placementHistoryMode === "orders"
+                            ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
+                            : "border-slate-400/30 text-slate-300"
+                        }`}
+                      >
+                        📦 Заказы
+                      </button>
+                      <button
+                        onClick={() => setPlacementHistoryMode("bids")}
+                        className={`rounded-md border px-2 py-1 ${
+                          placementHistoryMode === "bids"
+                            ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
+                            : "border-slate-400/30 text-slate-300"
+                        }`}
+                      >
+                        💰 Ставки
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="min-w-[620px] text-xs">
                         <thead className="text-slate-300">
                           <tr className="border-b border-slate-500/30">
-                            <th className="px-2 py-2 text-left"></th>
-                            <th className="px-2 py-2 text-right">🔍 Поиск</th>
-                            <th className="px-2 py-2 text-right">📦 Полки</th>
+                            <th className="px-2 py-2 text-left">Дата</th>
+                            {placementHistoryMode === "impressions" && (
+                              <>
+                                <th className="px-2 py-2 text-right">Поиск (показы)</th>
+                                <th className="px-2 py-2 text-right">Полки (показы)</th>
+                              </>
+                            )}
+                            {placementHistoryMode === "orders" && (
+                              <>
+                                <th className="px-2 py-2 text-right">Поиск (заказы)</th>
+                                <th className="px-2 py-2 text-right">Полки (заказы)</th>
+                              </>
+                            )}
+                            {placementHistoryMode === "bids" && (
+                              <>
+                                <th className="px-2 py-2 text-right">Поиск (ставка)</th>
+                                <th className="px-2 py-2 text-right">Полки (ставка)</th>
+                              </>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
-                          <PlacementMetricRow label="Ставка" searchValue={formatCurrency(placement.search.bid)} shelvesValue={formatCurrency(placement.shelves.bid)} />
-                          <PlacementMetricRow
-                            label="Показы"
-                            searchValue={formatInteger(placement.search.impressions)}
-                            shelvesValue={formatInteger(placement.shelves.impressions)}
-                          />
-                          <PlacementMetricRow
-                            label="Клики"
-                            searchValue={formatInteger(placement.search.clicks)}
-                            shelvesValue={formatInteger(placement.shelves.clicks)}
-                          />
-                          <PlacementMetricRow
-                            label="CTR"
-                            searchValue={`${formatPercent(placement.search.ctr, 1)} ${placement.search.ctrBadge}`}
-                            shelvesValue={`${formatPercent(placement.shelves.ctr, 1)} ${placement.shelves.ctrBadge}`}
-                            searchClass={placementToneClass(placement.search.ctrBadge)}
-                            shelvesClass={placementToneClass(placement.shelves.ctrBadge)}
-                          />
-                          <PlacementMetricRow
-                            label="Заказы с рекламы"
-                            searchValue={formatInteger(placement.search.adOrders)}
-                            shelvesValue={formatInteger(placement.shelves.adOrders)}
-                          />
-                          <PlacementMetricRow
-                            label="Продажи с рекламы"
-                            searchValue={formatInteger(placement.search.adSales)}
-                            shelvesValue={formatInteger(placement.shelves.adSales)}
-                          />
-                          <PlacementMetricRow
-                            label="ДРР"
-                            searchValue={`${formatPercent(placement.search.drr, 1)} ${placement.search.drrBadge}`}
-                            shelvesValue={`${formatPercent(placement.shelves.drr, 1)} ${placement.shelves.drrBadge}`}
-                            searchClass={placementToneClass(placement.search.drrBadge)}
-                            shelvesClass={placementToneClass(placement.shelves.drrBadge)}
-                          />
+                          {selectedWbPlacement.history.map((point) => (
+                            <tr key={`${selectedWbCampaign}-${point.date}-${placementHistoryMode}`} className="border-b border-slate-500/20">
+                              <td className="px-2 py-2 text-slate-100">{point.date}</td>
+                              {placementHistoryMode === "impressions" && (
+                                <>
+                                  <td className="px-2 py-2 text-right text-slate-200">{formatInteger(point.search.impressions)}</td>
+                                  <td className="px-2 py-2 text-right text-slate-200">{formatInteger(point.shelves.impressions)}</td>
+                                </>
+                              )}
+                              {placementHistoryMode === "orders" && (
+                                <>
+                                  <td className="px-2 py-2 text-right text-slate-200">{formatInteger(point.search.adOrders)}</td>
+                                  <td className="px-2 py-2 text-right text-slate-200">{formatInteger(point.shelves.adOrders)}</td>
+                                </>
+                              )}
+                              {placementHistoryMode === "bids" && (
+                                <>
+                                  <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(point.search.bid)}</td>
+                                  <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(point.shelves.bid)}</td>
+                                </>
+                              )}
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
-
-                    {placement.history && (
-                      <div className="mt-3">
-                        <div className="mb-2 flex flex-wrap gap-2 text-xs">
-                          <button
-                            onClick={() => setPlacementHistoryMode("impressions")}
-                            className={`rounded-md border px-2 py-1 ${
-                              placementHistoryMode === "impressions"
-                                ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
-                                : "border-slate-400/30 text-slate-300"
-                            }`}
-                          >
-                            Показы
-                          </button>
-                          <button
-                            onClick={() => setPlacementHistoryMode("orders")}
-                            className={`rounded-md border px-2 py-1 ${
-                              placementHistoryMode === "orders"
-                                ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
-                                : "border-slate-400/30 text-slate-300"
-                            }`}
-                          >
-                            Заказы
-                          </button>
-                          <button
-                            onClick={() => setPlacementHistoryMode("bids")}
-                            className={`rounded-md border px-2 py-1 ${
-                              placementHistoryMode === "bids"
-                                ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
-                                : "border-slate-400/30 text-slate-300"
-                            }`}
-                          >
-                            Ставки
-                          </button>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                          {placementHistoryMode === "bids" ? (
-                            <table className="min-w-[560px] text-xs">
-                              <thead className="text-slate-300">
-                                <tr className="border-b border-slate-500/30">
-                                  <th className="px-2 py-2 text-left">Дата</th>
-                                  <th className="px-2 py-2 text-right">Поиск ставка</th>
-                                  <th className="px-2 py-2 text-right">Полки ставка</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {placement.history.map((point) => (
-                                  <tr key={`${placement.campaign}-${point.date}-bids`} className="border-b border-slate-500/20">
-                                    <td className="px-2 py-2 text-slate-100">{point.date}</td>
-                                    <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(point.searchBid)}</td>
-                                    <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(point.shelvesBid)}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <table className="min-w-[720px] text-xs">
-                              <thead className="text-slate-300">
-                                <tr className="border-b border-slate-500/30">
-                                  <th className="px-2 py-2 text-left">Дата</th>
-                                  <th className="px-2 py-2 text-left">Поиск</th>
-                                  <th className="px-2 py-2 text-left">Полки</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {placement.history.map((point) => (
-                                  <tr key={`${placement.campaign}-${point.date}-${placementHistoryMode}`} className="border-b border-slate-500/20">
-                                    <td className="px-2 py-2 text-slate-100">{point.date}</td>
-                                    <td className="px-2 py-2 text-slate-200">
-                                      {placementHistoryMode === "impressions"
-                                        ? `${formatInteger(point.searchImpressions)} показов / ${formatInteger(point.searchOrders)} ${orderWord(point.searchOrders)}`
-                                        : `${formatInteger(point.searchOrders)} ${orderWord(point.searchOrders)} / ${formatInteger(point.searchImpressions)} показов`}
-                                    </td>
-                                    <td className="px-2 py-2 text-slate-200">
-                                      {placementHistoryMode === "impressions"
-                                        ? `${formatInteger(point.shelvesImpressions)} показов / ${formatInteger(point.shelvesOrders)} ${orderWord(point.shelvesOrders)}`
-                                        : `${formatInteger(point.shelvesOrders)} ${orderWord(point.shelvesOrders)} / ${formatInteger(point.shelvesImpressions)} показов`}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {placement.conclusion && <div className="mt-3 text-xs text-emerald-300">{placement.conclusion}</div>}
                   </div>
-                ))}
+                )}
+
+                {selectedWbPlacement.conclusion && <div className="mt-3 text-xs text-emerald-300">{selectedWbPlacement.conclusion}</div>}
+              </div>
+
+              <div className="mt-3 rounded-lg border border-slate-400/30 bg-slate-700/10 p-3">
+                <h3 className="mb-2 text-sm font-semibold text-slate-100">🔝 TOP-5 КЛЮЧЕВЫХ ЗАПРОСОВ</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[760px] text-xs">
+                    <thead className="text-slate-300">
+                      <tr className="border-b border-slate-500/30">
+                        <th className="px-2 py-2 text-left">Ключ</th>
+                        <th className="px-2 py-2 text-right">Показы</th>
+                        <th className="px-2 py-2 text-right">Заказы</th>
+                        <th className="px-2 py-2 text-right">Ставка</th>
+                        <th className="px-2 py-2 text-left">Размещение</th>
+                        <th className="px-2 py-2 text-left">Позиция</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedWbTopKeywords.map((row) => (
+                        <tr key={`${selectedWbCampaign}-${row.keyword}`} className="border-b border-slate-500/20">
+                          <td className="px-2 py-2 text-slate-100">{row.keyword}</td>
+                          <td className="px-2 py-2 text-right text-slate-200">{formatInteger(row.impressions)}</td>
+                          <td className="px-2 py-2 text-right text-slate-200">{formatInteger(row.orders)}</td>
+                          <td className="px-2 py-2 text-right text-slate-200">{formatCurrency(row.bid)}</td>
+                          <td className="px-2 py-2 text-slate-200">{row.placement}</td>
+                          <td className="px-2 py-2 text-slate-200">{row.position}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
           )}
@@ -1701,6 +2225,110 @@ function getIssueKind(issueId: string) {
   return issueId.split("-").slice(1).join("-");
 }
 
+function resolveWbPositionSnapshot(row: WbPositionKeywordRow, period: PositionPeriod): PositionSnapshot {
+  if (period === "today") return row.snapshots.today;
+  if (period === "yesterday") return row.snapshots.yesterday;
+  if (period === "dayBeforeYesterday") return row.snapshots.dayBeforeYesterday;
+  return row.snapshots.today;
+}
+
+function resolvePlacementSnapshot(placement: WbPlacementRow, period: WbPlacementPeriod, customDate: string) {
+  if (period === "today") {
+    return {
+      label: "Период: Сегодня",
+      search: placement.search,
+      shelves: placement.shelves
+    };
+  }
+
+  if (period === "week") {
+    const aggregate = aggregatePlacementHistory(placement.history);
+    return {
+      label: "Период: 7 дней",
+      search: aggregate.search,
+      shelves: aggregate.shelves
+    };
+  }
+
+  const fallbackPoint = placement.history.length ? placement.history[placement.history.length - 1] : undefined;
+  const yesterdayPoint = placement.history.length > 1 ? placement.history[placement.history.length - 2] : fallbackPoint;
+  const point = period === "yesterday" ? yesterdayPoint : placement.history.find((row) => row.isoDate === customDate) || fallbackPoint;
+  if (point) {
+    return {
+      label: period === "yesterday" ? `Период: Вчера (${point.date})` : `Период: ${point.date}`,
+      search: point.search,
+      shelves: point.shelves
+    };
+  }
+
+  return {
+    label: "Период: Сегодня",
+    search: placement.search,
+    shelves: placement.shelves
+  };
+}
+
+function aggregatePlacementHistory(history: PlacementHistoryPoint[]) {
+  const search = aggregatePlacementChannels(history.map((row) => row.search));
+  const shelves = aggregatePlacementChannels(history.map((row) => row.shelves));
+  return { search, shelves };
+}
+
+function aggregatePlacementChannels(channels: PlacementChannel[]): PlacementChannel {
+  if (!channels.length) {
+    return {
+      bid: 0,
+      impressions: 0,
+      clicks: 0,
+      ctr: 0,
+      ctrBadge: "🔴",
+      adOrders: 0,
+      adSales: 0,
+      drr: 0,
+      drrBadge: "🟢"
+    };
+  }
+
+  const totals = channels.reduce(
+    (acc, channel) => {
+      acc.bid += channel.bid;
+      acc.impressions += channel.impressions;
+      acc.clicks += channel.clicks;
+      acc.adOrders += channel.adOrders;
+      acc.adSales += channel.adSales;
+      acc.weightedDrr += channel.drr * Math.max(channel.adSales, 1);
+      acc.drrWeight += Math.max(channel.adSales, 1);
+      return acc;
+    },
+    { bid: 0, impressions: 0, clicks: 0, adOrders: 0, adSales: 0, weightedDrr: 0, drrWeight: 0 }
+  );
+  const ctr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
+  const drr = totals.drrWeight > 0 ? totals.weightedDrr / totals.drrWeight : 0;
+  return {
+    bid: Math.round(totals.bid / channels.length),
+    impressions: totals.impressions,
+    clicks: totals.clicks,
+    ctr: Number(ctr.toFixed(1)),
+    ctrBadge: resolveCtrBadge(ctr),
+    adOrders: totals.adOrders,
+    adSales: totals.adSales,
+    drr: Number(drr.toFixed(1)),
+    drrBadge: resolveDrrBadge(drr)
+  };
+}
+
+function resolveCtrBadge(value: number): "🟢" | "🟡" | "🔴" {
+  if (value >= 3) return "🟢";
+  if (value >= 2) return "🟡";
+  return "🔴";
+}
+
+function resolveDrrBadge(value: number): "🟢" | "🟡" | "🔴" {
+  if (value <= 10) return "🟢";
+  if (value <= 20) return "🟡";
+  return "🔴";
+}
+
 function resolvePositionPeriodIndexes(period: PositionPeriod): { currentIndex: number; previousIndex: number | null } {
   if (period === "today") return { currentIndex: 6, previousIndex: 5 };
   if (period === "yesterday") return { currentIndex: 5, previousIndex: 4 };
@@ -1724,6 +2352,16 @@ function PositionChangeIndicator({ current, previous }: { current: number; previ
   }
   if (delta < 0) {
     return <span className="font-semibold text-rose-300">↓{Math.abs(delta)}</span>;
+  }
+  return <span className="font-semibold text-slate-400">→</span>;
+}
+
+function PositionDeltaIndicator({ delta }: { delta: number }) {
+  if (delta > 0) {
+    return <span className="font-semibold text-emerald-300">↑{delta} 🟢</span>;
+  }
+  if (delta < 0) {
+    return <span className="font-semibold text-rose-300">↓{Math.abs(delta)} 🔴</span>;
   }
   return <span className="font-semibold text-slate-400">→</span>;
 }

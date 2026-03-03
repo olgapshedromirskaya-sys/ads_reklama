@@ -23,6 +23,8 @@ BTN_DIAGNOSTICS = "🔍 Диагностика"
 BTN_PLAN_FACT = "📊 План/Факт"
 BTN_AUTO_MINUS = "🚫 Авто-минусовка"
 BTN_CAMPAIGNS = "📦 Кампании"
+BTN_POSITIONS_BIDS = "📍 Позиции и ставки"
+BTN_WHERE_SHOWN = "🔍 Где показывается"
 BTN_NOTIFICATIONS = "🔔 Уведомления"
 BTN_OPEN_DASHBOARD = "🚀 Открыть дашборд"
 
@@ -32,6 +34,7 @@ def _build_main_menu() -> ReplyKeyboardMarkup:
         [KeyboardButton(text=BTN_DRR), KeyboardButton(text=BTN_WEEK_REPORT)],
         [KeyboardButton(text=BTN_DIAGNOSTICS), KeyboardButton(text=BTN_PLAN_FACT)],
         [KeyboardButton(text=BTN_AUTO_MINUS), KeyboardButton(text=BTN_CAMPAIGNS)],
+        [KeyboardButton(text=BTN_POSITIONS_BIDS), KeyboardButton(text=BTN_WHERE_SHOWN)],
         [KeyboardButton(text=BTN_NOTIFICATIONS)],
         [KeyboardButton(text=BTN_OPEN_DASHBOARD)],
     ]
@@ -186,6 +189,46 @@ async def _send_campaigns_report(update: Update) -> None:
     )
 
 
+async def _send_positions_and_bids_report(update: Update) -> None:
+    message = update.effective_message
+    if message is None:
+        return
+    await message.reply_text(
+        "📍 Позиции по ключам (WB) — сегодня\n\n"
+        "🟣 Кроссовки женские:\n"
+        "- кроссовки женские → поз.3 ↑ | 220₽ | 🔍 Поиск | 187 заказов\n"
+        "- кроссовки на платформе → поз.12 → | 220₽ | 🔍 Поиск | 94 заказов\n"
+        "- белые кроссовки → поз.7 ↓ | 210₽ | 🔍 Поиск | 62 заказов\n\n"
+        "🟣 Джинсы slim fit: ⚠️ Позиции падают!\n"
+        "- джинсы slim fit → поз.22 ↓3 🔴 | 155₽ | 🔍 Поиск\n"
+        "- джинсы скинни → поз.31 ↓4 🔴 | 145₽ | 🔍 Поиск\n\n"
+        "💡 Рекомендация: повысьте ставку у Джинсы slim fit — позиции падают 3 дня подряд\n\n"
+        "[🚀 Открыть дашборд]",
+        reply_markup=_dashboard_inline_keyboard(),
+    )
+
+
+async def _send_where_shown_report(update: Update) -> None:
+    message = update.effective_message
+    if message is None:
+        return
+    await message.reply_text(
+        "🔍 Размещение рекламы WB — сегодня\n\n"
+        "🟣 Кроссовки женские:\n"
+        "🔍 Поиск: показы 180,000 | заказы 380 | ставка 220₽ | ДРР 7.1% 🟢\n"
+        "📦 Полки: показы 65,000 | заказы 61 | ставка 180₽ | ДРР 14.8% 🟡\n\n"
+        "🟣 Платья летние:\n"
+        "🔍 Поиск: показы 140,000 | заказы 165 | ставка 210₽ | ДРР 15.8% 🟡\n"
+        "📦 Полки: показы 49,000 | заказы 33 | ставка 170₽ | ДРР 21.1% 🔴\n\n"
+        "🟣 Джинсы slim fit: ⚠️ Убыточно!\n"
+        "🔍 Поиск: показы 110,000 | заказы 22 | ставка 155₽ | ДРР 32.1% 🔴\n"
+        "📦 Полки: показы 46,000 | заказы 9 | ставка 120₽ | ДРР 50.0% 🔴\n\n"
+        "💡 Отключите Полки у Джинсы slim fit — ДРР 50%, убыточно!\n\n"
+        "[🚀 Открыть дашборд]",
+        reply_markup=_dashboard_inline_keyboard(),
+    )
+
+
 async def _send_plan_fact_report(update: Update) -> None:
     message = update.effective_message
     if message is None:
@@ -292,6 +335,12 @@ async def text_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
     if text == BTN_CAMPAIGNS:
         await _send_campaigns_report(update)
+        return
+    if text == BTN_POSITIONS_BIDS:
+        await _send_positions_and_bids_report(update)
+        return
+    if text == BTN_WHERE_SHOWN:
+        await _send_where_shown_report(update)
         return
     if text == BTN_NOTIFICATIONS:
         await _send_in_development_message(update)
