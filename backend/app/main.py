@@ -44,6 +44,7 @@ app.add_middleware(
 )
 
 for router_prefix in router_prefixes:
+    app.include_router(auth.setup_router, prefix=router_prefix)
     app.include_router(auth.router, prefix=router_prefix)
     app.include_router(campaigns.router, prefix=router_prefix)
     app.include_router(queries.router, prefix=router_prefix)

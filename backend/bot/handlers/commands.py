@@ -225,6 +225,25 @@ async def show_owner_menu(message) -> None:
     )
 
 
+async def show_full_owner_menu(message) -> None:
+    keyboard = ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(text=BTN_DRR), KeyboardButton(text=BTN_WEEK_REPORT)],
+            [KeyboardButton(text=BTN_DIAGNOSTICS), KeyboardButton(text=BTN_PLAN_FACT)],
+            [KeyboardButton(text=BTN_AUTO_MINUS), KeyboardButton(text=BTN_CAMPAIGNS)],
+            [KeyboardButton(text=BTN_POSITIONS_BIDS), KeyboardButton(text=BTN_WHERE_SHOWN)],
+            [KeyboardButton(text=BTN_EMPLOYEES), KeyboardButton(text=BTN_API_KEYS)],
+            [KeyboardButton(text=BTN_OPEN_DASHBOARD)],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+    await message.reply_text(
+        "👑 Добро пожаловать, Руководитель!\nПолный доступ активирован.",
+        reply_markup=keyboard,
+    )
+
+
 async def _send_access_closed(update: Update) -> None:
     if update.callback_query is not None:
         await update.callback_query.answer()
@@ -312,11 +331,10 @@ async def _send_in_development_message(update: Update) -> None:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
-    if message is None:
+    if message is not None and message.from_user and message.from_user.id == OWNER_TELEGRAM_ID:
+        await show_full_owner_menu(message)
         return
-    if message.from_user and message.from_user.id == OWNER_TELEGRAM_ID:
-        # Always allow owner, show full menu
-        await show_owner_menu(message)
+    if message is None:
         return
     logger.info("Received /start from telegram_id=%s", update.effective_user.id if update.effective_user else None)
 

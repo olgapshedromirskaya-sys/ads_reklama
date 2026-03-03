@@ -88,38 +88,27 @@ def main() -> None:
         logger.error("TELEGRAM_BOT_TOKEN не задан. Бот не может стартовать.")
         raise RuntimeError("Missing TELEGRAM_BOT_TOKEN")
 
-    async def ensure_owner() -> None:
-        from app.database import get_db
-        from sqlalchemy import text
+    async def setup_owner_in_db() -> None:
+        try:
+            from app.database import AsyncSessionLocal
+            from sqlalchemy import text
 
-        async with get_db() as db:
-            result = await db.execute(text(f"SELECT * FROM bot_users WHERE telegram_id = {OWNER_TELEGRAM_ID}"))
-            user = result.fetchone()
-            if not user:
+            async with AsyncSessionLocal() as db:
                 await db.execute(
                     text(
-                        f"""
+                        """
                         INSERT INTO bot_users (telegram_id, username, full_name, role, is_active, added_at)
-                        VALUES ({OWNER_TELEGRAM_ID}, 'owner', 'Руководитель', 'owner', true, NOW())
+                        VALUES (545972485, 'owner', 'Руководитель', 'owner', true, NOW())
                         ON CONFLICT (telegram_id) DO UPDATE SET role = 'owner', is_active = true
                         """
                     )
                 )
                 await db.commit()
-                print(f"Owner {OWNER_TELEGRAM_ID} created successfully")
-            else:
-                await db.execute(
-                    text(
-                        f"""
-                        UPDATE bot_users SET role = 'owner', is_active = true
-                        WHERE telegram_id = {OWNER_TELEGRAM_ID}
-                        """
-                    )
-                )
-                await db.commit()
-                print(f"Owner {OWNER_TELEGRAM_ID} updated to owner role")
+                print(f"✅ Owner {OWNER_TELEGRAM_ID} ensured in database")
+        except Exception as e:
+            print(f"DB setup error: {e}")
 
-    asyncio.run(ensure_owner())
+    asyncio.run(setup_owner_in_db())
     logger.info("Bot starting...")
     attempt = 1
     while True:
