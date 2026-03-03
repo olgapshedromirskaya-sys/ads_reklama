@@ -63,6 +63,9 @@ function App() {
         return;
       }
 
+      // Сбрасываем старый токен перед новой авторизацией
+      useAuthStore.getState().clearAuth();
+
       // Всегда авторизуемся заново при наличии initData — чтобы роль всегда была актуальной
       try {
         const auth = await telegramLogin(initData);
@@ -105,7 +108,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [token, setAuth]);
+  }, [setAuth]);
 
   if (bootstrapping) {
     return <LoadingScreen text="Авторизация..." fullscreen />;
