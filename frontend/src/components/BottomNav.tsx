@@ -13,6 +13,13 @@ const items: NavItem[] = [
   { id: "ozon", label: "🔵 Ozon", activeColor: "#0c4a6e", clickLog: "Ozon bottom tab clicked", touchLog: "Ozon bottom tab touched" },
   { id: "wb", label: "🟣 WB", activeColor: "#6b21a8", clickLog: "WB bottom tab clicked", touchLog: "WB bottom tab touched" },
   {
+    id: "auto-bids",
+    label: "🤖 Авто-ставки",
+    activeColor: "#4c1d95",
+    clickLog: "AutoBids bottom tab clicked",
+    touchLog: "AutoBids bottom tab touched"
+  },
+  {
     id: "settings",
     label: "⚙️ Настройки",
     activeColor: "#334155",
@@ -30,7 +37,7 @@ export function BottomNav({
 }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-500/30 bg-[#0f172a]/95 backdrop-blur">
-      <div className="mx-auto grid max-w-3xl grid-cols-3 gap-2 px-2 py-2">
+      <div className="mx-auto grid max-w-3xl grid-cols-4 gap-2 px-2 py-2">
         {items.map((item) => (
           <button
             key={item.id}
@@ -62,7 +69,7 @@ function buildBottomButtonStyle(isActive: boolean, activeColor: string): CSSProp
     minHeight: "48px",
     borderRadius: "8px",
     cursor: "pointer",
-    padding: "8px 6px",
+    padding: "8px 4px",
     fontSize: "11px",
     fontWeight: 600
   };
