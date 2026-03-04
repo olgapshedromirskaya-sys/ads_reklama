@@ -33,6 +33,7 @@ BTN_WHERE_SHOWN = "🔍 Где показывается"
 BTN_EMPLOYEES = "👥 Сотрудники"
 BTN_API_KEYS = "⚙️ API ключи"
 BTN_OPEN_DASHBOARD = "🚀 Открыть дашборд"
+BTN_AUTO_BIDS = "🤖 Авто-ставки"
 BTN_SKIP = "Пропустить"
 OWNER_TELEGRAM_ID = 545972485
 
@@ -162,7 +163,7 @@ def _build_main_menu(role: BotUserRole) -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_AUTO_MINUS), KeyboardButton(text=BTN_CAMPAIGNS)],
             [KeyboardButton(text=BTN_POSITIONS_BIDS), KeyboardButton(text=BTN_WHERE_SHOWN)],
             [KeyboardButton(text=BTN_EMPLOYEES), KeyboardButton(text=BTN_API_KEYS)],
-            [KeyboardButton(text=BTN_OPEN_DASHBOARD)],
+            [KeyboardButton(text=BTN_AUTO_BIDS), KeyboardButton(text=BTN_OPEN_DASHBOARD)],
         ]
     elif role == BotUserRole.ADMIN:
         rows = [
@@ -171,7 +172,7 @@ def _build_main_menu(role: BotUserRole) -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_AUTO_MINUS), KeyboardButton(text=BTN_CAMPAIGNS)],
             [KeyboardButton(text=BTN_POSITIONS_BIDS), KeyboardButton(text=BTN_WHERE_SHOWN)],
             [KeyboardButton(text=BTN_API_KEYS)],
-            [KeyboardButton(text=BTN_OPEN_DASHBOARD)],
+            [KeyboardButton(text=BTN_AUTO_BIDS), KeyboardButton(text=BTN_OPEN_DASHBOARD)],
         ]
     else:
         rows = [
@@ -187,6 +188,13 @@ def _build_main_menu(role: BotUserRole) -> ReplyKeyboardMarkup:
 def _dashboard_inline_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("✈️ Открыть WebApp", web_app=WebAppInfo(url=settings.webapp_url))]]
+    )
+
+
+def _auto_bids_inline_keyboard() -> InlineKeyboardMarkup:
+    base_url = settings.webapp_url.rstrip("/")
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🤖 Открыть Авто-ставки", web_app=WebAppInfo(url=f"{base_url}/auto-bids"))]]
     )
 
 
@@ -233,7 +241,7 @@ async def show_full_owner_menu(message) -> None:
             [KeyboardButton(text=BTN_AUTO_MINUS), KeyboardButton(text=BTN_CAMPAIGNS)],
             [KeyboardButton(text=BTN_POSITIONS_BIDS), KeyboardButton(text=BTN_WHERE_SHOWN)],
             [KeyboardButton(text=BTN_EMPLOYEES), KeyboardButton(text=BTN_API_KEYS)],
-            [KeyboardButton(text=BTN_OPEN_DASHBOARD)],
+            [KeyboardButton(text=BTN_AUTO_BIDS), KeyboardButton(text=BTN_OPEN_DASHBOARD)],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -280,7 +288,6 @@ async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         bot_user = get_active_bot_user(db, telegram_user.id)
 
         if bot_user is None:
-            # Только OWNER_TELEGRAM_ID может стать владельцем автоматически
             if telegram_user.id == OWNER_TELEGRAM_ID:
                 existing = db.get(BotUser, telegram_user.id)
                 if existing is None:
@@ -301,7 +308,6 @@ async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 db.commit()
                 db.refresh(bot_user)
             else:
-                # Все остальные незарегистрированные — доступ закрыт
                 await _send_access_closed(update)
                 raise ApplicationHandlerStop
         else:
@@ -351,6 +357,25 @@ async def dashboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         update,
         "Откройте дашборд в WebApp:",
         reply_markup=_dashboard_inline_keyboard(),
+    )
+
+
+async def _send_auto_bids_report(update: Update) -> None:
+    await _reply_text(
+        update,
+        "🤖 Авто-ставки WB\n\n"
+        "Статус: ✅ Активно · обновление каждый час\n\n"
+        "📊 Кроссовки женские:\n"
+        "Ставка: 85₽ | ДРР: 8.2% 🟢 | Позиция: #3\n"
+        "Цель: ДРР ≤10%, Топ-5\n\n"
+        "📊 Платья летние:\n"
+        "Ставка: 120₽ | ДРР: 17.2% 🔴 | Позиция: #8\n"
+        "Цель: ДРР ≤15%, Топ-7 · снижаем ставку\n\n"
+        "📊 Джинсы slim fit:\n"
+        "Ставка: 210₽ | ДРР: 37.7% 🔴 | Позиция: #2\n"
+        "⚠️ Авто-управление выключено\n\n"
+        "Изменений сегодня: 18 | Экономия ДРР: −4.2%",
+        reply_markup=_auto_bids_inline_keyboard(),
     )
 
 
@@ -1132,6 +1157,9 @@ async def text_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
     if text == BTN_WHERE_SHOWN:
         await _send_where_shown_report(update)
+        return
+    if text == BTN_AUTO_BIDS:
+        await _send_auto_bids_report(update)
         return
     if text == BTN_EMPLOYEES:
         if role == BotUserRole.OWNER:
