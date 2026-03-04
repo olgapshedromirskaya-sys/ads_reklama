@@ -12,6 +12,7 @@ import { CampaignDetailPage } from "@/pages/CampaignDetailPage";
 import { CampaignsPage } from "@/pages/CampaignsPage";
 import { QueriesPage } from "@/pages/QueriesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import AutoBidsPage from "@/pages/AutoBidsPage";
 
 function App() {
   useTelegramTheme();
@@ -26,6 +27,9 @@ function App() {
   const activeTab = useMemo<AppTab>(() => {
     if (location.pathname.startsWith("/settings")) {
       return "settings";
+    }
+    if (location.pathname.startsWith("/auto-bids")) {
+      return "auto-bids";
     }
     if (location.pathname.startsWith("/wb")) {
       return "wb";
@@ -134,6 +138,10 @@ function App() {
           navigate("/settings");
           return;
         }
+        if (tab === "auto-bids") {
+          navigate("/auto-bids");
+          return;
+        }
         navigate(tab === "wb" ? "/wb" : "/");
       }}
     >
@@ -152,6 +160,7 @@ function App() {
 
         <Route path="/queries" element={<QueriesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/auto-bids" element={<AutoBidsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
