@@ -1,7 +1,7 @@
 import { type CSSProperties, type ReactNode } from "react";
 import { BottomNav } from "./BottomNav";
 
-export type AppTab = "ozon" | "wb" | "settings";
+export type AppTab = "ozon" | "wb" | "settings" | "auto-bids";
 
 const tabs: Array<{
   id: AppTab;
@@ -12,6 +12,13 @@ const tabs: Array<{
 }> = [
   { id: "ozon", label: "🔵 Ozon", activeColor: "#0c4a6e", clickLog: "Ozon tab clicked", touchLog: "Ozon tab touched" },
   { id: "wb", label: "🟣 WB", activeColor: "#6b21a8", clickLog: "WB tab clicked", touchLog: "WB tab touched" },
+  {
+    id: "auto-bids",
+    label: "🤖 Авто-ставки",
+    activeColor: "#4c1d95",
+    clickLog: "AutoBids tab clicked",
+    touchLog: "AutoBids tab touched"
+  },
   {
     id: "settings",
     label: "⚙️ Настройки",
@@ -32,7 +39,12 @@ export function Layout({
   activeTab: AppTab;
   onTabChange: (tab: AppTab) => void;
 }) {
-  const pageTitle = activeTab === "settings" ? "⚙️ Настройки" : "Реклама маркетплейсов";
+  const pageTitle =
+    activeTab === "settings"
+      ? "⚙️ Настройки"
+      : activeTab === "auto-bids"
+      ? "🤖 Авто-ставки"
+      : "Реклама маркетплейсов";
 
   return (
     <div className="mx-auto min-h-screen max-w-3xl bg-[color:var(--tg-bg-color)] text-[color:var(--tg-text-color)] safe-bottom">
@@ -45,7 +57,7 @@ export function Layout({
       )}
       <header className="sticky top-0 z-30 border-b border-slate-600/40 bg-[#10192f]/95 px-4 py-3 backdrop-blur">
         <div className="text-sm font-semibold">{pageTitle}</div>
-        <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="mt-2 grid grid-cols-4 gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -77,10 +89,10 @@ function buildTabButtonStyle(isActive: boolean, activeColor: string): CSSPropert
     background: isActive ? activeColor : "transparent",
     color: "white",
     border: `1px solid ${activeColor}`,
-    padding: "8px 16px",
+    padding: "8px 4px",
     borderRadius: "8px",
     cursor: "pointer",
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: 600
   };
 }
