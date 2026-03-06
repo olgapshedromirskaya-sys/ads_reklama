@@ -1,7 +1,9 @@
 import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { LoadingScreen } from "@/components/LoadingScreen";
+import AdsAnalyticsPage from "@/pages/AdsAnalyticsPage";
 import {
   connectAccount,
   getDashboardSummary,
@@ -240,7 +242,7 @@ function App() {
   const budgetPct = budget && summary ? Math.round((summary.spend_month / budget) * 100) : null;
   const drrDiff = target != null && summary ? summary.avg_drr - target : null;
 
-  return (
+  const appContent = (
     <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "system-ui, sans-serif", paddingBottom: 80 }}>
       {runtimeDemoMode && (
         <div style={{ position: "fixed", right: 12, top: 10, zIndex: 100, fontSize: 10, fontWeight: 700, color: "#000", background: T.yellow, borderRadius: 999, padding: "3px 10px" }}>
@@ -435,6 +437,14 @@ function App() {
         <BottomButton active={mainTab === "settings"} onClick={() => setMainTab("settings")} label="⚙️ Настройки" />
       </div>
     </div>
+  );
+
+  return (
+    <Routes>
+      <Route path="/analytics" element={<AdsAnalyticsPage />} />
+      <Route path="/" element={appContent} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
