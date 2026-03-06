@@ -22,17 +22,17 @@ from app.services.bot_users import build_full_name, ensure_internal_user_for_bot
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-BTN_DRR = "📊 ДРР"
+BTN_DRR = "📊 Ключевые показатели"
 BTN_WEEK_REPORT = "📈 Отчёт за неделю"
 BTN_DIAGNOSTICS = "🔍 Диагностика"
-BTN_PLAN_FACT = "📊 План/Факт"
-BTN_AUTO_MINUS = "🚫 Авто-минусовка"
+BTN_PLAN_FACT = "📋 План/Факт"
+BTN_AUTO_MINUS = "🧹 Минус-слова"
 BTN_CAMPAIGNS = "📦 Кампании"
 BTN_POSITIONS_BIDS = "📍 Позиции и ставки"
-BTN_WHERE_SHOWN = "🔍 Где показывается"
+BTN_WHERE_SHOWN = "🧭 Размещения"
 BTN_EMPLOYEES = "👥 Сотрудники"
-BTN_API_KEYS = "⚙️ API ключи"
-BTN_OPEN_DASHBOARD = "🚀 Открыть дашборд"
+BTN_API_KEYS = "🔐 API ключи"
+BTN_OPEN_DASHBOARD = "🚀 Открыть веб-приложение"
 BTN_AUTO_BIDS = "🤖 Авто-ставки"
 BTN_SKIP = "Пропустить"
 OWNER_TELEGRAM_ID = 545972485
@@ -150,8 +150,8 @@ def _api_keys_management_keyboard(accounts: list[MPAccount]) -> InlineKeyboardMa
                 InlineKeyboardButton("❌ Удалить", callback_data=f"{CB_API_DELETE_PREFIX}{account.id}"),
             ]
         )
-    rows.append([InlineKeyboardButton("➕ Добавить WB аккаунт", callback_data=CB_API_ADD_WB)])
-    rows.append([InlineKeyboardButton("➕ Добавить Ozon аккаунт", callback_data=CB_API_ADD_OZON)])
+    rows.append([InlineKeyboardButton("➕ Добавить ВБ аккаунт", callback_data=CB_API_ADD_WB)])
+    rows.append([InlineKeyboardButton("➕ Добавить Озон аккаунт", callback_data=CB_API_ADD_OZON)])
     return InlineKeyboardMarkup(rows)
 
 
@@ -160,26 +160,26 @@ def _build_main_menu(role: BotUserRole) -> ReplyKeyboardMarkup:
         rows = [
             [KeyboardButton(text=BTN_DRR), KeyboardButton(text=BTN_WEEK_REPORT)],
             [KeyboardButton(text=BTN_DIAGNOSTICS), KeyboardButton(text=BTN_PLAN_FACT)],
-            [KeyboardButton(text=BTN_AUTO_MINUS), KeyboardButton(text=BTN_CAMPAIGNS)],
-            [KeyboardButton(text=BTN_POSITIONS_BIDS), KeyboardButton(text=BTN_WHERE_SHOWN)],
-            [KeyboardButton(text=BTN_EMPLOYEES), KeyboardButton(text=BTN_API_KEYS)],
-            [KeyboardButton(text=BTN_AUTO_BIDS), KeyboardButton(text=BTN_OPEN_DASHBOARD)],
+            [KeyboardButton(text=BTN_CAMPAIGNS), KeyboardButton(text=BTN_POSITIONS_BIDS)],
+            [KeyboardButton(text=BTN_WHERE_SHOWN), KeyboardButton(text=BTN_AUTO_MINUS)],
+            [KeyboardButton(text=BTN_AUTO_BIDS), KeyboardButton(text=BTN_API_KEYS)],
+            [KeyboardButton(text=BTN_EMPLOYEES), KeyboardButton(text=BTN_OPEN_DASHBOARD)],
         ]
     elif role == BotUserRole.ADMIN:
         rows = [
             [KeyboardButton(text=BTN_DRR), KeyboardButton(text=BTN_WEEK_REPORT)],
             [KeyboardButton(text=BTN_DIAGNOSTICS), KeyboardButton(text=BTN_PLAN_FACT)],
-            [KeyboardButton(text=BTN_AUTO_MINUS), KeyboardButton(text=BTN_CAMPAIGNS)],
-            [KeyboardButton(text=BTN_POSITIONS_BIDS), KeyboardButton(text=BTN_WHERE_SHOWN)],
-            [KeyboardButton(text=BTN_API_KEYS)],
-            [KeyboardButton(text=BTN_AUTO_BIDS), KeyboardButton(text=BTN_OPEN_DASHBOARD)],
+            [KeyboardButton(text=BTN_CAMPAIGNS), KeyboardButton(text=BTN_POSITIONS_BIDS)],
+            [KeyboardButton(text=BTN_WHERE_SHOWN), KeyboardButton(text=BTN_AUTO_MINUS)],
+            [KeyboardButton(text=BTN_AUTO_BIDS), KeyboardButton(text=BTN_API_KEYS)],
+            [KeyboardButton(text=BTN_EMPLOYEES), KeyboardButton(text=BTN_OPEN_DASHBOARD)],
         ]
     else:
         rows = [
             [KeyboardButton(text=BTN_DRR), KeyboardButton(text=BTN_WEEK_REPORT)],
             [KeyboardButton(text=BTN_DIAGNOSTICS), KeyboardButton(text=BTN_CAMPAIGNS)],
-            [KeyboardButton(text=BTN_AUTO_MINUS)],
             [KeyboardButton(text=BTN_POSITIONS_BIDS), KeyboardButton(text=BTN_WHERE_SHOWN)],
+            [KeyboardButton(text=BTN_AUTO_MINUS)],
             [KeyboardButton(text=BTN_OPEN_DASHBOARD)],
         ]
     return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
@@ -187,14 +187,14 @@ def _build_main_menu(role: BotUserRole) -> ReplyKeyboardMarkup:
 
 def _dashboard_inline_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("✈️ Открыть WebApp", web_app=WebAppInfo(url=settings.webapp_url))]]
+        [[InlineKeyboardButton("🚀 Открыть веб-приложение", web_app=WebAppInfo(url=settings.webapp_url))]]
     )
 
 
 def _auto_bids_inline_keyboard() -> InlineKeyboardMarkup:
     base_url = settings.webapp_url.rstrip("/")
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🤖 Открыть Авто-ставки", web_app=WebAppInfo(url=f"{base_url}/auto-bids"))]]
+        [[InlineKeyboardButton("🤖 Открыть авто-ставки", web_app=WebAppInfo(url=f"{base_url}/auto-bids"))]]
     )
 
 
@@ -382,9 +382,11 @@ async def _send_auto_bids_report(update: Update) -> None:
 async def _send_drr_report(update: Update) -> None:
     await _reply_text(
         update,
-        "📊 ДРР отчёт\n\n"
+        "📊 Ключевые показатели\n\n"
         "🔵 Ozon: 5.7% 🟢 Шик\n"
         "🟣 WB: 8.4% 🟢 Шик\n\n"
+        "💰 Выручка всего: 3 903 000₽\n"
+        "📦 Заказы всего: 1 385\n\n"
         "Худшие кампании:\n"
         "🔴 Джинсы slim fit (WB) — 37.7%\n"
         "🟡 Платья летние (WB) — 17.2%\n"
@@ -560,24 +562,25 @@ async def _show_employee_management(update: Update) -> None:
     )
 
 
-def _employee_list_markup(employees: list[BotUser]) -> InlineKeyboardMarkup:
+def _employee_list_markup(employees: list[BotUser], can_manage: bool) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = []
-    for employee in employees:
-        if employee.role == BotUserRole.OWNER:
-            continue
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    f"❌ Удалить {_format_user_label(employee)}",
-                    callback_data=f"{CB_EMP_DELETE_PREFIX}{employee.telegram_id}",
-                )
-            ]
-        )
-    rows.append([InlineKeyboardButton("⬅️ Назад", callback_data=CB_EMP_BACK)])
+    if can_manage:
+        for employee in employees:
+            if employee.role == BotUserRole.OWNER:
+                continue
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        f"❌ Удалить {_format_user_label(employee)}",
+                        callback_data=f"{CB_EMP_DELETE_PREFIX}{employee.telegram_id}",
+                    )
+                ]
+            )
+        rows.append([InlineKeyboardButton("⬅️ Назад", callback_data=CB_EMP_BACK)])
     return InlineKeyboardMarkup(rows)
 
 
-async def _show_employee_list(update: Update) -> None:
+async def _show_employee_list(update: Update, *, can_manage: bool) -> None:
     with SessionLocal() as db:
         role_order = case(
             (BotUser.role == BotUserRole.OWNER, 0),
@@ -595,11 +598,10 @@ async def _show_employee_list(update: Update) -> None:
         lines.append(f"{index}. {icon} {_format_user_label(employee)} — {title}")
     lines.append(f"\nВсего: {len(employees)} сотрудника")
 
-    await _reply_text(
-        update,
-        "\n".join(lines),
-        reply_markup=_employee_list_markup(employees),
-    )
+    kwargs: dict[str, Any] = {}
+    if can_manage:
+        kwargs["reply_markup"] = _employee_list_markup(employees, can_manage=True)
+    await _reply_text(update, "\n".join(lines), **kwargs)
 
 
 def _api_accounts_text(accounts: list[MPAccount]) -> str:
@@ -920,7 +922,7 @@ async def team_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _show_employee_management(update)
         return
     if role == BotUserRole.ADMIN:
-        await _show_employee_list(update)
+        await _show_employee_list(update, can_manage=False)
         return
     await _send_manager_denied(update)
 
@@ -944,7 +946,7 @@ async def remove_employee_command(update: Update, context: ContextTypes.DEFAULT_
         else:
             await _send_owner_only_denied(update)
         return
-    await _show_employee_list(update)
+    await _show_employee_list(update, can_manage=True)
 
 
 async def callback_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -958,18 +960,27 @@ async def callback_menu_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if data in {CB_EMP_ADD, CB_EMP_LIST, CB_EMP_BACK} or data.startswith(
         (CB_EMP_ROLE_PREFIX, CB_EMP_DELETE_PREFIX, CB_EMP_DELETE_YES_PREFIX)
     ) or data in {CB_EMP_SKIP_USERNAME, CB_EMP_DELETE_CANCEL}:
-        if role != BotUserRole.OWNER:
+        owner_only_employee_action = (
+            data == CB_EMP_ADD
+            or data == CB_EMP_BACK
+            or data.startswith((CB_EMP_ROLE_PREFIX, CB_EMP_DELETE_PREFIX, CB_EMP_DELETE_YES_PREFIX))
+            or data in {CB_EMP_SKIP_USERNAME, CB_EMP_DELETE_CANCEL}
+        )
+        if owner_only_employee_action and role != BotUserRole.OWNER:
             if role == BotUserRole.MANAGER:
                 await _send_manager_denied(update)
             else:
                 await _send_owner_only_denied(update)
+            return
+        if data == CB_EMP_LIST and role not in {BotUserRole.OWNER, BotUserRole.ADMIN}:
+            await _send_manager_denied(update)
             return
 
         if data == CB_EMP_ADD:
             await _start_add_employee_flow(update, context)
             return
         if data == CB_EMP_LIST:
-            await _show_employee_list(update)
+            await _show_employee_list(update, can_manage=role == BotUserRole.OWNER)
             return
         if data == CB_EMP_BACK:
             await _show_employee_management(update)
@@ -1164,6 +1175,9 @@ async def text_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if text == BTN_EMPLOYEES:
         if role == BotUserRole.OWNER:
             await _show_employee_management(update)
+            return
+        if role == BotUserRole.ADMIN:
+            await _show_employee_list(update, can_manage=False)
             return
         if role == BotUserRole.MANAGER:
             await _send_manager_denied(update)

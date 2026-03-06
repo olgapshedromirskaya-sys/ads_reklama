@@ -235,7 +235,7 @@ def me(
 
 
 @router.get("/accounts", response_model=list[AccountOut])
-def list_accounts(current_user: User = Depends(require_admin_or_director), db: Session = Depends(get_db)) -> list[MPAccount]:
+def list_accounts(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[MPAccount]:
     scope_user_id = get_scope_user_id(current_user)
     accounts = db.execute(select(MPAccount).where(MPAccount.user_id == scope_user_id)).scalars().all()
     return accounts
