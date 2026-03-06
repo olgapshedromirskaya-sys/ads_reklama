@@ -13,6 +13,7 @@ import { CampaignsPage } from "@/pages/CampaignsPage";
 import { QueriesPage } from "@/pages/QueriesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import AutoBidsPage from "@/pages/AutoBidsPage";
+import AdsAnalyticsPage from "@/pages/AdsAnalyticsPage";
 
 function App() {
   useTelegramTheme();
@@ -25,6 +26,9 @@ function App() {
   const [accessDenied, setAccessDenied] = useState(false);
 
   const activeTab = useMemo<AppTab>(() => {
+    if (location.pathname.startsWith("/analytics")) {
+      return "analytics";
+    }
     if (location.pathname.startsWith("/settings")) {
       return "settings";
     }
@@ -142,6 +146,10 @@ function App() {
           navigate("/auto-bids");
           return;
         }
+        if (tab === "analytics") {
+          navigate("/analytics");
+          return;
+        }
         navigate(tab === "wb" ? "/wb" : "/");
       }}
     >
@@ -161,6 +169,7 @@ function App() {
         <Route path="/queries" element={<QueriesPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/auto-bids" element={<AutoBidsPage />} />
+        <Route path="/analytics" element={<AdsAnalyticsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

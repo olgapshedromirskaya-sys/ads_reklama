@@ -1,7 +1,7 @@
 import { type CSSProperties, type ReactNode } from "react";
 import { BottomNav } from "./BottomNav";
 
-export type AppTab = "ozon" | "wb" | "settings" | "auto-bids";
+export type AppTab = "ozon" | "wb" | "settings" | "auto-bids" | "analytics";
 
 const tabs: Array<{
   id: AppTab;
@@ -18,6 +18,13 @@ const tabs: Array<{
     activeColor: "#4c1d95",
     clickLog: "AutoBids tab clicked",
     touchLog: "AutoBids tab touched"
+  },
+  {
+    id: "analytics",
+    label: "📊 Аналитика",
+    activeColor: "#0f766e",
+    clickLog: "Analytics tab clicked",
+    touchLog: "Analytics tab touched"
   },
   {
     id: "settings",
@@ -42,6 +49,8 @@ export function Layout({
   const pageTitle =
     activeTab === "settings"
       ? "⚙️ Настройки"
+      : activeTab === "analytics"
+      ? "📊 Аналитика"
       : activeTab === "auto-bids"
       ? "🤖 Авто-ставки"
       : "Реклама маркетплейсов";
@@ -57,7 +66,7 @@ export function Layout({
       )}
       <header className="sticky top-0 z-30 border-b border-slate-600/40 bg-[#10192f]/95 px-4 py-3 backdrop-blur">
         <div className="text-sm font-semibold">{pageTitle}</div>
-        <div className="mt-2 grid grid-cols-4 gap-2">
+        <div className="mt-2 grid grid-cols-5 gap-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
