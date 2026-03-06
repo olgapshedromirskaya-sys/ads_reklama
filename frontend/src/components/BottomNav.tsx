@@ -20,6 +20,13 @@ const items: NavItem[] = [
     touchLog: "AutoBids bottom tab touched"
   },
   {
+    id: "analytics",
+    label: "📊 Аналитика",
+    activeColor: "#0f766e",
+    clickLog: "Analytics bottom tab clicked",
+    touchLog: "Analytics bottom tab touched"
+  },
+  {
     id: "settings",
     label: "⚙️ Настройки",
     activeColor: "#334155",
@@ -37,7 +44,7 @@ export function BottomNav({
 }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-500/30 bg-[#0f172a]/95 backdrop-blur">
-      <div className="mx-auto grid max-w-3xl grid-cols-4 gap-2 px-2 py-2">
+      <div className="mx-auto grid max-w-3xl grid-cols-5 gap-2 px-2 py-2">
         {items.map((item) => (
           <button
             key={item.id}

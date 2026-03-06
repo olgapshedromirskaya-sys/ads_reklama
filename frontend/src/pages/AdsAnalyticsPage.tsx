@@ -1,4 +1,6 @@
-import { useState } from "react";
+// @ts-nocheck
+import { useState } from 'react';
+import { retrieveLaunchParams } from "@telegram-apps/sdk";
 
 const T={bg:"#151c2e",card:"#1e2640",card2:"#252e4a",border:"rgba(255,255,255,0.07)",text:"#ffffff",sub:"#8892a4",green:"#4ade80",yellow:"#fbbf24",red:"#f87171",wb:"#7c3aed",ozon:"#2563eb"};
 const S={card:{background:T.card,borderRadius:16,padding:16,border:`1px solid ${T.border}`},card2:{background:T.card2,borderRadius:12,padding:12,border:`1px solid ${T.border}`}};
@@ -1922,16 +1924,28 @@ const SUB_TABS={
   ],
 };
 
-export default function App(){
-  const MOCK_TG_USERS=[
-    {id:"123456789",first_name:"Анна",    last_name:"Иванова", username:"anna_ivanova"},
-    {id:"987654321",first_name:"Дмитрий", last_name:"Петров",  username:"dmitry_petrov"},
-    {id:"555000111",first_name:"Незнакомец",last_name:"",      username:"unknown_user"},
-  ];
+export default function AdsAnalyticsPage(){
   const ALLOWED_IDS=["123456789","987654321"];
-  const [mockUserIdx,setMockUserIdx]=useState(0);
-  const tgUser=MOCK_TG_USERS[mockUserIdx];
-  const isAllowed=ALLOWED_IDS.includes(tgUser.id);
+  const [tgUser] = useState(() => {
+    try {
+      const launchParams = retrieveLaunchParams();
+      const user = launchParams?.tgWebAppData?.user;
+      if (!user?.id) {
+        return null;
+      }
+
+      return {
+        id: String(user.id),
+        first_name: user.first_name || "",
+        last_name: user.last_name || "",
+        username: user.username || ""
+      };
+    } catch (error) {
+      console.error("[AdsAnalyticsPage] Failed to read launch params:", error);
+      return null;
+    }
+  });
+  const isAllowed=!!tgUser && ALLOWED_IDS.includes(tgUser.id);
 
   const [platform,setPlatform]=useState("wb");
   const [mainTab,setMainTab]=useState("dashboard");
@@ -1967,26 +1981,8 @@ export default function App(){
     {id:"settings", icon:"⚙️", label:"Настройки"},
   ];
 
-  const DemoUserSwitch=(
-    <div style={{position:"fixed",bottom:76,right:12,zIndex:100}}>
-      <div style={{...S.card,padding:10,fontSize:11,minWidth:210}}>
-        <div style={{color:T.sub,marginBottom:6,fontSize:10}}>🧪 ДЕМО — смена пользователя</div>
-        {MOCK_TG_USERS.map((u,i)=>(
-          <button key={u.id} onClick={()=>setMockUserIdx(i)}
-            style={{display:"block",width:"100%",textAlign:"left",
-              background:mockUserIdx===i?"rgba(167,139,250,0.15)":"transparent",
-              border:`1px solid ${mockUserIdx===i?"rgba(167,139,250,0.4)":"transparent"}`,
-              borderRadius:8,padding:"5px 8px",cursor:"pointer",marginBottom:3,
-              color:ALLOWED_IDS.includes(u.id)?T.green:T.red,fontSize:11}}>
-            {ALLOWED_IDS.includes(u.id)?"✅":"🔒"} {u.first_name} · @{u.username}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   if(!isAllowed){
-    return(<><AccessDenied tgUser={tgUser} onRequestAccess={()=>{}}/>{DemoUserSwitch}</>);
+    return <AccessDenied tgUser={tgUser} onRequestAccess={()=>{}}/>;
   }
 
   const subs=SUB_TABS[mainTab];
@@ -2054,7 +2050,7 @@ export default function App(){
         {subTab==="bids_strategy" &&<StrategyTab     data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
         {subTab==="bids_minus"    &&<TabAutoMinus    data={data}/>}
         {/* Настройки */}
-        {subTab==="settings_main" &&<TabSettings     currentUserTgId={tgUser.id}/>}
+        {subTab==="settings_main" &&<TabSettings     currentUserTgId={tgUser?.id ?? ""}/>}
       </div>
 
       {/* ── НИЖНЯЯ НАВИГАЦИЯ ── */}
@@ -2081,7 +2077,6 @@ export default function App(){
         })}
       </div>
 
-      {DemoUserSwitch}
     </div>
   );
 }
