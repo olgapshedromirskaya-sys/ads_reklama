@@ -637,17 +637,17 @@ function TabFunnel({data}){
               {kws.slice(0,5).map(kw=>{
                 const bykt=Math.round(kw.orders*0.87);
                 const crOrder=kw.baskets?+(kw.orders/kw.baskets*100).toFixed(1):0;
-                const ctrSt=getCtrSt(kwS.ctr);
+                const ctrSt=getCtrSt(kw.ctr);
                 return(
                   <tr key={kw.keyword} style={{borderBottom:`1px solid ${T.border}`}}>
-                    <td style={{padding:"7px 8px",color:T.text,maxWidth:130}}>{kwS.keyword}</td>
-                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{fmt.num(kwS.impressions)}</td>
-                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{kwS.clicks}</td>
+                    <td style={{padding:"7px 8px",color:T.text,maxWidth:130}}>{kw.keyword}</td>
+                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{fmt.num(kw.impressions)}</td>
+                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{kw.clicks}</td>
                     <td style={{padding:"7px 8px"}}>
                       <span style={{fontFamily:"monospace",fontWeight:700,fontSize:11,padding:"2px 6px",borderRadius:6,background:ctrSt.bg,color:ctrSt.c}}>{fmt.pct(kw.ctr)}</span>
                     </td>
-                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{kwS.baskets}</td>
-                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.text,fontWeight:700}}>{kwS.orders}</td>
+                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{kw.baskets}</td>
+                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.text,fontWeight:700}}>{kw.orders}</td>
                     <td style={{padding:"7px 8px",fontFamily:"monospace",color:crOrder>=5?T.green:crOrder>=2?T.yellow:T.red}}>{crOrder}%</td>
                     <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.green}}>{bykt}</td>
                   </tr>
@@ -1029,8 +1029,8 @@ function TabPositionsByPlacement({data,targetDrr}){
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                        {kwS.alert&&<span style={{fontSize:11}}>⚠️</span>}
-                        <span style={{fontSize:13,fontWeight:600,color:T.text}}>{kwS.keyword}</span>
+                        {kw.alert&&<span style={{fontSize:11}}>⚠️</span>}
+                        <span style={{fontSize:13,fontWeight:600,color:T.text}}>{kw.keyword}</span>
                         <span style={{fontSize:11,color:delta>0?T.green:delta<0?T.red:T.sub,fontWeight:700}}>
                           {delta>0?`↑${delta}`:delta<0?`↓${Math.abs(delta)}`:"→"}
                         </span>
@@ -1039,15 +1039,15 @@ function TabPositionsByPlacement({data,targetDrr}){
                         <div style={{background:"rgba(99,102,241,0.1)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(99,102,241,0.2)"}}>
                           <div style={{fontSize:10,color:"#a5b4fc",marginBottom:4}}>🔍 Поиск</div>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:pc(kw.posSearch)}}>{kwS.posSearch}</span>
-                            <div><div style={{fontSize:11,color:T.sub}}>Ставка CPM</div><div style={{fontSize:12,fontFamily:"monospace",color:T.text}}>{kwS.bidSearch} ₽</div></div>
+                            <span style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:pc(kw.posSearch)}}>{kw.posSearch}</span>
+                            <div><div style={{fontSize:11,color:T.sub}}>Ставка CPM</div><div style={{fontSize:12,fontFamily:"monospace",color:T.text}}>{kw.bidSearch} ₽</div></div>
                           </div>
                         </div>
                         <div style={{background:"rgba(59,130,246,0.1)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(59,130,246,0.2)"}}>
                           <div style={{fontSize:10,color:"#93c5fd",marginBottom:4}}>🗂 Полки</div>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:pc(kw.posShelves)}}>{kwS.posShelves}</span>
-                            <div><div style={{fontSize:11,color:T.sub}}>Ставка CPM</div><div style={{fontSize:12,fontFamily:"monospace",color:T.text}}>{kwS.bidShelves} ₽</div></div>
+                            <span style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:pc(kw.posShelves)}}>{kw.posShelves}</span>
+                            <div><div style={{fontSize:11,color:T.sub}}>Ставка CPM</div><div style={{fontSize:12,fontFamily:"monospace",color:T.text}}>{kw.bidShelves} ₽</div></div>
                           </div>
                         </div>
                       </div>
@@ -1059,7 +1059,7 @@ function TabPositionsByPlacement({data,targetDrr}){
                   </div>
                   {isExp&&(
                     <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${T.border}`,display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-                      {[{l:"Заказы",v:kw.orders},{l:"Корзины",v:kw.baskets},{l:"CTR",v:fmt.pct(kw.ctr)},{l:"Расход",v:fmt.rub(kwS.spend)}].map(m=>(
+                      {[{l:"Заказы",v:kw.orders},{l:"Корзины",v:kw.baskets},{l:"CTR",v:fmt.pct(kw.ctr)},{l:"Расход",v:fmt.rub(kw.spend)}].map(m=>(
                         <div key={m.l} style={S.card2}><div style={{fontSize:10,color:T.sub}}>{m.l}</div><div style={{fontSize:12,fontFamily:"monospace",fontWeight:700,color:T.text}}>{m.v}</div></div>
                       ))}
                     </div>
@@ -1103,7 +1103,7 @@ function TabPositionsByPlacement({data,targetDrr}){
                 const deltaP=first&&last?first.posShelves-last.posShelves:0;
                 return(
                   <tr key={kw.keyword} style={{borderTop:`1px solid ${T.border}`,background:ki%2?"rgba(255,255,255,0.01)":"transparent"}}>
-                    <td style={{padding:"9px 10px",color:T.text}}>{kwS.keyword}</td>
+                    <td style={{padding:"9px 10px",color:T.text}}>{kw.keyword}</td>
                     <td style={{padding:"9px 6px",fontFamily:"monospace",color:T.sub}}>{fmt.num(kw.freq)}</td>
                     {/* Было/стало */}
                     <td style={{padding:"9px 10px",textAlign:"center"}}>
@@ -1216,10 +1216,10 @@ function TabAutoMinus({data}){
                 <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                   {mode==="manual"&&<input type="checkbox" checked={selected.has(kw.id)} onChange={()=>setSelected(prev=>{const n=new Set(prev);n.has(kw.id)?n.delete(kw.id):n.add(kw.id);return n;})} style={{marginTop:3,accentColor:"#dc2626",flexShrink:0}}/>}
                   <div style={{flex:1}}>
-                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kwS.keyword}</div>
+                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kw.keyword}</div>
                     <div style={{fontSize:11,color:T.sub,marginTop:2}}>Причина: {REASON_LABELS[kw.reason]||kw.reason} · {kw.addedDaysAgo}д. назад</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:8}}>
-                      {[{l:"Показы",v:fmt.num(kwS.impressions)},{l:"Клики",v:kw.clicks},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kwS.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:kw.orders===0?T.red:T.green}].map(m=>(
+                      {[{l:"Показы",v:fmt.num(kw.impressions)},{l:"Клики",v:kw.clicks},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kw.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:kw.orders===0?T.red:T.green}].map(m=>(
                         <div key={m.l}><div style={{fontSize:9,color:T.sub}}>{m.l}</div><div style={{fontSize:12,fontFamily:"monospace",fontWeight:600,color:m.c||T.text}}>{m.v}</div></div>
                       ))}
                     </div>
@@ -1240,10 +1240,10 @@ function TabAutoMinus({data}){
               <div key={kw.id} style={S.card2}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kwS.keyword}</div>
+                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kw.keyword}</div>
                     <div style={{fontSize:11,color:T.sub,marginTop:2}}>Удалён: {kw.deletedAt} · {kw.deletedBy} · {kw.reason}</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:8}}>
-                      {[{l:"Показы",v:fmt.num(kwS.impressions)},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kwS.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:T.red},{l:"CPO",v:kw.orders>0?fmt.rub(kw.spend/kw.orders):"—",c:T.sub}].map(m=>(
+                      {[{l:"Показы",v:fmt.num(kw.impressions)},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kw.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:T.red},{l:"CPO",v:kw.orders>0?fmt.rub(kw.spend/kw.orders):"—",c:T.sub}].map(m=>(
                         <div key={m.l}><div style={{fontSize:9,color:T.sub}}>{m.l}</div><div style={{fontSize:11,fontFamily:"monospace",fontWeight:600,color:m.c||T.text}}>{m.v}</div></div>
                       ))}
                     </div>
@@ -1821,7 +1821,7 @@ function ManualBidsTab({data,inp}){
           <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
             <div style={{flex:1,minWidth:120}}>
               <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Тип изменения</div>
-              <select value={massType} onChange={e=>setMassType(e.target.value)} style={{...selectStyle,width:"100%"}}>
+              <select value={massType} onChange={e=>setMassType(e.target.value)} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",width:"100%"}}>
                 <option value="set">Установить (₽)</option>
                 <option value="add">Добавить (±₽)</option>
                 <option value="pct">Изменить (%)</option>
@@ -1869,7 +1869,7 @@ function ManualBidsTab({data,inp}){
                   <input type="checkbox" checked={isSel} onChange={()=>toggleSelect(kw.keyword)}
                     style={{accentColor:T.wb,width:14,height:14,flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,color:T.text,fontWeight:600,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kwS.keyword}</div>
+                    <div style={{fontSize:12,color:T.text,fontWeight:600,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</div>
                     {/* Тип ставки */}
                     <div style={{display:"flex",gap:4,marginBottom:8}}>
                       {["CPM","CPC"].map(t=>(
