@@ -2190,12 +2190,24 @@ export default function App(){
   const [platform,setPlatform]=useState("wb");
   const [mainTab,setMainTab]=useState("dashboard");
   const [subTab,setSubTab]=useState("overview");
-  const [drrWB,setDrrWB]=useState(null);
-  const [catWB,setCatWB]=useState("");
-  const [budgetWB,setBudgetWB]=useState(null);
-  const [drrOzon,setDrrOzon]=useState(null);
-  const [catOzon,setCatOzon]=useState("");
-  const [budgetOzon,setBudgetOzon]=useState(null);
+
+  // ── localStorage helpers ──────────────────────────────────────────────────
+  function loadLS(key,fallback){try{const v=localStorage.getItem(key);return v!=null?JSON.parse(v):fallback;}catch{return fallback;}}
+  function saveLS(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch{}}
+
+  const [drrWB,setDrrWBRaw]=useState(()=>loadLS("pf_drr_wb",null));
+  const [catWB,setCatWBRaw]=useState(()=>loadLS("pf_cat_wb",""));
+  const [budgetWB,setBudgetWBRaw]=useState(()=>loadLS("pf_budget_wb",null));
+  const [drrOzon,setDrrOzonRaw]=useState(()=>loadLS("pf_drr_ozon",null));
+  const [catOzon,setCatOzonRaw]=useState(()=>loadLS("pf_cat_ozon",""));
+  const [budgetOzon,setBudgetOzonRaw]=useState(()=>loadLS("pf_budget_ozon",null));
+
+  function setDrrWB(v){setDrrWBRaw(v);saveLS("pf_drr_wb",v);}
+  function setCatWB(v){setCatWBRaw(v);saveLS("pf_cat_wb",v);}
+  function setBudgetWB(v){setBudgetWBRaw(v);saveLS("pf_budget_wb",v);}
+  function setDrrOzon(v){setDrrOzonRaw(v);saveLS("pf_drr_ozon",v);}
+  function setCatOzon(v){setCatOzonRaw(v);saveLS("pf_cat_ozon",v);}
+  function setBudgetOzon(v){setBudgetOzonRaw(v);saveLS("pf_budget_ozon",v);}
 
   const data=DEMO[platform];
   const targetDrr=platform==="wb"?drrWB:drrOzon;
