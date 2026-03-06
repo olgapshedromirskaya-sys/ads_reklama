@@ -1,6 +1,4 @@
-// @ts-nocheck
 import { useState } from "react";
-import { retrieveLaunchParams } from "@telegram-apps/sdk";
 
 const T={bg:"#151c2e",card:"#1e2640",card2:"#252e4a",border:"rgba(255,255,255,0.07)",text:"#ffffff",sub:"#8892a4",green:"#4ade80",yellow:"#fbbf24",red:"#f87171",wb:"#7c3aed",ozon:"#2563eb"};
 const S={card:{background:T.card,borderRadius:16,padding:16,border:`1px solid ${T.border}`},card2:{background:T.card2,borderRadius:12,padding:12,border:`1px solid ${T.border}`}};
@@ -160,7 +158,6 @@ function Tabs({tabs,active,onChange,accent}){
     </div>
   );
 }
-const selectStyle={width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box"};
 
 // Выбор периода + кампании (переиспользуемый компонент)
 const PERIODS=[{id:"today",l:"Сегодня"},{id:"yesterday",l:"Вчера"},{id:"7d",l:"7 дней"},{id:"custom",l:"Период"}];
@@ -208,9 +205,10 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
   const yesterday=data.daily[1];
   const allDays=data.daily;
 
-  // Переключатели периода для ключевых блоков
+  // Переключатели периода для каждого блока
   const [metricsPeriod,setMetricsPeriod]=useState("7d");
   const [placementsPeriod,setPlacementsPeriod]=useState("7d");
+  const [kwPeriod,setKwPeriod]=useState("7d");
 
   function getPeriodDays(period){
     if(period==="today") return allDays.slice(0,1);
@@ -243,9 +241,8 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
   const totalBaskets=mDays.reduce((s,x)=>s+x.baskets,0);
   const totalOrders=mDays.reduce((s,x)=>s+x.orders,0);
   const factDrr=totalRev>0?totalSpend/totalRev*100:null;
-  const drrSt=getDrrStatus(factDrr,targetDrr);
 
-  // Для спарклайна всегда берём 7 дней
+  // для спарклайна всегда берём 7 дней
   const week=allDays.slice(0,7);
   const avgCpm=totalImpr>0?totalSpend/totalImpr*1000:0;
   const avgCtr=totalImpr>0?totalClicks/totalImpr*100:0;
@@ -253,6 +250,28 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
   const avgCpl=totalBaskets>0?totalSpend/totalBaskets:0;
   const avgCpo=totalOrders>0?totalSpend/totalOrders:0;
   const cro=totalBaskets>0?totalOrders/totalBaskets*100:0;
+  const drrSt=getDrrStatus(factDrr,targetDrr);
+
+  // Места размещения (агрегат за неделю)
+  const srcAgg={};
+  week.forEach(day=>{
+    (day.sources||[]).forEach(s=>{
+      if(!srcAgg[s.type])srcAgg[s.type]={type:s.type,spend:0,impressions:0,clicks:0,orders:0,baskets:0};
+      srcAgg[s.type].spend+=s.spend;
+      srcAgg[s.type].impressions+=s.impressions;
+      srcAgg[s.type].clicks+=s.clicks;
+      srcAgg[s.type].orders+=s.orders||0;
+    });
+  });
+  // Корзины по источнику — оцениваем пропорционально
+  Object.values(srcAgg).forEach(s=>{
+    s.ctr=s.impressions>0?s.clicks/s.impressions*100:0;
+    s.cpm=s.impressions>0?s.spend/s.impressions*1000:0;
+    s.cpc=s.clicks>0?s.spend/s.clicks:0;
+    s.cpl=totalBaskets>0?s.spend/totalBaskets:0;
+    s.pct=totalSpend>0?s.spend/totalSpend*100:0;
+  });
+  const sources=Object.values(srcAgg).sort((a,b)=>b.spend-a.spend);
 
   // Динамика корзин сегодня/вчера
   const basketToday=today?.baskets||0;
@@ -262,6 +281,8 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
 
   // Бюджет
   const budgetSpendPct=data.budgetPlan>0?Math.round(totalSpend/data.budgetPlan*100):null;
+
+  const SRC_COLOR={поиск:"#6366f1",полки:"#0ea5e9",каталог:"#f59e0b"};
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -290,7 +311,7 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
                 </div>
               </div>
               <div style={{fontSize:22,padding:"10px 14px",borderRadius:12,background:`${DRR_ST[drrSt].c}18`,border:`1px solid ${DRR_ST[drrSt].c}30`}}>
-                {drrSt==="great"?"🎯":drrSt==="good"?"✅":drrSt==="warn"?"⚠️":"🚨"}
+                {drrSt==="great"?"🎯":drrSt==="ok"?"✅":drrSt==="warn"?"⚠️":"🚨"}
               </div>
             </div>
             {/* Бюджет прогресс */}
@@ -310,7 +331,7 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
               {[
                 {l:"Выручка",f:fmt.rubK(totalRev),p:fmt.rubK(data.revenuePlan),pct:data.revenuePlan?Math.round(totalRev/data.revenuePlan*100):null},
                 {l:"Заказы",f:totalOrders,p:data.ordersPlan,pct:data.ordersPlan?Math.round(totalOrders/data.ordersPlan*100):null},
-                {l:"% выкупа",f:`${d.fromAd.buyoutPct}%`,p:`${data.buyoutPlan}%`,pct:data.buyoutPlan?Math.round(d.fromAd.buyoutPct/data.buyoutPlan*100):null},
+                {l:"% выкупа",f:`${d.fromAd.buyoutPct}%`,p:`${data.buyoutPlan}%`,pct:Math.round(d.fromAd.buyoutPct/data.buyoutPlan*100)},
               ].map(m=>(
                 <div key={m.l} style={{...S.card2,padding:"8px 10px"}}>
                   <div style={{fontSize:9,color:T.sub,marginBottom:2}}>{m.l}</div>
@@ -403,7 +424,7 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
             {l:"📋 Заказано с рекламы",v:`${d.fromAd.ordered} шт | ${fmt.rubK(d.fromAd.orderedRevenue)}`},
             {l:"📊 % выкупа трафика",  v:`${d.fromAd.buyoutPct}%`,c:d.fromAd.buyoutPct>=80?T.green:d.fromAd.buyoutPct>=60?T.yellow:T.red},
             {l:"💸 Доля затрат в выручке",v:totalRev>0?`${(totalSpend/totalRev*100).toFixed(1)}%`:"—"},
-            {l:"📈 CRF (корзина→заказ)", v:totalOrders>0&&totalBaskets>0?`${(totalOrders/totalBaskets*100).toFixed(1)}%`:"—"},
+            {l:"📈 CRF (корзина→заказ)", v:`${(totalOrders>0&&totalBaskets>0?(totalOrders/totalBaskets*100).toFixed(1):"—")}%`},
           ].map(m=>(
             <div key={m.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
               <span style={{fontSize:12,color:T.sub}}>{m.l}</span>
@@ -437,22 +458,22 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
             s.pct=pTotalSpend>0?s.spend/pTotalSpend*100:0;
           });
           const pSources=Object.values(pSrcAgg).sort((a,b)=>b.spend-a.spend);
-          const SRC_COLOR={поиск:"#6366f1",полки:"#0ea5e9",каталог:"#f59e0b"};
+          const SRC_COLOR2={поиск:"#6366f1",полки:"#0ea5e9",каталог:"#f59e0b"};
           return(
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {pSources.map(s=>(
-                <div key={s.type} style={{...S.card2,borderLeft:`3px solid ${SRC_COLOR[s.type]||"#6366f1"}`}}>
+                <div key={s.type} style={{...S.card2,borderLeft:`3px solid ${SRC_COLOR2[s.type]||"#6366f1"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                     <span style={{fontSize:13,fontWeight:700,color:T.text,textTransform:"capitalize"}}>{s.type}</span>
                     <div style={{display:"flex",gap:6,alignItems:"center"}}>
                       <span style={{fontSize:11,color:T.sub}}>{s.pct.toFixed(0)}% бюджета</span>
-                      <div style={{background:`${SRC_COLOR[s.type]||"#6366f1"}20`,borderRadius:6,padding:"2px 8px"}}>
-                        <span style={{fontSize:11,fontWeight:700,color:SRC_COLOR[s.type]||"#6366f1"}}>{fmt.rubK(s.spend)}</span>
+                      <div style={{background:`${SRC_COLOR2[s.type]||"#6366f1"}20`,borderRadius:6,padding:"2px 8px"}}>
+                        <span style={{fontSize:11,fontWeight:700,color:SRC_COLOR2[s.type]||"#6366f1"}}>{fmt.rubK(s.spend)}</span>
                       </div>
                     </div>
                   </div>
                   <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2,marginBottom:10,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${s.pct}%`,background:SRC_COLOR[s.type]||"#6366f1",borderRadius:2}}/>
+                    <div style={{height:"100%",width:`${s.pct}%`,background:SRC_COLOR2[s.type]||"#6366f1",borderRadius:2}}/>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
                     {[
@@ -615,17 +636,17 @@ function TabFunnel({data}){
               {kws.slice(0,5).map(kw=>{
                 const bykt=Math.round(kw.orders*0.87);
                 const crOrder=kw.baskets?+(kw.orders/kw.baskets*100).toFixed(1):0;
-                const ctrSt=getCtrSt(kw.ctr);
+                const ctrSt=getCtrSt(kwS.ctr);
                 return(
                   <tr key={kw.keyword} style={{borderBottom:`1px solid ${T.border}`}}>
-                    <td style={{padding:"7px 8px",color:T.text,maxWidth:130}}>{kw.keyword}</td>
-                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{fmt.num(kw.impressions)}</td>
-                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{kw.clicks}</td>
+                    <td style={{padding:"7px 8px",color:T.text,maxWidth:130}}>{kwS.keyword}</td>
+                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{fmt.num(kwS.impressions)}</td>
+                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{kwS.clicks}</td>
                     <td style={{padding:"7px 8px"}}>
                       <span style={{fontFamily:"monospace",fontWeight:700,fontSize:11,padding:"2px 6px",borderRadius:6,background:ctrSt.bg,color:ctrSt.c}}>{fmt.pct(kw.ctr)}</span>
                     </td>
-                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{kw.baskets}</td>
-                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.text,fontWeight:700}}>{kw.orders}</td>
+                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.sub}}>{kwS.baskets}</td>
+                    <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.text,fontWeight:700}}>{kwS.orders}</td>
                     <td style={{padding:"7px 8px",fontFamily:"monospace",color:crOrder>=5?T.green:crOrder>=2?T.yellow:T.red}}>{crOrder}%</td>
                     <td style={{padding:"7px 8px",fontFamily:"monospace",color:T.green}}>{bykt}</td>
                   </tr>
@@ -708,7 +729,7 @@ function TabPlacements({data,targetDrr}){
         </div>
       </div>
 
-      {/* ── КЛЮЧИ — расширенная карточная таблица ── */}
+      {/* ── КЛЮЧИ — расширенная таблица ── */}
       <div style={S.card}>
         <SectionTitle>По ключевым словам — полные метрики</SectionTitle>
         <PeriodSwitch2 value={kwPeriod} onChange={setKwPeriod}/>
@@ -716,124 +737,124 @@ function TabPlacements({data,targetDrr}){
           // Масштабируем метрики ключей по выбранному периоду
           const kwScale=kwPeriod==="today"?1/7:kwPeriod==="yesterday"?1/6:1;
           return(
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {data.keywords.map((kw,ki)=>{
-                const kwS={...kw,
-                  impressions:Math.round(kw.impressions*kwScale),
-                  clicks:Math.max(0,Math.round(kw.clicks*kwScale)),
-                  baskets:Math.max(0,Math.round(kw.baskets*kwScale)),
-                  orders:Math.max(0,Math.round(kw.orders*kwScale)),
-                  spend:Math.round(kw.spend*kwScale),
-                  revenue:Math.round(kw.revenue*kwScale),
-                };
-                const drr=kwS.revenue>0?kwS.spend/kwS.revenue*100:null;
-                const ctrSt=getCtrSt(kwS.ctr);
-                const pc=pos=>pos<=5?"#4ade80":pos<=10?"#86efac":pos<=20?"#fbbf24":"#f87171";
-                const dS=kwS.posPrev-kwS.posSearch;
-                const dP=Math.round((kwS.posPrev-kwS.posShelves)*0.8);
-                const cpl=kwS.baskets>0?kwS.spend/kwS.baskets:null;
-                const cro=kwS.baskets>0?kwS.orders/kwS.baskets*100:0;
-                const crf=kwS.impressions>0?kwS.baskets/kwS.impressions*100:0;
-                // Мок динамики корзин: ±рандомно на основе ki
-                const basketDiff=[2,-1,0,1,-2,3][ki%6];
-                const basketYest=Math.max(1,kwS.baskets-basketDiff);
-                const basketPct=basketYest>0?basketDiff/basketYest*100:0;
-                return(
-                  <div key={kw.keyword} style={{...S.card2,borderLeft:`3px solid ${kwS.alert?"rgba(248,113,113,0.6)":drr&&targetDrr&&drr>targetDrr?"rgba(251,191,36,0.5)":"rgba(74,222,128,0.3)"}`}}>
-                    {/* Строка 1: Ключ + позиции */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
-                          {kwS.alert&&<span style={{fontSize:10}}>⚠️</span>}
-                          <span style={{fontSize:13,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kwS.keyword}</span>
-                        </div>
-                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                          {/* Поиск */}
-                          <div style={{display:"flex",alignItems:"center",gap:3,background:"rgba(99,102,241,0.1)",borderRadius:6,padding:"2px 7px"}}>
-                            <span style={{fontSize:9,color:"#a5b4fc"}}>🔍</span>
-                            <span style={{fontFamily:"monospace",fontWeight:700,fontSize:12,color:pc(kwS.posSearch)}}>{kwS.posSearch}</span>
-                            <span style={{fontSize:10,fontWeight:700,color:dS>0?T.green:dS<0?T.red:T.sub}}>{dS>0?`↑${dS}`:dS<0?`↓${Math.abs(dS)}`:"→"}</span>
-                            <span style={{fontSize:9,color:T.sub}}>{kwS.bidSearch}₽</span>
-                          </div>
-                          {/* Полки */}
-                          <div style={{display:"flex",alignItems:"center",gap:3,background:"rgba(59,130,246,0.1)",borderRadius:6,padding:"2px 7px"}}>
-                            <span style={{fontSize:9,color:"#93c5fd"}}>🗂</span>
-                            <span style={{fontFamily:"monospace",fontWeight:700,fontSize:12,color:pc(kwS.posShelves)}}>{kwS.posShelves}</span>
-                            <span style={{fontSize:10,fontWeight:700,color:dP>0?T.green:dP<0?T.red:T.sub}}>{dP>0?`↑${dP}`:dP<0?`↓${Math.abs(dP)}`:"→"}</span>
-                            <span style={{fontSize:9,color:T.sub}}>{kwS.bidShelves}₽</span>
-                          </div>
-                        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {data.keywords.map((kw,ki)=>{
+            const kwS={...kw,
+              impressions:Math.round(kw.impressions*kwScale),
+              clicks:Math.max(1,Math.round(kw.clicks*kwScale)),
+              baskets:Math.max(1,Math.round(kw.baskets*kwScale)),
+              orders:Math.max(kwPeriod==="today"?0:1,Math.round(kw.orders*kwScale)),
+              spend:Math.round(kw.spend*kwScale),
+              revenue:Math.round(kw.revenue*kwScale),
+            };
+            const drr=kwS.revenue>0?kwS.spend/kwS.revenue*100:null;
+            const ctrSt=getCtrSt(kw.ctr);
+            const pc=pos=>pos<=5?"#4ade80":pos<=10?"#86efac":pos<=20?"#fbbf24":"#f87171";
+            const dS=kwS.posPrev-kwS.posSearch;
+            const dP=Math.round((kwS.posPrev-kwS.posShelves)*0.8);
+            const cpl=kwS.baskets>0?kwS.spend/kwS.baskets:null;
+            const cro=kwS.baskets>0?kwS.orders/kwS.baskets*100:0;
+            const crf=kwS.impressions>0?kwS.baskets/kwS.impressions*100:0;
+            // Мок динамики корзин: ±рандомно на основе ki
+            const basketDiff=[2,-1,0,1,-2,3][ki%6];
+            const basketYest=Math.max(1,kwS.baskets-(basketDiff));
+            const basketPct=basketYest>0?basketDiff/basketYest*100:0;
+            return(
+              <div key={kw.keyword} style={{...S.card2,borderLeft:`3px solid ${kw.alert?"rgba(248,113,113,0.6)":drr&&targetDrr&&drr>targetDrr?"rgba(251,191,36,0.5)":"rgba(74,222,128,0.3)"}`}}>
+                {/* Строка 1: Ключ + позиции */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
+                      {kwS.alert&&<span style={{fontSize:10}}>⚠️</span>}
+                      <span style={{fontSize:13,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kwS.keyword}</span>
+                    </div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {/* Поиск */}
+                      <div style={{display:"flex",alignItems:"center",gap:3,background:"rgba(99,102,241,0.1)",borderRadius:6,padding:"2px 7px"}}>
+                        <span style={{fontSize:9,color:"#a5b4fc"}}>🔍</span>
+                        <span style={{fontFamily:"monospace",fontWeight:700,fontSize:12,color:pc(kw.posSearch)}}>{kwS.posSearch}</span>
+                        <span style={{fontSize:10,fontWeight:700,color:dS>0?T.green:dS<0?T.red:T.sub}}>{dS>0?`↑${dS}`:dS<0?`↓${Math.abs(dS)}`:"→"}</span>
+                        <span style={{fontSize:9,color:T.sub}}>{kwS.bidSearch}₽</span>
                       </div>
-                      {/* ДРР */}
-                      <DrrBadge drr={drr} target={targetDrr}/>
-                    </div>
-
-                    {/* Строка 2: Метрики трафика */}
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
-                      {[
-                        {l:"Показы",v:fmt.num(kwS.impressions),sub:""},
-                        {l:"Клики",v:kwS.clicks,sub:""},
-                        {l:"CTR",v:fmt.pct(kwS.ctr),c:ctrSt.c,bg:ctrSt.bg},
-                        {l:"CPC",v:fmt.rub(kwS.spend/Math.max(kwS.clicks,1)),sub:""},
-                      ].map(m=>(
-                        <div key={m.l} style={{textAlign:"center",background:m.bg||"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
-                          <div style={{fontSize:9,color:T.sub}}>{m.l}</div>
-                          <div style={{fontSize:11,fontWeight:700,fontFamily:"monospace",color:m.c||T.text}}>{m.v}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Строка 3: Корзины с динамикой */}
-                    <div style={{...S.card2,padding:"7px 10px",marginBottom:8,background:basketDiff>0?"rgba(74,222,128,0.05)":basketDiff<0?"rgba(248,113,113,0.05)":"rgba(255,255,255,0.02)",borderColor:basketDiff>0?"rgba(74,222,128,0.2)":basketDiff<0?"rgba(248,113,113,0.2)":T.border}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:16}}>🛒</span>
-                          <div>
-                            <div style={{fontSize:9,color:T.sub}}>Корзины</div>
-                            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-                              <span style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:T.text}}>{kwS.baskets}</span>
-                              <span style={{fontSize:12,fontWeight:700,color:basketDiff>0?T.green:basketDiff<0?T.red:T.sub}}>
-                                {basketDiff>0?`↑ +${basketDiff}`:basketDiff<0?`↓ ${basketDiff}`:"→"}
-                              </span>
-                              <span style={{fontSize:10,color:T.sub}}>({basketPct>0?"+":""}{basketPct.toFixed(0)}% к вчера)</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{display:"flex",gap:12}}>
-                          <div style={{textAlign:"center"}}>
-                            <div style={{fontSize:9,color:T.sub}}>CPL</div>
-                            <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:T.text}}>{cpl?fmt.rub(cpl):"—"}</div>
-                          </div>
-                          <div style={{textAlign:"center"}}>
-                            <div style={{fontSize:9,color:T.sub}}>CRO</div>
-                            <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:cro>=10?T.green:cro>=5?T.yellow:T.red}}>{cro.toFixed(1)}%</div>
-                          </div>
-                          <div style={{textAlign:"center"}}>
-                            <div style={{fontSize:9,color:T.sub}}>CRF</div>
-                            <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:T.text}}>{crf.toFixed(2)}%</div>
-                          </div>
-                        </div>
+                      {/* Полки */}
+                      <div style={{display:"flex",alignItems:"center",gap:3,background:"rgba(59,130,246,0.1)",borderRadius:6,padding:"2px 7px"}}>
+                        <span style={{fontSize:9,color:"#93c5fd"}}>🗂</span>
+                        <span style={{fontFamily:"monospace",fontWeight:700,fontSize:12,color:pc(kw.posShelves)}}>{kwS.posShelves}</span>
+                        <span style={{fontSize:10,fontWeight:700,color:dP>0?T.green:dP<0?T.red:T.sub}}>{dP>0?`↑${dP}`:dP<0?`↓${Math.abs(dP)}`:"→"}</span>
+                        <span style={{fontSize:9,color:T.sub}}>{kwS.bidShelves}₽</span>
                       </div>
-                    </div>
-
-                    {/* Строка 4: Заказы + затраты + доля */}
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
-                      {[
-                        {l:"Заказы",v:kwS.orders,c:kwS.orders>0?T.green:T.red},
-                        {l:"Затраты",v:fmt.rub(kwS.spend),sub:""},
-                        {l:"Выручка",v:fmt.rubK(kwS.revenue),sub:""},
-                        {l:"Доля затр.",v:kwS.revenue>0?`${(kwS.spend/kwS.revenue*100).toFixed(1)}%`:"—",sub:""},
-                      ].map(m=>(
-                        <div key={m.l} style={{textAlign:"center",background:"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
-                          <div style={{fontSize:9,color:T.sub}}>{m.l}</div>
-                          <div style={{fontSize:11,fontWeight:700,fontFamily:"monospace",color:m.c||T.text}}>{m.v}</div>
-                        </div>
-                      ))}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  {/* ДРР */}
+                  <DrrBadge drr={drr} target={targetDrr}/>
+                </div>
+
+                {/* Строка 2: Метрики трафика */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
+                  {[
+                    {l:"Показы",v:fmt.num(kwS.impressions),sub:""},
+                    {l:"Клики",v:kw.clicks,sub:""},
+                    {l:"CTR",v:fmt.pct(kw.ctr),c:ctrSt.c,bg:ctrSt.bg},
+                    {l:"CPC",v:fmt.rub(kwS.spend/Math.max(kwS.clicks,1)),sub:""},
+                  ].map(m=>(
+                    <div key={m.l} style={{textAlign:"center",background:m.bg||"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
+                      <div style={{fontSize:9,color:T.sub}}>{m.l}</div>
+                      <div style={{fontSize:11,fontWeight:700,fontFamily:"monospace",color:m.c||T.text}}>{m.v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Строка 3: Корзины с динамикой */}
+                <div style={{...S.card2,padding:"7px 10px",marginBottom:8,background:basketDiff>0?"rgba(74,222,128,0.05)":basketDiff<0?"rgba(248,113,113,0.05)":"rgba(255,255,255,0.02)",borderColor:basketDiff>0?"rgba(74,222,128,0.2)":basketDiff<0?"rgba(248,113,113,0.2)":T.border}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:16}}>🛒</span>
+                      <div>
+                        <div style={{fontSize:9,color:T.sub}}>Корзины</div>
+                        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                          <span style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:T.text}}>{kwS.baskets}</span>
+                          <span style={{fontSize:12,fontWeight:700,color:basketDiff>0?T.green:basketDiff<0?T.red:T.sub}}>
+                            {basketDiff>0?`↑ +${basketDiff}`:basketDiff<0?`↓ ${basketDiff}`:"→"}
+                          </span>
+                          <span style={{fontSize:10,color:T.sub}}>({basketPct>0?"+":""}{basketPct.toFixed(0)}% к вчера)</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:12}}>
+                      <div style={{textAlign:"center"}}>
+                        <div style={{fontSize:9,color:T.sub}}>CPL</div>
+                        <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:T.text}}>{cpl?fmt.rub(cpl):"—"}</div>
+                      </div>
+                      <div style={{textAlign:"center"}}>
+                        <div style={{fontSize:9,color:T.sub}}>CRO</div>
+                        <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:cro>=10?T.green:cro>=5?T.yellow:T.red}}>{cro.toFixed(1)}%</div>
+                      </div>
+                      <div style={{textAlign:"center"}}>
+                        <div style={{fontSize:9,color:T.sub}}>CRF</div>
+                        <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:T.text}}>{crf.toFixed(2)}%</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Строка 4: Заказы + затраты + доля */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+                  {[
+                    {l:"Заказы",v:kw.orders,c:kw.orders>0?T.green:T.red},
+                    {l:"Затраты",v:fmt.rub(kwS.spend),sub:""},
+                    {l:"Выручка",v:fmt.rubK(kwS.revenue),sub:""},
+                    {l:"Доля затр.",v:kwS.revenue>0?`${(kwS.spend/kwS.revenue*100).toFixed(1)}%`:"—",sub:""},
+                  ].map(m=>(
+                    <div key={m.l} style={{textAlign:"center",background:"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
+                      <div style={{fontSize:9,color:T.sub}}>{m.l}</div>
+                      <div style={{fontSize:11,fontWeight:700,fontFamily:"monospace",color:m.c||T.text}}>{m.v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
           );
         })()}
       </div>
@@ -1007,8 +1028,8 @@ function TabPositionsByPlacement({data,targetDrr}){
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                        {kw.alert&&<span style={{fontSize:11}}>⚠️</span>}
-                        <span style={{fontSize:13,fontWeight:600,color:T.text}}>{kw.keyword}</span>
+                        {kwS.alert&&<span style={{fontSize:11}}>⚠️</span>}
+                        <span style={{fontSize:13,fontWeight:600,color:T.text}}>{kwS.keyword}</span>
                         <span style={{fontSize:11,color:delta>0?T.green:delta<0?T.red:T.sub,fontWeight:700}}>
                           {delta>0?`↑${delta}`:delta<0?`↓${Math.abs(delta)}`:"→"}
                         </span>
@@ -1017,15 +1038,15 @@ function TabPositionsByPlacement({data,targetDrr}){
                         <div style={{background:"rgba(99,102,241,0.1)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(99,102,241,0.2)"}}>
                           <div style={{fontSize:10,color:"#a5b4fc",marginBottom:4}}>🔍 Поиск</div>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:pc(kw.posSearch)}}>{kw.posSearch}</span>
-                            <div><div style={{fontSize:11,color:T.sub}}>Ставка CPM</div><div style={{fontSize:12,fontFamily:"monospace",color:T.text}}>{kw.bidSearch} ₽</div></div>
+                            <span style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:pc(kw.posSearch)}}>{kwS.posSearch}</span>
+                            <div><div style={{fontSize:11,color:T.sub}}>Ставка CPM</div><div style={{fontSize:12,fontFamily:"monospace",color:T.text}}>{kwS.bidSearch} ₽</div></div>
                           </div>
                         </div>
                         <div style={{background:"rgba(59,130,246,0.1)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(59,130,246,0.2)"}}>
                           <div style={{fontSize:10,color:"#93c5fd",marginBottom:4}}>🗂 Полки</div>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:pc(kw.posShelves)}}>{kw.posShelves}</span>
-                            <div><div style={{fontSize:11,color:T.sub}}>Ставка CPM</div><div style={{fontSize:12,fontFamily:"monospace",color:T.text}}>{kw.bidShelves} ₽</div></div>
+                            <span style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:pc(kw.posShelves)}}>{kwS.posShelves}</span>
+                            <div><div style={{fontSize:11,color:T.sub}}>Ставка CPM</div><div style={{fontSize:12,fontFamily:"monospace",color:T.text}}>{kwS.bidShelves} ₽</div></div>
                           </div>
                         </div>
                       </div>
@@ -1037,7 +1058,7 @@ function TabPositionsByPlacement({data,targetDrr}){
                   </div>
                   {isExp&&(
                     <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${T.border}`,display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-                      {[{l:"Заказы",v:kw.orders},{l:"Корзины",v:kw.baskets},{l:"CTR",v:fmt.pct(kw.ctr)},{l:"Расход",v:fmt.rub(kw.spend)}].map(m=>(
+                      {[{l:"Заказы",v:kw.orders},{l:"Корзины",v:kw.baskets},{l:"CTR",v:fmt.pct(kw.ctr)},{l:"Расход",v:fmt.rub(kwS.spend)}].map(m=>(
                         <div key={m.l} style={S.card2}><div style={{fontSize:10,color:T.sub}}>{m.l}</div><div style={{fontSize:12,fontFamily:"monospace",fontWeight:700,color:T.text}}>{m.v}</div></div>
                       ))}
                     </div>
@@ -1081,7 +1102,7 @@ function TabPositionsByPlacement({data,targetDrr}){
                 const deltaP=first&&last?first.posShelves-last.posShelves:0;
                 return(
                   <tr key={kw.keyword} style={{borderTop:`1px solid ${T.border}`,background:ki%2?"rgba(255,255,255,0.01)":"transparent"}}>
-                    <td style={{padding:"9px 10px",color:T.text}}>{kw.keyword}</td>
+                    <td style={{padding:"9px 10px",color:T.text}}>{kwS.keyword}</td>
                     <td style={{padding:"9px 6px",fontFamily:"monospace",color:T.sub}}>{fmt.num(kw.freq)}</td>
                     {/* Было/стало */}
                     <td style={{padding:"9px 10px",textAlign:"center"}}>
@@ -1194,10 +1215,10 @@ function TabAutoMinus({data}){
                 <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                   {mode==="manual"&&<input type="checkbox" checked={selected.has(kw.id)} onChange={()=>setSelected(prev=>{const n=new Set(prev);n.has(kw.id)?n.delete(kw.id):n.add(kw.id);return n;})} style={{marginTop:3,accentColor:"#dc2626",flexShrink:0}}/>}
                   <div style={{flex:1}}>
-                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kw.keyword}</div>
+                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kwS.keyword}</div>
                     <div style={{fontSize:11,color:T.sub,marginTop:2}}>Причина: {REASON_LABELS[kw.reason]||kw.reason} · {kw.addedDaysAgo}д. назад</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:8}}>
-                      {[{l:"Показы",v:fmt.num(kw.impressions)},{l:"Клики",v:kw.clicks},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kw.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:kw.orders===0?T.red:T.green}].map(m=>(
+                      {[{l:"Показы",v:fmt.num(kwS.impressions)},{l:"Клики",v:kw.clicks},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kwS.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:kw.orders===0?T.red:T.green}].map(m=>(
                         <div key={m.l}><div style={{fontSize:9,color:T.sub}}>{m.l}</div><div style={{fontSize:12,fontFamily:"monospace",fontWeight:600,color:m.c||T.text}}>{m.v}</div></div>
                       ))}
                     </div>
@@ -1218,10 +1239,10 @@ function TabAutoMinus({data}){
               <div key={kw.id} style={S.card2}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kw.keyword}</div>
+                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kwS.keyword}</div>
                     <div style={{fontSize:11,color:T.sub,marginTop:2}}>Удалён: {kw.deletedAt} · {kw.deletedBy} · {kw.reason}</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:8}}>
-                      {[{l:"Показы",v:fmt.num(kw.impressions)},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kw.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:T.red},{l:"CPO",v:kw.orders>0?fmt.rub(kw.spend/kw.orders):"—",c:T.sub}].map(m=>(
+                      {[{l:"Показы",v:fmt.num(kwS.impressions)},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kwS.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:T.red},{l:"CPO",v:kw.orders>0?fmt.rub(kw.spend/kw.orders):"—",c:T.sub}].map(m=>(
                         <div key={m.l}><div style={{fontSize:9,color:T.sub}}>{m.l}</div><div style={{fontSize:11,fontFamily:"monospace",fontWeight:600,color:m.c||T.text}}>{m.v}</div></div>
                       ))}
                     </div>
@@ -1371,6 +1392,37 @@ function TabPlanFact({data,targetDrr,onSetTargetDrr,category,onSetCategory,budge
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ЭКРАН — НЕТ ДОСТУПА
+// ═══════════════════════════════════════════════════════════════════════════════
+function AccessDenied({tgUser,onRequestAccess}){
+  const [sent,setSent]=useState(false);
+  return(
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}}>
+      <div style={{fontSize:56,marginBottom:16}}>🔒</div>
+      <div style={{fontSize:20,fontWeight:700,color:T.text,marginBottom:8}}>Нет доступа</div>
+      <div style={{fontSize:13,color:T.sub,marginBottom:24,maxWidth:300,lineHeight:1.6}}>
+        Приложение доступно только приглашённым пользователям. Обратитесь к владельцу аккаунта.
+      </div>
+      {tgUser&&(
+        <div style={{...S.card2,marginBottom:20,textAlign:"left",width:"100%",maxWidth:320}}>
+          <div style={{fontSize:11,color:T.sub,marginBottom:4}}>Ваш Telegram</div>
+          <div style={{fontSize:14,fontWeight:600,color:T.text}}>
+            {tgUser.first_name}{tgUser.last_name?" "+tgUser.last_name:""}
+          </div>
+          {tgUser.username&&<div style={{fontSize:12,color:"#a78bfa",marginTop:2}}>@{tgUser.username}</div>}
+          <div style={{fontSize:11,color:T.sub,marginTop:4,fontFamily:"monospace"}}>ID: {tgUser.id}</div>
+        </div>
+      )}
+      <button onClick={()=>{onRequestAccess();setSent(true);}} disabled={sent}
+        style={{background:sent?"rgba(74,222,128,0.15)":T.wb,color:sent?T.green:"#fff",border:sent?"1px solid rgba(74,222,128,0.3)":"none",borderRadius:12,padding:"13px 28px",fontSize:14,fontWeight:700,cursor:sent?"default":"pointer",width:"100%",maxWidth:320}}>
+        {sent?"✅ Запрос отправлен владельцу":"Запросить доступ"}
+      </button>
+      {sent&&<div style={{fontSize:11,color:T.sub,marginTop:12}}>Владелец получит уведомление в Telegram</div>}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // НАСТРОЙКИ — API ключи + сотрудники (доступ по Telegram ID)
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabSettings({currentUserTgId}){
@@ -1379,28 +1431,13 @@ function TabSettings({currentUserTgId}){
   const [ozonClientId,setOzonClientId]=useState("");
   const [wbSaved,setWbSaved]=useState(false);
   const [ozonSaved,setOzonSaved]=useState(false);
-  const [employees,setEmployees]=useState([
-    {id:1,name:"Анна Иванова",  tgUsername:"anna_ivanova",  tgId:"123456789", role:"Менеджер",      access:["wb","ozon"]},
-    {id:2,name:"Дмитрий Петров",tgUsername:"dmitry_petrov", tgId:"987654321", role:"Аналитик",      access:["wb"]},
-  ]);
-  const [showAddEmp,setShowAddEmp]=useState(false);
-  const [newName,setNewName]=useState("");
-  const [newTgUsername,setNewTgUsername]=useState("");
-  const [newTgId,setNewTgId]=useState("");
-  const [newRole,setNewRole]=useState("Менеджер");
-  const [newAccess,setNewAccess]=useState(["wb","ozon"]);
+
+  const employees=[
+    {id:1,name:"Анна Иванова",   tgUsername:"anna_ivanova",  tgId:"123456789", role:"Менеджер", access:["wb","ozon"]},
+    {id:2,name:"Дмитрий Петров", tgUsername:"dmitry_petrov", tgId:"987654321", role:"Аналитик", access:["wb"]},
+  ];
 
   const inp={width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box"};
-
-  function addEmployee(){
-    if(!newName||!newTgId)return;
-    setEmployees(prev=>[...prev,{id:Date.now(),name:newName,tgUsername:newTgUsername.replace("@",""),tgId:newTgId,role:newRole,access:newAccess}]);
-    setNewName("");setNewTgUsername("");setNewTgId("");setNewRole("Менеджер");setNewAccess(["wb","ozon"]);setShowAddEmp(false);
-  }
-
-  function removeEmployee(id){setEmployees(prev=>prev.filter(e=>e.id!==id));}
-
-  const ROLES=["Менеджер","Аналитик","Администратор","Только просмотр"];
   const ROLE_COLORS={"Администратор":"#f59e0b","Менеджер":"#a78bfa","Аналитик":"#38bdf8","Только просмотр":"#8892a4"};
 
   return(
@@ -1409,11 +1446,15 @@ function TabSettings({currentUserTgId}){
       {/* Как работает доступ */}
       <div style={{...S.card,background:"rgba(167,139,250,0.06)",borderColor:"rgba(167,139,250,0.2)"}}>
         <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-          <span style={{fontSize:20}}>🔐</span>
+          <span style={{fontSize:22}}>🔐</span>
           <div>
             <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:4}}>Доступ по Telegram ID</div>
-            <div style={{fontSize:11,color:T.sub,lineHeight:1.7}}>
-              Приложение открывается только у пользователей из списка ниже. Telegram автоматически передаёт ID при открытии Mini App — ничего вводить не нужно.
+            <div style={{fontSize:11,color:T.sub,lineHeight:1.8}}>
+              Приложение открывается только у приглашённых пользователей. Добавление и удаление сотрудников — через бота.
+            </div>
+            <div style={{marginTop:10,display:"inline-flex",alignItems:"center",gap:6,background:"rgba(167,139,250,0.12)",border:"1px solid rgba(167,139,250,0.3)",borderRadius:8,padding:"6px 12px"}}>
+              <span style={{fontSize:14}}>🤖</span>
+              <span style={{fontSize:12,color:"#c4b5fd",fontWeight:600}}>Управление через бота → /adduser</span>
             </div>
           </div>
         </div>
@@ -1458,109 +1499,44 @@ function TabSettings({currentUserTgId}){
         </div>
       </div>
 
-      {/* Сотрудники */}
+      {/* Сотрудники — только просмотр */}
       <div style={S.card}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <div>
-            <SectionTitle marginBottom={0}>👥 Доступ сотрудников</SectionTitle>
-            <div style={{fontSize:11,color:T.sub,marginTop:3}}>{employees.length} пользователей имеют доступ</div>
-          </div>
-          <button onClick={()=>setShowAddEmp(!showAddEmp)}
-            style={{fontSize:12,color:"#a78bfa",background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.3)",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontWeight:600,flexShrink:0}}>
-            {showAddEmp?"Отмена":"+ Добавить"}
-          </button>
+        <div style={{marginBottom:14}}>
+          <SectionTitle marginBottom={2}>👥 Сотрудники с доступом</SectionTitle>
+          <div style={{fontSize:11,color:T.sub}}>{employees.length} пользователя · добавление через бота</div>
         </div>
-
-        {/* Форма добавления */}
-        {showAddEmp&&(
-          <div style={{...S.card2,marginBottom:12}}>
-            <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:12}}>Новый сотрудник</div>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <div>
-                <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Имя сотрудника</div>
-                <input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Иванова Анна" style={inp}/>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <div>
-                  <div style={{fontSize:10,color:T.sub,marginBottom:4}}>@username в Telegram</div>
-                  <input value={newTgUsername} onChange={e=>setNewTgUsername(e.target.value)} placeholder="@anna_ivanova" style={{...inp,fontFamily:"monospace"}}/>
-                </div>
-                <div>
-                  <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Telegram ID <span style={{color:T.red}}>*</span></div>
-                  <input value={newTgId} onChange={e=>setNewTgId(e.target.value)} placeholder="123456789" style={{...inp,fontFamily:"monospace"}}/>
-                </div>
-              </div>
-              <div style={{fontSize:10,color:"rgba(251,191,36,0.8)",background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:8,padding:"8px 10px"}}>
-                💡 Telegram ID можно узнать через бота @userinfobot — сотрудник пишет боту и получает свой ID
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <div>
-                  <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Роль</div>
-                  <select value={newRole} onChange={e=>setNewRole(e.target.value)} style={{...selectStyle,width:"100%"}}>
-                    {ROLES.map(r=><option key={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Площадки</div>
-                  <div style={{display:"flex",gap:10,paddingTop:8}}>
-                    {["wb","ozon"].map(p=>(
-                      <label key={p} style={{display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
-                        <input type="checkbox" checked={newAccess.includes(p)}
-                          onChange={()=>setNewAccess(prev=>prev.includes(p)?prev.filter(x=>x!==p):[...prev,p])}
-                          style={{accentColor:p==="wb"?T.wb:T.ozon,width:14,height:14}}/>
-                        <span style={{fontSize:12,color:T.text}}>{p==="wb"?"WB":"Ozon"}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <button onClick={addEmployee} disabled={!newName||!newTgId}
-                style={{background:newName&&newTgId?"rgba(167,139,250,0.2)":"rgba(255,255,255,0.04)",color:newName&&newTgId?"#a78bfa":T.sub,border:`1px solid ${newName&&newTgId?"rgba(167,139,250,0.3)":T.border}`,borderRadius:10,padding:"10px",fontSize:13,fontWeight:700,cursor:newName&&newTgId?"pointer":"default",width:"100%"}}>
-                Добавить сотрудника
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Список */}
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {employees.map(e=>{
             const isCurrentUser=e.tgId===currentUserTgId;
             return(
               <div key={e.id} style={{...S.card2,border:`1px solid ${isCurrentUser?"rgba(167,139,250,0.3)":T.border}`,background:isCurrentUser?"rgba(167,139,250,0.05)":T.card2}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                  <div style={{display:"flex",gap:10,alignItems:"flex-start",flex:1}}>
-                    {/* Аватар */}
-                    <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${T.wb},${T.ozon})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#fff",flexShrink:0}}>
-                      {e.name[0]}
+                <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                  <div style={{width:38,height:38,borderRadius:"50%",background:`linear-gradient(135deg,${T.wb},${T.ozon})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#fff",flexShrink:0}}>
+                    {e.name[0]}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                      <span style={{fontSize:13,color:T.text,fontWeight:600}}>{e.name}</span>
+                      {isCurrentUser&&<span style={{fontSize:9,color:"#a78bfa",background:"rgba(167,139,250,0.15)",padding:"1px 6px",borderRadius:10}}>это вы</span>}
                     </div>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                        <span style={{fontSize:13,color:T.text,fontWeight:600}}>{e.name}</span>
-                        {isCurrentUser&&<span style={{fontSize:9,color:"#a78bfa",background:"rgba(167,139,250,0.15)",padding:"1px 6px",borderRadius:10}}>это вы</span>}
-                      </div>
-                      <div style={{fontSize:11,color:"#a78bfa",marginTop:1}}>
-                        {e.tgUsername?"@"+e.tgUsername+" · ":""}
-                        <span style={{fontFamily:"monospace",color:T.sub}}>ID: {e.tgId}</span>
-                      </div>
-                      <div style={{display:"flex",gap:5,marginTop:6,flexWrap:"wrap"}}>
-                        <span style={{fontSize:10,color:ROLE_COLORS[e.role]||"#a78bfa",background:`${ROLE_COLORS[e.role]||"#a78bfa"}15`,padding:"2px 8px",borderRadius:10,border:`1px solid ${ROLE_COLORS[e.role]||"#a78bfa"}30`}}>{e.role}</span>
-                        {e.access.map(p=>(
-                          <span key={p} style={{fontSize:10,color:"#fff",background:p==="wb"?T.wb:T.ozon,padding:"2px 8px",borderRadius:10}}>{p.toUpperCase()}</span>
-                        ))}
-                      </div>
+                    <div style={{fontSize:11,color:"#a78bfa",marginTop:1}}>
+                      {e.tgUsername?"@"+e.tgUsername+" · ":""}
+                      <span style={{fontFamily:"monospace",fontSize:10,color:T.sub}}>ID: {e.tgId}</span>
+                    </div>
+                    <div style={{display:"flex",gap:5,marginTop:6,flexWrap:"wrap"}}>
+                      <span style={{fontSize:10,color:ROLE_COLORS[e.role]||"#a78bfa",background:`${ROLE_COLORS[e.role]||"#a78bfa"}15`,padding:"2px 8px",borderRadius:10,border:`1px solid ${ROLE_COLORS[e.role]||"#a78bfa"}30`}}>{e.role}</span>
+                      {e.access.map(p=>(
+                        <span key={p} style={{fontSize:10,color:"#fff",background:p==="wb"?T.wb:T.ozon,padding:"2px 8px",borderRadius:10}}>{p.toUpperCase()}</span>
+                      ))}
                     </div>
                   </div>
-                  {!isCurrentUser&&(
-                    <button onClick={()=>removeEmployee(e.id)}
-                      style={{background:"rgba(248,113,113,0.08)",color:T.red,border:"1px solid rgba(248,113,113,0.2)",borderRadius:8,padding:"5px 10px",fontSize:11,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-                      Удалить
-                    </button>
-                  )}
                 </div>
               </div>
             );
           })}
+        </div>
+        <div style={{marginTop:12,padding:"10px 14px",background:"rgba(255,255,255,0.03)",border:`1px solid ${T.border}`,borderRadius:10,fontSize:11,color:T.sub,textAlign:"center"}}>
+          Чтобы добавить или удалить сотрудника — напишите боту команду <span style={{color:"#a78bfa",fontFamily:"monospace"}}>/adduser</span> или <span style={{color:T.red,fontFamily:"monospace"}}>/removeuser</span>
         </div>
       </div>
     </div>
@@ -1892,7 +1868,7 @@ function ManualBidsTab({data,inp}){
                   <input type="checkbox" checked={isSel} onChange={()=>toggleSelect(kw.keyword)}
                     style={{accentColor:T.wb,width:14,height:14,flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,color:T.text,fontWeight:600,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</div>
+                    <div style={{fontSize:12,color:T.text,fontWeight:600,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kwS.keyword}</div>
                     {/* Тип ставки */}
                     <div style={{display:"flex",gap:4,marginBottom:8}}>
                       {["CPM","CPC"].map(t=>(
@@ -2197,22 +2173,18 @@ const SUB_TABS={
   ],
 };
 
-export default function AdsAnalyticsPage(){
-  // Получаем реального пользователя из Telegram
-  let tgUser = { id: "", first_name: "Пользователь", last_name: "", username: "" };
-  try {
-    const { initData } = retrieveLaunchParams();
-    if (initData?.user) {
-      tgUser = {
-        id: String(initData.user.id),
-        first_name: initData.user.firstName ?? "",
-        last_name: initData.user.lastName ?? "",
-        username: initData.user.username ?? "",
-      };
-    }
-  } catch (e) {
-    console.warn("Telegram initData недоступен — fallback");
-  }
+export default function App(){
+  const MOCK_TG_USERS=[
+    {id:"545972485",first_name:"Olga",last_name:"Pshedromirskaya",username:"NeuroFrilans"},
+    {id:"123456789",first_name:"Анна",last_name:"Иванова",username:"anna_ivanova"},
+    {id:"555000111",first_name:"Незнакомец",last_name:"",username:"unknown_user"},
+  ];
+  const OWNER_ID="545972485";
+  const ALLOWED_IDS=["545972485","123456789"];
+  const [mockUserIdx,setMockUserIdx]=useState(0);
+  const tgUser=MOCK_TG_USERS[mockUserIdx];
+  const isOwner=tgUser.id===OWNER_ID;
+  const isAllowed=ALLOWED_IDS.includes(tgUser.id);
 
   const [platform,setPlatform]=useState("wb");
   const [mainTab,setMainTab]=useState("dashboard");
@@ -2242,22 +2214,23 @@ export default function AdsAnalyticsPage(){
   // Навигация изнутри (например кнопка "Задайте ДРР")
   function goToPlanFact(){goMain("dashboard");setSubTab("planfact");}
 
+
+
+  const subs=SUB_TABS[mainTab];
+
   const BOTTOM_TABS=[
     {id:"dashboard",icon:"🏠",label:"Дашборд"},
     {id:"bids",     icon:"💰",label:"Ставки"},
     {id:"settings", icon:"⚙️", label:"Настройки"},
   ];
 
-  const subs=SUB_TABS[mainTab];
-
   return(
-    <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:"system-ui,sans-serif",paddingBottom:64}}>
+    <div style={{background:T.bg,color:T.text,fontFamily:"system-ui,sans-serif",minHeight:"100vh",paddingBottom:70}}>
 
       {/* ── ШАПКА ── */}
       <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,padding:"10px 16px",position:"sticky",top:0,zIndex:30}}>
         <div style={{maxWidth:600,margin:"0 auto"}}>
-          {/* Платформа + ДРР */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:subs.length>1?8:0}}>
             <div style={{display:"flex",gap:6}}>
               {[{id:"wb",label:"🟣 WB",bg:T.wb},{id:"ozon",label:"🔵 Ozon",bg:T.ozon}].map(p=>(
                 <button key={p.id} onClick={()=>setPlatform(p.id)}
@@ -2277,8 +2250,6 @@ export default function AdsAnalyticsPage(){
               </button>
             )}
           </div>
-
-          {/* Подвкладки текущего раздела */}
           {subs.length>1&&(
             <div style={{display:"flex",gap:3,overflowX:"auto",paddingBottom:2}}>
               {subs.map(s=>(
@@ -2300,19 +2271,16 @@ export default function AdsAnalyticsPage(){
 
       {/* ── КОНТЕНТ ── */}
       <div style={{maxWidth:600,margin:"0 auto",padding:"12px 16px"}}>
-        {/* Дашборд */}
         {subTab==="overview"    &&<TabOverview    data={data} platform={platform} targetDrr={targetDrr} onGoToPlanFact={goToPlanFact}/>}
         {subTab==="funnel"      &&<TabFunnel      data={data}/>}
         {subTab==="placements"  &&<TabPlacements  data={data} targetDrr={targetDrr}/>}
         {subTab==="positions"   &&<TabPositionsByPlacement data={data} targetDrr={targetDrr}/>}
         {subTab==="diagnostics" &&<TabDiagnostics data={data} targetDrr={targetDrr} onGoToPlanFact={goToPlanFact}/>}
         {subTab==="planfact"    &&<TabPlanFact    data={data} targetDrr={targetDrr} onSetTargetDrr={setDrr} category={category} onSetCategory={setCat} budget={budget} onSetBudget={setBudget}/>}
-        {/* Ставки */}
         {subTab==="bids_smart"    &&<SmartBidsTab    data={data} targetDrr={targetDrr} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
         {subTab==="bids_manual"   &&<ManualBidsTab   data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
         {subTab==="bids_strategy" &&<StrategyTab     data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
         {subTab==="bids_minus"    &&<TabAutoMinus    data={data}/>}
-        {/* Настройки */}
         {subTab==="settings_main" &&<TabSettings     currentUserTgId={tgUser.id}/>}
       </div>
 
@@ -2320,7 +2288,7 @@ export default function AdsAnalyticsPage(){
       <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:40,
         background:T.card,borderTop:`1px solid ${T.border}`,
         display:"flex",justifyContent:"space-around",alignItems:"center",
-        padding:"8px 0 12px",maxWidth:"100%"}}>
+        padding:"8px 0 12px"}}>
         {BOTTOM_TABS.map(tab=>{
           const isActive=mainTab===tab.id;
           const hasDot=tab.id==="dashboard"&&!targetDrr;
@@ -2328,11 +2296,11 @@ export default function AdsAnalyticsPage(){
             <button key={tab.id} onClick={()=>goMain(tab.id)}
               style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,
                 background:"transparent",border:"none",cursor:"pointer",
-                color:isActive?accent:T.sub,padding:"4px 20px",position:"relative",
-                minWidth:80,transition:"color 0.15s"}}>
-              {hasDot&&<span style={{position:"absolute",top:0,right:16,width:7,height:7,borderRadius:"50%",background:T.yellow}}/>}
+                color:isActive?accent:T.sub,padding:"4px 24px",position:"relative",
+                transition:"color 0.15s"}}>
+              {hasDot&&<span style={{position:"absolute",top:0,right:18,width:7,height:7,borderRadius:"50%",background:T.yellow}}/>}
               <span style={{fontSize:22,lineHeight:1}}>{tab.icon}</span>
-              <span style={{fontSize:10,fontWeight:isActive?700:400,letterSpacing:"0.3px"}}>{tab.label}</span>
+              <span style={{fontSize:10,fontWeight:isActive?700:400}}>{tab.label}</span>
               {isActive&&<div style={{position:"absolute",bottom:-12,left:"50%",transform:"translateX(-50%)",
                 width:32,height:3,borderRadius:2,background:accent}}/>}
             </button>
