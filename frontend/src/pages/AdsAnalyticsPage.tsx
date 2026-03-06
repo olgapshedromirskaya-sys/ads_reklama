@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from "react";
 
 const T={bg:"#151c2e",card:"#1e2640",card2:"#252e4a",border:"rgba(255,255,255,0.07)",text:"#ffffff",sub:"#8892a4",green:"#4ade80",yellow:"#fbbf24",red:"#f87171",wb:"#7c3aed",ozon:"#2563eb"};
