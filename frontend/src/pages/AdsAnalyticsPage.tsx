@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState } from "react";
+import { retrieveLaunchParams } from "@telegram-apps/sdk";
 
 const T={bg:"#151c2e",card:"#1e2640",card2:"#252e4a",border:"rgba(255,255,255,0.07)",text:"#ffffff",sub:"#8892a4",green:"#4ade80",yellow:"#fbbf24",red:"#f87171",wb:"#7c3aed",ozon:"#2563eb"};
 const S={card:{background:T.card,borderRadius:16,padding:16,border:`1px solid ${T.border}`},card2:{background:T.card2,borderRadius:12,padding:12,border:`1px solid ${T.border}`}};
@@ -1370,37 +1371,6 @@ function TabPlanFact({data,targetDrr,onSetTargetDrr,category,onSetCategory,budge
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ЭКРАН — НЕТ ДОСТУПА
-// ═══════════════════════════════════════════════════════════════════════════════
-function AccessDenied({tgUser,onRequestAccess}){
-  const [sent,setSent]=useState(false);
-  return(
-    <div style={{minHeight:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,textAlign:"center"}}>
-      <div style={{fontSize:56,marginBottom:16}}>🔒</div>
-      <div style={{fontSize:20,fontWeight:700,color:T.text,marginBottom:8}}>Нет доступа</div>
-      <div style={{fontSize:13,color:T.sub,marginBottom:24,maxWidth:300,lineHeight:1.6}}>
-        Приложение доступно только приглашённым пользователям. Обратитесь к владельцу аккаунта.
-      </div>
-      {tgUser&&(
-        <div style={{...S.card2,marginBottom:20,textAlign:"left",width:"100%",maxWidth:320}}>
-          <div style={{fontSize:11,color:T.sub,marginBottom:4}}>Ваш Telegram</div>
-          <div style={{fontSize:14,fontWeight:600,color:T.text}}>
-            {tgUser.first_name}{tgUser.last_name?" "+tgUser.last_name:""}
-          </div>
-          {tgUser.username&&<div style={{fontSize:12,color:"#a78bfa",marginTop:2}}>@{tgUser.username}</div>}
-          <div style={{fontSize:11,color:T.sub,marginTop:4,fontFamily:"monospace"}}>ID: {tgUser.id}</div>
-        </div>
-      )}
-      <button onClick={()=>{onRequestAccess();setSent(true);}} disabled={sent}
-        style={{background:sent?"rgba(74,222,128,0.15)":T.wb,color:sent?T.green:"#fff",border:sent?"1px solid rgba(74,222,128,0.3)":"none",borderRadius:12,padding:"13px 28px",fontSize:14,fontWeight:700,cursor:sent?"default":"pointer",width:"100%",maxWidth:320}}>
-        {sent?"✅ Запрос отправлен владельцу":"Запросить доступ"}
-      </button>
-      {sent&&<div style={{fontSize:11,color:T.sub,marginTop:12}}>Владелец получит уведомление в Telegram</div>}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // НАСТРОЙКИ — API ключи + сотрудники (доступ по Telegram ID)
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabSettings({currentUserTgId}){
@@ -2227,18 +2197,22 @@ const SUB_TABS={
   ],
 };
 
-export default function App(){
-  const MOCK_TG_USERS=[
-    {id:"545972485",first_name:"Olga",last_name:"Pshedromirskaya",username:"NeuroFrilans"},
-    {id:"123456789",first_name:"Анна",last_name:"Иванова",username:"anna_ivanova"},
-    {id:"555000111",first_name:"Незнакомец",last_name:"",username:"unknown_user"},
-  ];
-  const OWNER_ID="545972485";
-  const ALLOWED_IDS=["545972485","123456789"];
-  const [mockUserIdx,setMockUserIdx]=useState(0);
-  const tgUser=MOCK_TG_USERS[mockUserIdx];
-  const isOwner=tgUser.id===OWNER_ID;
-  const isAllowed=ALLOWED_IDS.includes(tgUser.id);
+export default function AdsAnalyticsPage(){
+  // Получаем реального пользователя из Telegram
+  let tgUser = { id: "", first_name: "Пользователь", last_name: "", username: "" };
+  try {
+    const { initData } = retrieveLaunchParams();
+    if (initData?.user) {
+      tgUser = {
+        id: String(initData.user.id),
+        first_name: initData.user.firstName ?? "",
+        last_name: initData.user.lastName ?? "",
+        username: initData.user.username ?? "",
+      };
+    }
+  } catch (e) {
+    console.warn("Telegram initData недоступен — fallback");
+  }
 
   const [platform,setPlatform]=useState("wb");
   const [mainTab,setMainTab]=useState("dashboard");
@@ -2273,28 +2247,6 @@ export default function App(){
     {id:"bids",     icon:"💰",label:"Ставки"},
     {id:"settings", icon:"⚙️", label:"Настройки"},
   ];
-
-  const DemoUserSwitch=(
-    <div style={{position:"fixed",bottom:76,right:12,zIndex:100}}>
-      <div style={{...S.card,padding:10,fontSize:11,minWidth:210}}>
-        <div style={{color:T.sub,marginBottom:6,fontSize:10}}>🧪 ДЕМО — смена пользователя</div>
-        {MOCK_TG_USERS.map((u,i)=>(
-          <button key={u.id} onClick={()=>setMockUserIdx(i)}
-            style={{display:"block",width:"100%",textAlign:"left",
-              background:mockUserIdx===i?"rgba(167,139,250,0.15)":"transparent",
-              border:`1px solid ${mockUserIdx===i?"rgba(167,139,250,0.4)":"transparent"}`,
-              borderRadius:8,padding:"5px 8px",cursor:"pointer",marginBottom:3,
-              color:ALLOWED_IDS.includes(u.id)?T.green:T.red,fontSize:11}}>
-            {u.id===OWNER_ID?"👑":ALLOWED_IDS.includes(u.id)?"✅":"🔒"} {u.first_name} {u.last_name} · @{u.username}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  if(!isAllowed){
-    return(<><AccessDenied tgUser={tgUser} onRequestAccess={()=>{}}/>{DemoUserSwitch}</>);
-  }
 
   const subs=SUB_TABS[mainTab];
 
@@ -2387,8 +2339,6 @@ export default function App(){
           );
         })}
       </div>
-
-      {DemoUserSwitch}
     </div>
   );
 }
