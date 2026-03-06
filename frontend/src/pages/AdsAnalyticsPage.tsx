@@ -159,6 +159,7 @@ function Tabs({tabs,active,onChange,accent}){
     </div>
   );
 }
+const selectStyle={width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box"};
 
 // Выбор периода + кампании (переиспользуемый компонент)
 const PERIODS=[{id:"today",l:"Сегодня"},{id:"yesterday",l:"Вчера"},{id:"7d",l:"7 дней"},{id:"custom",l:"Период"}];
@@ -202,29 +203,137 @@ function PeriodPicker({period,onChange,campaigns,selectedCampaign,onChangeCampai
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
   const d=data.today;
-  const activeDays=data.daily.filter(x=>x.drr>0);
-  const totalSpend=activeDays.reduce((s,x)=>s+x.spend,0);
-  const totalRev=activeDays.reduce((s,x)=>s+x.revenue,0);
+  const today=data.daily[0];
+  const yesterday=data.daily[1];
+  const allDays=data.daily;
+
+  // Переключатели периода для ключевых блоков
+  const [metricsPeriod,setMetricsPeriod]=useState("7d");
+  const [placementsPeriod,setPlacementsPeriod]=useState("7d");
+
+  function getPeriodDays(period){
+    if(period==="today") return allDays.slice(0,1);
+    if(period==="yesterday") return allDays.slice(1,2);
+    return allDays.slice(0,7);
+  }
+
+  const PERIOD_BTNS=[{id:"today",l:"Сегодня"},{id:"yesterday",l:"Вчера"},{id:"7d",l:"7 дней"}];
+  function PeriodSwitch({value,onChange}){
+    return(
+      <div style={{display:"flex",gap:4,marginBottom:12}}>
+        {PERIOD_BTNS.map(p=>(
+          <button key={p.id} onClick={()=>onChange(p.id)}
+            style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${value===p.id?"rgba(124,58,237,0.5)":T.border}`,
+              background:value===p.id?"rgba(124,58,237,0.15)":"transparent",
+              color:value===p.id?"#c4b5fd":T.sub,fontSize:11,fontWeight:value===p.id?700:400,cursor:"pointer"}}>
+            {p.l}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  // Агрегаты по выбранному периоду — метрики
+  const mDays=getPeriodDays(metricsPeriod);
+  const totalSpend=mDays.reduce((s,x)=>s+x.spend,0);
+  const totalRev=mDays.reduce((s,x)=>s+x.revenue,0);
+  const totalImpr=mDays.reduce((s,x)=>s+x.impressions,0);
+  const totalClicks=mDays.reduce((s,x)=>s+x.clicks,0);
+  const totalBaskets=mDays.reduce((s,x)=>s+x.baskets,0);
+  const totalOrders=mDays.reduce((s,x)=>s+x.orders,0);
   const factDrr=totalRev>0?totalSpend/totalRev*100:null;
   const drrSt=getDrrStatus(factDrr,targetDrr);
+
+  // Для спарклайна всегда берём 7 дней
+  const week=allDays.slice(0,7);
+  const avgCpm=totalImpr>0?totalSpend/totalImpr*1000:0;
+  const avgCtr=totalImpr>0?totalClicks/totalImpr*100:0;
+  const avgCpc=totalClicks>0?totalSpend/totalClicks:0;
+  const avgCpl=totalBaskets>0?totalSpend/totalBaskets:0;
+  const avgCpo=totalOrders>0?totalSpend/totalOrders:0;
+  const cro=totalBaskets>0?totalOrders/totalBaskets*100:0;
+
+  // Динамика корзин сегодня/вчера
+  const basketToday=today?.baskets||0;
+  const basketYest=yesterday?.baskets||0;
+  const basketDiff=basketToday-basketYest;
+  const basketPct=basketYest>0?basketDiff/basketYest*100:0;
+
+  // Бюджет
+  const budgetSpendPct=data.budgetPlan>0?Math.round(totalSpend/data.budgetPlan*100):null;
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {!targetDrr&&(
-        <div style={{background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.25)",borderRadius:12,padding:"10px 14px",fontSize:12,color:T.yellow,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span>⚠️ Целевой ДРР не задан — метрики без ориентира</span>
-          <button onClick={onGoToPlanFact} style={{fontSize:11,color:T.yellow,background:"rgba(251,191,36,0.15)",border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>Задать →</button>
+
+      {/* ── ПЛАН/ФАКТ КАРТОЧКА ── */}
+      <div style={{...S.card,background:"rgba(124,58,237,0.06)",borderColor:"rgba(124,58,237,0.2)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <SectionTitle marginBottom={0}>📋 План / Факт</SectionTitle>
+          <button onClick={onGoToPlanFact} style={{fontSize:10,color:"#a78bfa",background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.25)",borderRadius:7,padding:"3px 8px",cursor:"pointer"}}>
+            {targetDrr?"Изменить":"Задать ДРР →"}
+          </button>
         </div>
-      )}
+        {!targetDrr?(
+          <div style={{fontSize:12,color:T.yellow,background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"8px 12px"}}>
+            ⚠️ Задайте целевой ДРР — метрики отображаются без ориентира
+          </div>
+        ):(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {/* ДРР */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:11,color:T.sub,marginBottom:2}}>ДРР факт / цель</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+                  <span style={{fontSize:26,fontWeight:700,fontFamily:"monospace",color:DRR_ST[drrSt].c}}>{factDrr?factDrr.toFixed(1):"—"}%</span>
+                  <span style={{fontSize:13,color:T.sub}}>/ {targetDrr}%</span>
+                </div>
+              </div>
+              <div style={{fontSize:22,padding:"10px 14px",borderRadius:12,background:`${DRR_ST[drrSt].c}18`,border:`1px solid ${DRR_ST[drrSt].c}30`}}>
+                {drrSt==="great"?"🎯":drrSt==="good"?"✅":drrSt==="warn"?"⚠️":"🚨"}
+              </div>
+            </div>
+            {/* Бюджет прогресс */}
+            {data.budgetPlan>0&&(
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:5}}>
+                  <span style={{color:T.sub}}>💰 Бюджет: {fmt.rubK(totalSpend)} / {fmt.rubK(data.budgetPlan)}</span>
+                  <span style={{color:budgetSpendPct>=90?T.red:budgetSpendPct>=70?T.yellow:T.green,fontWeight:700}}>{budgetSpendPct}%</span>
+                </div>
+                <div style={{height:5,background:"rgba(255,255,255,0.06)",borderRadius:3,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${Math.min(budgetSpendPct,100)}%`,background:budgetSpendPct>=90?T.red:budgetSpendPct>=70?T.yellow:T.green,borderRadius:3}}/>
+                </div>
+              </div>
+            )}
+            {/* Мини метрики план/факт */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+              {[
+                {l:"Выручка",f:fmt.rubK(totalRev),p:fmt.rubK(data.revenuePlan),pct:data.revenuePlan?Math.round(totalRev/data.revenuePlan*100):null},
+                {l:"Заказы",f:totalOrders,p:data.ordersPlan,pct:data.ordersPlan?Math.round(totalOrders/data.ordersPlan*100):null},
+                {l:"% выкупа",f:`${d.fromAd.buyoutPct}%`,p:`${data.buyoutPlan}%`,pct:data.buyoutPlan?Math.round(d.fromAd.buyoutPct/data.buyoutPlan*100):null},
+              ].map(m=>(
+                <div key={m.l} style={{...S.card2,padding:"8px 10px"}}>
+                  <div style={{fontSize:9,color:T.sub,marginBottom:2}}>{m.l}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:T.text}}>{m.f}</div>
+                  <div style={{fontSize:9,color:T.sub}}>план: {m.p}</div>
+                  {m.pct!=null&&<div style={{fontSize:9,fontWeight:700,color:m.pct>=80?T.green:m.pct>=50?T.yellow:T.red,marginTop:2}}>{m.pct}%</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── СЕГОДНЯ КЛЮЧЕВЫЕ МЕТРИКИ ── */}
       <div style={S.card}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-          <SectionTitle>Сегодня</SectionTitle>
+          <SectionTitle marginBottom={0}>Сегодня</SectionTitle>
           <span style={{fontSize:11,color:T.sub}}>{platform==="wb"?"🟣 Wildberries":"🔵 Ozon"}</span>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
           {[
             {icon:"💰",label:"Выручка",val:fmt.rubK(d.revenue),plan:d.revenuePlan,valRaw:d.revenue},
-            {icon:"📦",label:"Заказы",val:d.orders,plan:d.ordersPlan,valRaw:d.orders},
-            {icon:"📢",label:"Реклама",val:fmt.rubK(d.adSpend),plan:d.adSpendPlan,valRaw:d.adSpend},
+            {icon:"📦",label:"Заказы", val:d.orders,           plan:d.ordersPlan, valRaw:d.orders},
+            {icon:"📢",label:"Расход", val:fmt.rubK(d.adSpend),plan:d.adSpendPlan,valRaw:d.adSpend},
             {icon:"🔄",label:"Конверсия",val:`${d.conversion}%`,plan:d.conversionPlan,valRaw:d.conversion},
           ].map(m=>{
             const p=m.plan?Math.round(m.valRaw/m.plan*100):0;
@@ -232,58 +341,170 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
             return(
               <div key={m.label} style={S.card2}>
                 <div style={{fontSize:11,color:T.sub}}>{m.icon} {m.label}</div>
-                <div style={{fontSize:22,fontWeight:700,color:T.text,fontFamily:"monospace"}}>{m.val}</div>
-                <div style={{fontSize:11,color:col,marginTop:2}}>▼ {100-p}% к плану</div>
+                <div style={{fontSize:20,fontWeight:700,color:T.text,fontFamily:"monospace"}}>{m.val}</div>
+                <div style={{fontSize:10,color:col,marginTop:2}}>▼ {100-p}% к плану</div>
               </div>
             );
           })}
         </div>
-      </div>
-      <div style={S.card}>
-        <SectionTitle>С рекламы</SectionTitle>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{display:"flex",justifyContent:"space-between"}}>
-            <span style={{fontSize:13,color:T.sub}}>📋 Заказано с рекламы</span>
-            <span style={{fontSize:13,fontWeight:600,color:T.text}}>{d.fromAd.ordered} шт | {fmt.rubK(d.fromAd.orderedRevenue)}</span>
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between"}}>
-            <span style={{fontSize:13,color:T.sub}}>📊 % выкупа</span>
-            <span style={{fontSize:13,fontWeight:600,color:T.green}}>{d.fromAd.buyoutPct}% 🟢</span>
-          </div>
-        </div>
-      </div>
-      {targetDrr&&factDrr&&(
-        <div style={{...S.card,background:drrSt==="bad"?"rgba(248,113,113,0.06)":drrSt==="warn"?"rgba(251,191,36,0.06)":"rgba(74,222,128,0.06)"}}>
+        {/* Корзины с динамикой */}
+        <div style={{...S.card2,borderColor:basketDiff>0?"rgba(74,222,128,0.2)":basketDiff<0?"rgba(248,113,113,0.2)":T.border}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
-              <div style={{fontSize:11,color:T.sub,marginBottom:4}}>🎯 ДРР за период</div>
-              <div style={{fontSize:28,fontWeight:700,fontFamily:"monospace",color:DRR_ST[drrSt].c}}>{fmt.pct1(factDrr)}</div>
-              <div style={{fontSize:11,color:T.sub}}>Цель: {targetDrr}% · {DRR_ST[drrSt].l}</div>
+              <div style={{fontSize:11,color:T.sub,marginBottom:4}}>🛒 Корзины сегодня</div>
+              <div style={{display:"flex",alignItems:"baseline",gap:10}}>
+                <span style={{fontSize:24,fontWeight:700,fontFamily:"monospace",color:T.text}}>{basketToday}</span>
+                <span style={{fontSize:13,fontWeight:700,color:basketDiff>0?T.green:basketDiff<0?T.red:T.sub}}>
+                  {basketDiff>0?`↑ +${basketDiff}`:basketDiff<0?`↓ ${basketDiff}`:"→ без изм."}
+                </span>
+                {basketYest>0&&<span style={{fontSize:11,color:T.sub}}>({basketPct>0?"+":""}{basketPct.toFixed(0)}% к вчера)</span>}
+              </div>
             </div>
-            <div style={{fontSize:13,color:factDrr<=targetDrr?T.green:T.red,fontWeight:600}}>
-              {factDrr<=targetDrr?"✅ В норме":`⚠️ +${(factDrr-targetDrr).toFixed(1)}%`}
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,color:T.sub,marginBottom:2}}>Спарклайн</div>
+              <div style={{display:"flex",gap:2,alignItems:"flex-end"}}>
+                {week.slice().reverse().map((d2,i)=>{
+                  const maxB=Math.max(...week.map(x=>x.baskets),1);
+                  const h=Math.max(3,Math.round(d2.baskets/maxB*28));
+                  return <div key={i} style={{width:6,height:h,borderRadius:2,background:i===week.length-1?"#a78bfa":"rgba(167,139,250,0.35)"}}/>;
+                })}
+              </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ── ПОЛНЫЕ МЕТРИКИ РЕКЛАМЫ ── */}
       <div style={S.card}>
-        <SectionTitle>По кампаниям (ДРР)</SectionTitle>
+        <SectionTitle>📊 Метрики рекламы</SectionTitle>
+        <PeriodSwitch value={metricsPeriod} onChange={setMetricsPeriod}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          {[
+            {l:"Показы",      v:fmt.num(totalImpr),     sub:""},
+            {l:"Клики",       v:fmt.num(totalClicks),   sub:""},
+            {l:"CPM ср.",     v:fmt.rub(avgCpm),        sub:"за 1000 показов"},
+            {l:"CTR",         v:fmt.pct(avgCtr),        sub:"клики/показы"},
+            {l:"CPC",         v:fmt.rub(avgCpc),        sub:"цена клика"},
+            {l:"CPL",         v:fmt.rub(avgCpl),        sub:"цена корзины"},
+            {l:"CPO",         v:fmt.rub(avgCpo),        sub:"цена заказа"},
+            {l:"CRO",         v:fmt.pct1(cro),          sub:"корзина→заказ"},
+          ].map(m=>(
+            <div key={m.l} style={{...S.card2,padding:"9px 10px"}}>
+              <div style={{fontSize:10,color:T.sub,marginBottom:2}}>{m.l}</div>
+              <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:T.text}}>{m.v}</div>
+              {m.sub&&<div style={{fontSize:9,color:T.sub,marginTop:1}}>{m.sub}</div>}
+            </div>
+          ))}
+        </div>
+        {/* Доп. метрики */}
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {[
+            {l:"📋 Заказано с рекламы",v:`${d.fromAd.ordered} шт | ${fmt.rubK(d.fromAd.orderedRevenue)}`},
+            {l:"📊 % выкупа трафика",  v:`${d.fromAd.buyoutPct}%`,c:d.fromAd.buyoutPct>=80?T.green:d.fromAd.buyoutPct>=60?T.yellow:T.red},
+            {l:"💸 Доля затрат в выручке",v:totalRev>0?`${(totalSpend/totalRev*100).toFixed(1)}%`:"—"},
+            {l:"📈 CRF (корзина→заказ)", v:totalOrders>0&&totalBaskets>0?`${(totalOrders/totalBaskets*100).toFixed(1)}%`:"—"},
+          ].map(m=>(
+            <div key={m.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
+              <span style={{fontSize:12,color:T.sub}}>{m.l}</span>
+              <span style={{fontSize:13,fontWeight:600,color:m.c||T.text}}>{m.v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── МЕСТА РАЗМЕЩЕНИЯ ── */}
+      <div style={S.card}>
+        <SectionTitle>📍 По местам размещения</SectionTitle>
+        <PeriodSwitch value={placementsPeriod} onChange={setPlacementsPeriod}/>
+        {(()=>{
+          const pDays=getPeriodDays(placementsPeriod);
+          const pSrcAgg={};
+          pDays.forEach(day=>{
+            (day.sources||[]).forEach(s=>{
+              if(!pSrcAgg[s.type])pSrcAgg[s.type]={type:s.type,spend:0,impressions:0,clicks:0,orders:0};
+              pSrcAgg[s.type].spend+=s.spend;
+              pSrcAgg[s.type].impressions+=s.impressions;
+              pSrcAgg[s.type].clicks+=s.clicks;
+              pSrcAgg[s.type].orders+=s.orders||0;
+            });
+          });
+          const pTotalSpend=pDays.reduce((s,x)=>s+x.spend,0);
+          Object.values(pSrcAgg).forEach(s=>{
+            s.ctr=s.impressions>0?s.clicks/s.impressions*100:0;
+            s.cpm=s.impressions>0?s.spend/s.impressions*1000:0;
+            s.cpc=s.clicks>0?s.spend/s.clicks:0;
+            s.pct=pTotalSpend>0?s.spend/pTotalSpend*100:0;
+          });
+          const pSources=Object.values(pSrcAgg).sort((a,b)=>b.spend-a.spend);
+          const SRC_COLOR={поиск:"#6366f1",полки:"#0ea5e9",каталог:"#f59e0b"};
+          return(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {pSources.map(s=>(
+                <div key={s.type} style={{...S.card2,borderLeft:`3px solid ${SRC_COLOR[s.type]||"#6366f1"}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <span style={{fontSize:13,fontWeight:700,color:T.text,textTransform:"capitalize"}}>{s.type}</span>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <span style={{fontSize:11,color:T.sub}}>{s.pct.toFixed(0)}% бюджета</span>
+                      <div style={{background:`${SRC_COLOR[s.type]||"#6366f1"}20`,borderRadius:6,padding:"2px 8px"}}>
+                        <span style={{fontSize:11,fontWeight:700,color:SRC_COLOR[s.type]||"#6366f1"}}>{fmt.rubK(s.spend)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{height:3,background:"rgba(255,255,255,0.06)",borderRadius:2,marginBottom:10,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${s.pct}%`,background:SRC_COLOR[s.type]||"#6366f1",borderRadius:2}}/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    {[
+                      {l:"Показы",v:fmt.num(s.impressions)},
+                      {l:"Клики", v:fmt.num(s.clicks)},
+                      {l:"CTR",   v:`${s.ctr.toFixed(2)}%`},
+                      {l:"CPM",   v:fmt.rub(s.cpm)},
+                      {l:"CPC",   v:fmt.rub(s.cpc)},
+                      {l:"Заказы",v:fmt.num(s.orders)},
+                    ].map(m=>(
+                      <div key={m.l} style={{textAlign:"center",padding:"5px 2px",background:"rgba(255,255,255,0.02)",borderRadius:6}}>
+                        <div style={{fontSize:9,color:T.sub,marginBottom:2}}>{m.l}</div>
+                        <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:T.text}}>{m.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── ПО КАМПАНИЯМ ── */}
+      <div style={S.card}>
+        <SectionTitle>По кампаниям</SectionTitle>
         {[...data.campaigns].sort((a,b)=>b.drr-a.drr).map(c=>{
           const drrSt2=getDrrStatus(c.drr,targetDrr);
+          // Корзины по кампании из keywords
+          const campKws=data.keywords.filter(k=>k.campaignId===c.id);
+          const campBaskets=campKws.reduce((s,k)=>s+k.baskets,0);
           return(
-            <div key={c.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
-              <div>
-                <div style={{fontSize:13,color:T.text}}>{c.name}</div>
-                <div style={{fontSize:11,color:T.sub}}>{fmt.rubK(c.spend)} · CPO {fmt.rub(c.cpo)}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:14,fontWeight:700,fontFamily:"monospace",color:!targetDrr?T.text:DRR_ST[drrSt2].c}}>{c.drr}%</div>
-                <div style={{fontSize:10,color:T.sub}}>ДРР · {c.orders} зак.</div>
+            <div key={c.id} style={{padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,color:T.text,fontWeight:600}}>{c.name}</div>
+                  <div style={{display:"flex",gap:12,marginTop:4,flexWrap:"wrap"}}>
+                    <span style={{fontSize:11,color:T.sub}}>{fmt.rubK(c.spend)}</span>
+                    <span style={{fontSize:11,color:T.sub}}>CPO {fmt.rub(c.cpo)}</span>
+                    <span style={{fontSize:11,color:"#38bdf8"}}>🛒 {campBaskets} корз.</span>
+                    <span style={{fontSize:11,color:T.sub}}>{c.orders} зак.</span>
+                  </div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontSize:15,fontWeight:700,fontFamily:"monospace",color:!targetDrr?T.text:DRR_ST[drrSt2].c}}>{c.drr}%</div>
+                  <div style={{fontSize:9,color:T.sub}}>ДРР</div>
+                </div>
               </div>
             </div>
           );
         })}
       </div>
+
     </div>
   );
 }
@@ -422,7 +643,23 @@ function TabFunnel({data}){
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabPlacements({data,targetDrr}){
   const [period,setPeriod]=useState("7d");
+  const [kwPeriod,setKwPeriod]=useState("7d");
   const days=period==="today"?data.daily.slice(0,1):period==="yesterday"?data.daily.slice(1,2):data.daily;
+  const PERIOD_BTNS2=[{id:"today",l:"Сегодня"},{id:"yesterday",l:"Вчера"},{id:"7d",l:"7 дней"}];
+  function PeriodSwitch2({value,onChange}){
+    return(
+      <div style={{display:"flex",gap:4,marginBottom:12}}>
+        {PERIOD_BTNS2.map(p=>(
+          <button key={p.id} onClick={()=>onChange(p.id)}
+            style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${value===p.id?"rgba(124,58,237,0.5)":T.border}`,
+              background:value===p.id?"rgba(124,58,237,0.15)":"transparent",
+              color:value===p.id?"#c4b5fd":T.sub,fontSize:11,fontWeight:value===p.id?700:400,cursor:"pointer"}}>
+            {p.l}
+          </button>
+        ))}
+      </div>
+    );
+  }
   const placementIcons={"поиск":"🔍","полки":"🗂","каталог":"📋"};
   const types=["поиск","полки","каталог"];
   const totals=types.map(type=>{
@@ -470,67 +707,134 @@ function TabPlacements({data,targetDrr}){
         </div>
       </div>
 
+      {/* ── КЛЮЧИ — расширенная карточная таблица ── */}
       <div style={S.card}>
-        <SectionTitle>По ключам — место, позиция, ставка</SectionTitle>
-        <div style={{overflowX:"auto"}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-            <thead>
-              <tr>
-                <th style={{padding:"8px 10px",textAlign:"left",color:T.sub,background:T.card2,minWidth:150}}>Ключ</th>
-                <th style={{padding:"8px 6px",textAlign:"center",color:"#a5b4fc",background:T.card2}} colSpan={3}>🔍 Поиск</th>
-                <th style={{padding:"8px 6px",textAlign:"center",color:"#93c5fd",background:T.card2}} colSpan={3}>🗂 Полки</th>
-                <th style={{padding:"8px 8px",textAlign:"left",color:T.sub,background:T.card2}}>CTR</th>
-                <th style={{padding:"8px 8px",textAlign:"left",color:T.sub,background:T.card2}}>Заказы</th>
-                <th style={{padding:"8px 8px",textAlign:"left",color:T.sub,background:T.card2,whiteSpace:"nowrap"}}>ДРР</th>
-              </tr>
-              <tr style={{background:"rgba(0,0,0,0.15)"}}>
-                <td style={{padding:"4px 10px",fontSize:10,color:T.sub}}>запрос</td>
-                {["позиция","ставка CPM","тренд","позиция","ставка CPM","тренд"].map((h,i)=>(
-                  <td key={i} style={{padding:"4px 8px",fontSize:10,color:i<3?"#a5b4fc":"#93c5fd",textAlign:"center"}}>{h}</td>
-                ))}
-                <td colSpan={3}/>
-              </tr>
-            </thead>
-            <tbody>
+        <SectionTitle>По ключевым словам — полные метрики</SectionTitle>
+        <PeriodSwitch2 value={kwPeriod} onChange={setKwPeriod}/>
+        {(()=>{
+          // Масштабируем метрики ключей по выбранному периоду
+          const kwScale=kwPeriod==="today"?1/7:kwPeriod==="yesterday"?1/6:1;
+          return(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {data.keywords.map((kw,ki)=>{
-                const drr=kw.revenue>0?kw.spend/kw.revenue*100:null;
-                const ctrSt=getCtrSt(kw.ctr);
+                const kwS={...kw,
+                  impressions:Math.round(kw.impressions*kwScale),
+                  clicks:Math.max(0,Math.round(kw.clicks*kwScale)),
+                  baskets:Math.max(0,Math.round(kw.baskets*kwScale)),
+                  orders:Math.max(0,Math.round(kw.orders*kwScale)),
+                  spend:Math.round(kw.spend*kwScale),
+                  revenue:Math.round(kw.revenue*kwScale),
+                };
+                const drr=kwS.revenue>0?kwS.spend/kwS.revenue*100:null;
+                const ctrSt=getCtrSt(kwS.ctr);
                 const pc=pos=>pos<=5?"#4ade80":pos<=10?"#86efac":pos<=20?"#fbbf24":"#f87171";
-                const dS=kw.posPrev-kw.posSearch;
-                const dP=Math.round((kw.posPrev-kw.posShelves)*0.8);
+                const dS=kwS.posPrev-kwS.posSearch;
+                const dP=Math.round((kwS.posPrev-kwS.posShelves)*0.8);
+                const cpl=kwS.baskets>0?kwS.spend/kwS.baskets:null;
+                const cro=kwS.baskets>0?kwS.orders/kwS.baskets*100:0;
+                const crf=kwS.impressions>0?kwS.baskets/kwS.impressions*100:0;
+                // Мок динамики корзин: ±рандомно на основе ki
+                const basketDiff=[2,-1,0,1,-2,3][ki%6];
+                const basketYest=Math.max(1,kwS.baskets-basketDiff);
+                const basketPct=basketYest>0?basketDiff/basketYest*100:0;
                 return(
-                  <tr key={kw.keyword} style={{borderTop:`1px solid ${T.border}`,background:ki%2?"rgba(255,255,255,0.015)":"transparent"}}>
-                    <td style={{padding:"9px 10px"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:5}}>
-                        {kw.alert&&<span style={{fontSize:10}}>⚠️</span>}
-                        <span style={{color:T.text,fontWeight:500}}>{kw.keyword}</span>
+                  <div key={kw.keyword} style={{...S.card2,borderLeft:`3px solid ${kwS.alert?"rgba(248,113,113,0.6)":drr&&targetDrr&&drr>targetDrr?"rgba(251,191,36,0.5)":"rgba(74,222,128,0.3)"}`}}>
+                    {/* Строка 1: Ключ + позиции */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
+                          {kwS.alert&&<span style={{fontSize:10}}>⚠️</span>}
+                          <span style={{fontSize:13,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kwS.keyword}</span>
+                        </div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {/* Поиск */}
+                          <div style={{display:"flex",alignItems:"center",gap:3,background:"rgba(99,102,241,0.1)",borderRadius:6,padding:"2px 7px"}}>
+                            <span style={{fontSize:9,color:"#a5b4fc"}}>🔍</span>
+                            <span style={{fontFamily:"monospace",fontWeight:700,fontSize:12,color:pc(kwS.posSearch)}}>{kwS.posSearch}</span>
+                            <span style={{fontSize:10,fontWeight:700,color:dS>0?T.green:dS<0?T.red:T.sub}}>{dS>0?`↑${dS}`:dS<0?`↓${Math.abs(dS)}`:"→"}</span>
+                            <span style={{fontSize:9,color:T.sub}}>{kwS.bidSearch}₽</span>
+                          </div>
+                          {/* Полки */}
+                          <div style={{display:"flex",alignItems:"center",gap:3,background:"rgba(59,130,246,0.1)",borderRadius:6,padding:"2px 7px"}}>
+                            <span style={{fontSize:9,color:"#93c5fd"}}>🗂</span>
+                            <span style={{fontFamily:"monospace",fontWeight:700,fontSize:12,color:pc(kwS.posShelves)}}>{kwS.posShelves}</span>
+                            <span style={{fontSize:10,fontWeight:700,color:dP>0?T.green:dP<0?T.red:T.sub}}>{dP>0?`↑${dP}`:dP<0?`↓${Math.abs(dP)}`:"→"}</span>
+                            <span style={{fontSize:9,color:T.sub}}>{kwS.bidShelves}₽</span>
+                          </div>
+                        </div>
                       </div>
-                    </td>
-                    <td style={{padding:"9px 8px",textAlign:"center"}}>
-                      <span style={{fontFamily:"monospace",fontWeight:700,fontSize:13,padding:"2px 7px",borderRadius:7,background:`${pc(kw.posSearch)}18`,color:pc(kw.posSearch)}}>{kw.posSearch}</span>
-                    </td>
-                    <td style={{padding:"9px 8px",textAlign:"center"}}>
-                      <span style={{fontFamily:"monospace",fontSize:12,color:T.text,background:"rgba(99,102,241,0.12)",padding:"2px 7px",borderRadius:6}}>{kw.bidSearch} ₽</span>
-                    </td>
-                    <td style={{padding:"9px 8px",textAlign:"center",fontWeight:700,fontSize:13,color:dS>0?T.green:dS<0?T.red:T.sub}}>{dS>0?`↑${dS}`:dS<0?`↓${Math.abs(dS)}`:"→"}</td>
-                    <td style={{padding:"9px 8px",textAlign:"center"}}>
-                      <span style={{fontFamily:"monospace",fontWeight:700,fontSize:13,padding:"2px 7px",borderRadius:7,background:`${pc(kw.posShelves)}18`,color:pc(kw.posShelves)}}>{kw.posShelves}</span>
-                    </td>
-                    <td style={{padding:"9px 8px",textAlign:"center"}}>
-                      <span style={{fontFamily:"monospace",fontSize:12,color:T.text,background:"rgba(59,130,246,0.12)",padding:"2px 7px",borderRadius:6}}>{kw.bidShelves} ₽</span>
-                    </td>
-                    <td style={{padding:"9px 8px",textAlign:"center",fontWeight:700,fontSize:13,color:dP>0?T.green:dP<0?T.red:T.sub}}>{dP>0?`↑${dP}`:dP<0?`↓${Math.abs(dP)}`:"→"}</td>
-                    <td style={{padding:"9px 8px"}}>
-                      <span style={{fontFamily:"monospace",fontWeight:700,fontSize:11,padding:"2px 6px",borderRadius:6,background:ctrSt.bg,color:ctrSt.c}}>{fmt.pct(kw.ctr)}</span>
-                    </td>
-                    <td style={{padding:"9px 8px",fontFamily:"monospace",fontWeight:700,color:kw.orders>0?T.green:T.red}}>{kw.orders}</td>
-                    <td style={{padding:"9px 8px"}}><DrrBadge drr={drr} target={targetDrr}/></td>
-                  </tr>
+                      {/* ДРР */}
+                      <DrrBadge drr={drr} target={targetDrr}/>
+                    </div>
+
+                    {/* Строка 2: Метрики трафика */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginBottom:8}}>
+                      {[
+                        {l:"Показы",v:fmt.num(kwS.impressions),sub:""},
+                        {l:"Клики",v:kwS.clicks,sub:""},
+                        {l:"CTR",v:fmt.pct(kwS.ctr),c:ctrSt.c,bg:ctrSt.bg},
+                        {l:"CPC",v:fmt.rub(kwS.spend/Math.max(kwS.clicks,1)),sub:""},
+                      ].map(m=>(
+                        <div key={m.l} style={{textAlign:"center",background:m.bg||"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
+                          <div style={{fontSize:9,color:T.sub}}>{m.l}</div>
+                          <div style={{fontSize:11,fontWeight:700,fontFamily:"monospace",color:m.c||T.text}}>{m.v}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Строка 3: Корзины с динамикой */}
+                    <div style={{...S.card2,padding:"7px 10px",marginBottom:8,background:basketDiff>0?"rgba(74,222,128,0.05)":basketDiff<0?"rgba(248,113,113,0.05)":"rgba(255,255,255,0.02)",borderColor:basketDiff>0?"rgba(74,222,128,0.2)":basketDiff<0?"rgba(248,113,113,0.2)":T.border}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:16}}>🛒</span>
+                          <div>
+                            <div style={{fontSize:9,color:T.sub}}>Корзины</div>
+                            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                              <span style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:T.text}}>{kwS.baskets}</span>
+                              <span style={{fontSize:12,fontWeight:700,color:basketDiff>0?T.green:basketDiff<0?T.red:T.sub}}>
+                                {basketDiff>0?`↑ +${basketDiff}`:basketDiff<0?`↓ ${basketDiff}`:"→"}
+                              </span>
+                              <span style={{fontSize:10,color:T.sub}}>({basketPct>0?"+":""}{basketPct.toFixed(0)}% к вчера)</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:12}}>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:9,color:T.sub}}>CPL</div>
+                            <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:T.text}}>{cpl?fmt.rub(cpl):"—"}</div>
+                          </div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:9,color:T.sub}}>CRO</div>
+                            <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:cro>=10?T.green:cro>=5?T.yellow:T.red}}>{cro.toFixed(1)}%</div>
+                          </div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:9,color:T.sub}}>CRF</div>
+                            <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",color:T.text}}>{crf.toFixed(2)}%</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Строка 4: Заказы + затраты + доля */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5}}>
+                      {[
+                        {l:"Заказы",v:kwS.orders,c:kwS.orders>0?T.green:T.red},
+                        {l:"Затраты",v:fmt.rub(kwS.spend),sub:""},
+                        {l:"Выручка",v:fmt.rubK(kwS.revenue),sub:""},
+                        {l:"Доля затр.",v:kwS.revenue>0?`${(kwS.spend/kwS.revenue*100).toFixed(1)}%`:"—",sub:""},
+                      ].map(m=>(
+                        <div key={m.l} style={{textAlign:"center",background:"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
+                          <div style={{fontSize:9,color:T.sub}}>{m.l}</div>
+                          <div style={{fontSize:11,fontWeight:700,fontFamily:"monospace",color:m.c||T.text}}>{m.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
