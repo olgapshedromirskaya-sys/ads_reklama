@@ -10,17 +10,17 @@ const DEMO={
     today:{revenue:285000,revenuePlan:450000,orders:187,ordersPlan:400,adSpend:38427,adSpendPlan:120000,conversion:3.2,conversionPlan:5,fromAd:{ordered:79,orderedRevenue:194900,buyoutPct:87.3}},
     budgetPlan:120000, revenuePlan:900000, ordersPlan:800, buyoutPlan:85,
     campaigns:[
-      {id:1,name:"Кроссовки женские",drr:12.4,spend:38427,orders:187,cpo:205,status:"ok",
+      {id:1,name:"Кроссовки женские",drr:12.4,spend:38427,orders:187,cpo:205,status:"ok",buyoutPct:89.2,orderedRevenue:142600,
         keywords:["кроссовки женские","кроссовки на платформе","белые кроссовки"]},
-      {id:2,name:"Джинсы slim fit",  drr:24.1,spend:15200,orders:31, cpo:490,status:"bad",
+      {id:2,name:"Джинсы slim fit",  drr:24.1,spend:15200,orders:31, cpo:490,status:"bad",buyoutPct:71.4,orderedRevenue:28600,
         keywords:["джинсы slim fit","джинсы скинни"]},
-      {id:3,name:"Белые кроссовки",  drr:8.7, spend:9800, orders:62, cpo:158,status:"ok",
+      {id:3,name:"Белые кроссовки",  drr:8.7, spend:9800, orders:62, cpo:158,status:"ok",buyoutPct:91.8,orderedRevenue:58100,
         keywords:["белые кроссовки"]},
     ],
     keywords:[
       {keyword:"кроссовки женские",    campaignId:1,pos:3, posPrev:5, posSearch:3, posShelves:2, bidSearch:220,bidShelves:175,bidCompSearch:190,bidCompShelves:155, orders:187,baskets:240,ctr:1.42,drr:12.4,spend:826, revenue:6500, impressions:1063,clicks:15},
       {keyword:"кроссовки на платформе",campaignId:1,pos:12,posPrev:12,posSearch:12,posShelves:8, bidSearch:220,bidShelves:175,bidCompSearch:180,bidCompShelves:140, orders:94, baskets:120,ctr:0.94,drr:18.2,spend:580, revenue:3186, impressions:890, clicks:8},
-      {keyword:"белые кроссовки",      campaignId:1,pos:7, posPrev:5, posSearch:7, posShelves:5, bidSearch:210,bidShelves:170,bidCompSearch:165,bidCompShelves:130, orders:62, baskets:80, ctr:0.67,drr:21.5,spend:420, revenue:1953, impressions:760, clicks:5,alert:true},
+      {keyword:"белые кроссовки",      campaignId:3,pos:7, posPrev:5, posSearch:7, posShelves:5, bidSearch:210,bidShelves:170,bidCompSearch:165,bidCompShelves:130, orders:62, baskets:80, ctr:0.67,drr:21.5,spend:420, revenue:1953, impressions:760, clicks:5,alert:true},
       {keyword:"джинсы slim fit",      campaignId:2,pos:22,posPrev:19,posSearch:22,posShelves:18,bidSearch:155,bidShelves:120,bidCompSearch:200,bidCompShelves:160, orders:18, baskets:35, ctr:0.47,drr:31.2,spend:285, revenue:913,  impressions:520, clicks:2,alert:true},
       {keyword:"джинсы скинни",        campaignId:2,pos:31,posPrev:27,posSearch:31,posShelves:25,bidSearch:145,bidShelves:110,bidCompSearch:190,bidCompShelves:150, orders:13, baskets:22, ctr:0.38,drr:28.7,spend:195, revenue:680,  impressions:410, clicks:1,alert:true},
     ],
@@ -34,39 +34,42 @@ const DEMO={
       {date:"27.02",dow:"пт",impressions:2100,cpm:290,clicks:18,ctr:0.86,cpc:38.0,spend:684, baskets:3,cpl:228,orders:1,cpo:684, cro:5.56, drr:16.4, revenue:4168, sources:[{type:"поиск",pct:32,spend:219,impressions:672,clicks:7,ctr:1.04,orders:1},{type:"полки",pct:68,spend:465,impressions:1428,clicks:11,ctr:0.77,orders:0}]},
     ],
     positions:[
-      {keyword:"кроссовки женские",     freq:84295,dates:[{date:"05.03",promo:true, price:547,shows:">700",posSearch:3, posShelves:2, cpm:220},{date:"28.02",promo:true, price:545,shows:">700",posSearch:5, posShelves:4, cpm:220},{date:"21.02",promo:false,price:520,shows:">700",posSearch:8, posShelves:7, cpm:180}]},
-      {keyword:"кроссовки на платформе",freq:19745,dates:[{date:"05.03",promo:true, price:547,shows:">700",posSearch:12,posShelves:8, cpm:220},{date:"28.02",promo:true, price:545,shows:">700",posSearch:12,posShelves:9, cpm:220},{date:"21.02",promo:false,price:520,shows:"412", posSearch:15,posShelves:11,cpm:180}]},
-      {keyword:"белые кроссовки",       freq:16330,dates:[{date:"05.03",promo:true, price:547,shows:"560", posSearch:7, posShelves:5, cpm:210},{date:"28.02",promo:true, price:545,shows:"490", posSearch:5, posShelves:4, cpm:210},{date:"21.02",promo:false,price:520,shows:"380", posSearch:9, posShelves:7, cpm:170}]},
-      {keyword:"джинсы slim fit",       freq:19353,dates:[{date:"05.03",promo:true, price:547,shows:"320", posSearch:22,posShelves:18,cpm:155},{date:"28.02",promo:true, price:545,shows:"290", posSearch:19,posShelves:15,cpm:155},{date:"21.02",promo:false,price:520,shows:"210", posSearch:16,posShelves:13,cpm:130}]},
-      {keyword:"джинсы скинни",         freq:7217, dates:[{date:"05.03",promo:true, price:547,shows:"180", posSearch:31,posShelves:25,cpm:145},{date:"28.02",promo:true, price:545,shows:"160", posSearch:27,posShelves:22,cpm:145},{date:"21.02",promo:false,price:520,shows:"120", posSearch:24,posShelves:19,cpm:120}]},
+      {keyword:"кроссовки женские",     campaignId:1,freq:84295,dates:[{date:"05.03",promo:true, price:547,shows:">700",posSearch:3, posShelves:2, cpm:220},{date:"28.02",promo:true, price:545,shows:">700",posSearch:5, posShelves:4, cpm:220},{date:"21.02",promo:false,price:520,shows:">700",posSearch:8, posShelves:7, cpm:180}]},
+      {keyword:"кроссовки на платформе",campaignId:1,freq:19745,dates:[{date:"05.03",promo:true, price:547,shows:">700",posSearch:12,posShelves:8, cpm:220},{date:"28.02",promo:true, price:545,shows:">700",posSearch:12,posShelves:9, cpm:220},{date:"21.02",promo:false,price:520,shows:"412", posSearch:15,posShelves:11,cpm:180}]},
+      {keyword:"белые кроссовки",       campaignId:3,freq:16330,dates:[{date:"05.03",promo:true, price:547,shows:"560", posSearch:7, posShelves:5, cpm:210},{date:"28.02",promo:true, price:545,shows:"490", posSearch:5, posShelves:4, cpm:210},{date:"21.02",promo:false,price:520,shows:"380", posSearch:9, posShelves:7, cpm:170}]},
+      {keyword:"джинсы slim fit",       campaignId:2,freq:19353,dates:[{date:"05.03",promo:true, price:547,shows:"320", posSearch:22,posShelves:18,cpm:155},{date:"28.02",promo:true, price:545,shows:"290", posSearch:19,posShelves:15,cpm:155},{date:"21.02",promo:false,price:520,shows:"210", posSearch:16,posShelves:13,cpm:130}]},
+      {keyword:"джинсы скинни",         campaignId:2,freq:7217, dates:[{date:"05.03",promo:true, price:547,shows:"180", posSearch:31,posShelves:25,cpm:145},{date:"28.02",promo:true, price:545,shows:"160", posSearch:27,posShelves:22,cpm:145},{date:"21.02",promo:false,price:520,shows:"120", posSearch:24,posShelves:19,cpm:120}]},
     ],
     clusters:[
-      {keyword:"кроссовки женские",freq:84295,cpm:220,avgPos:3,impressions:1063,clicks:15,ctr:1.42,cpc:55.1,spend:826,costShare:32.1,baskets:240,orders:187,revenue:6500},
-      {keyword:"кроссовки на платформе",freq:19745,cpm:220,avgPos:12,impressions:890,clicks:8,ctr:0.94,cpc:82.6,spend:580,costShare:19.8,baskets:120,orders:94,revenue:3186},
-      {keyword:"белые кроссовки",freq:16330,cpm:210,avgPos:7,impressions:760,clicks:5,ctr:0.67,cpc:84.0,spend:420,costShare:14.3,baskets:80,orders:62,revenue:1953,alert:true},
-      {keyword:"джинсы slim fit",freq:19353,cpm:155,avgPos:22,impressions:520,clicks:2,ctr:0.47,cpc:142.5,spend:285,costShare:9.7,baskets:35,orders:18,revenue:913,alert:true},
-      {keyword:"джинсы скинни",freq:7217,cpm:145,avgPos:31,impressions:410,clicks:1,ctr:0.38,cpc:195.0,spend:195,costShare:6.6,baskets:22,orders:13,revenue:680,alert:true},
+      {keyword:"кроссовки женские",campaignId:1,freq:84295,cpm:220,avgPos:3,impressions:1063,clicks:15,ctr:1.42,cpc:55.1,spend:826,costShare:32.1,baskets:240,orders:187,revenue:6500},
+      {keyword:"кроссовки на платформе",campaignId:1,freq:19745,cpm:220,avgPos:12,impressions:890,clicks:8,ctr:0.94,cpc:82.6,spend:580,costShare:19.8,baskets:120,orders:94,revenue:3186},
+      {keyword:"белые кроссовки",campaignId:3,freq:16330,cpm:210,avgPos:7,impressions:760,clicks:5,ctr:0.67,cpc:84.0,spend:420,costShare:14.3,baskets:80,orders:62,revenue:1953,alert:true},
+      {keyword:"джинсы slim fit",campaignId:2,freq:19353,cpm:155,avgPos:22,impressions:520,clicks:2,ctr:0.47,cpc:142.5,spend:285,costShare:9.7,baskets:35,orders:18,revenue:913,alert:true},
+      {keyword:"джинсы скинни",campaignId:2,freq:7217,cpm:145,avgPos:31,impressions:410,clicks:1,ctr:0.38,cpc:195.0,spend:195,costShare:6.6,baskets:22,orders:13,revenue:680,alert:true},
       {keyword:"женские кроссовки купить",freq:38228,cpm:220,avgPos:5,impressions:98,clicks:3,ctr:3.06,cpc:25.3,spend:76,costShare:2.6,baskets:15,orders:8,revenue:640,best:true},
     ],
     minusActive:[
-      {id:1,keyword:"мужские кроссовки",impressions:820,clicks:3,ctr:0.37,spend:248,orders:0,addedDaysAgo:3,reason:"low_ctr"},
-      {id:2,keyword:"детские кроссовки",impressions:540,clicks:1,ctr:0.19,spend:163,orders:0,addedDaysAgo:5,reason:"low_ctr"},
-      {id:3,keyword:"кроссовки мужские",impressions:310,clicks:2,ctr:0.65,spend:194,orders:0,addedDaysAgo:1,reason:"no_orders"},
-      {id:4,keyword:"спортивные кроссовки",impressions:290,clicks:4,ctr:1.38,spend:316,orders:0,addedDaysAgo:2,reason:"no_orders"},
+      {id:1,campaignId:1,keyword:"мужские кроссовки",impressions:820,clicks:3,ctr:0.37,spend:248,orders:0,addedDaysAgo:3,reason:"low_ctr"},
+      {id:2,campaignId:1,keyword:"детские кроссовки",impressions:540,clicks:1,ctr:0.19,spend:163,orders:0,addedDaysAgo:5,reason:"low_ctr"},
+      {id:3,campaignId:2,keyword:"джинсы широкие",impressions:310,clicks:2,ctr:0.65,spend:194,orders:0,addedDaysAgo:1,reason:"no_orders"},
+      {id:4,campaignId:2,keyword:"брюки slim",impressions:290,clicks:4,ctr:1.38,spend:316,orders:0,addedDaysAgo:2,reason:"no_orders"},
+      {id:5,campaignId:3,keyword:"кроссовки серые",impressions:480,clicks:3,ctr:0.63,spend:214,orders:0,addedDaysAgo:2,reason:"low_ctr"},
+      {id:6,campaignId:3,keyword:"кроссовки цветные",impressions:340,clicks:1,ctr:0.29,spend:175,orders:0,addedDaysAgo:4,reason:"low_ctr"},
     ],
     minusArchive:[
-      {id:10,keyword:"обувь женская",impressions:1240,clicks:4,ctr:0.32,spend:410,orders:0,deletedAt:"01.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
-      {id:11,keyword:"туфли",impressions:890,clicks:2,ctr:0.22,spend:280,orders:0,deletedAt:"28.02.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
-      {id:12,keyword:"сапоги женские",impressions:320,clicks:3,ctr:0.94,spend:195,orders:0,deletedAt:"25.02.2026",deletedBy:"ручное",reason:"Ручное удаление"},
+      {id:10,campaignId:1,keyword:"обувь женская",impressions:1240,clicks:4,ctr:0.32,spend:410,orders:0,deletedAt:"01.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
+      {id:11,campaignId:1,keyword:"туфли",impressions:890,clicks:2,ctr:0.22,spend:280,orders:0,deletedAt:"28.02.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
+      {id:12,campaignId:2,keyword:"штаны мужские",impressions:320,clicks:3,ctr:0.94,spend:195,orders:0,deletedAt:"25.02.2026",deletedBy:"ручное",reason:"Ручное удаление"},
+      {id:13,campaignId:3,keyword:"кроссовки чёрные",impressions:560,clicks:2,ctr:0.36,spend:198,orders:0,deletedAt:"03.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
     ],
   },
   ozon:{
     today:{revenue:180000,revenuePlan:300000,orders:138,ordersPlan:400,adSpend:10000,adSpendPlan:60000,conversion:2.5,conversionPlan:4,fromAd:{ordered:79,orderedRevenue:194900,buyoutPct:87.3}},
     budgetPlan:60000, revenuePlan:600000, ordersPlan:600, buyoutPlan:80,
     campaigns:[
-      {id:1,name:"Рюкзак туристический",drr:16.4,spend:72000,orders:220,cpo:327,status:"warn",keywords:["рюкзак туристический","рюкзак для походов"]},
-      {id:2,name:"Термокружка 450мл",   drr:12.3,spend:52000,orders:150,cpo:347,status:"ok",keywords:["термокружка 450мл","термокружка с крышкой"]},
-      {id:3,name:"Куртка зимняя XL",    drr:7.1, spend:58500,orders:190,cpo:308,status:"ok",keywords:["куртка зимняя"]},
+      {id:1,name:"Рюкзак туристический",drr:16.4,spend:72000,orders:220,cpo:327,status:"warn",buyoutPct:82.5,orderedRevenue:88400,keywords:["рюкзак туристический","рюкзак для походов"]},
+      {id:2,name:"Термокружка 450мл",   drr:12.3,spend:52000,orders:150,cpo:347,status:"ok",buyoutPct:91.3,orderedRevenue:64200,keywords:["термокружка 450мл","термокружка с крышкой"]},
+      {id:3,name:"Куртка зимняя XL",    drr:7.1, spend:58500,orders:190,cpo:308,status:"ok",buyoutPct:88.7,orderedRevenue:125900,keywords:["куртка зимняя"]},
     ],
     keywords:[
       {keyword:"рюкзак туристический",campaignId:1,pos:8, posPrev:11,posSearch:8, posShelves:6, bidSearch:340,bidShelves:260,bidCompSearch:310,bidCompShelves:240,orders:220,baskets:310,ctr:1.21,drr:16.4,spend:720, revenue:4390, impressions:890, clicks:10},
@@ -85,25 +88,25 @@ const DEMO={
       {date:"27.02",dow:"пт",impressions:2600,cpm:275,clicks:20,ctr:0.77,cpc:35.0,spend:700, baskets:5,cpl:140,orders:2,cpo:350,cro:10.0, drr:10.5,revenue:6667,sources:[{type:"поиск",pct:37,spend:259,impressions:962,clicks:8,ctr:0.83,orders:2},{type:"полки",pct:63,spend:441,impressions:1638,clicks:12,ctr:0.73,orders:0}]},
     ],
     positions:[
-      {keyword:"рюкзак туристический",freq:62100,dates:[{date:"05.03",promo:true, price:3490,shows:">700",posSearch:8, posShelves:6, cpm:340},{date:"28.02",promo:true, price:3490,shows:">700",posSearch:11,posShelves:9, cpm:340},{date:"21.02",promo:false,price:3200,shows:">700",posSearch:14,posShelves:11,cpm:280}]},
-      {keyword:"рюкзак для походов",  freq:18400,dates:[{date:"05.03",promo:true, price:3490,shows:"480", posSearch:15,posShelves:12,cpm:290},{date:"28.02",promo:true, price:3490,shows:"420", posSearch:15,posShelves:12,cpm:290},{date:"21.02",promo:false,price:3200,shows:"360", posSearch:18,posShelves:14,cpm:240}]},
-      {keyword:"термокружка 450мл",   freq:24800,dates:[{date:"05.03",promo:true, price:890, shows:">700",posSearch:4, posShelves:3, cpm:180},{date:"28.02",promo:true, price:890, shows:">700",posSearch:6, posShelves:5, cpm:180},{date:"21.02",promo:false,price:850, shows:"510", posSearch:9, posShelves:7, cpm:150}]},
-      {keyword:"куртка зимняя",       freq:91200,dates:[{date:"05.03",promo:true, price:6800,shows:">700",posSearch:3, posShelves:2, cpm:420},{date:"28.02",promo:true, price:6800,shows:">700",posSearch:4, posShelves:3, cpm:420},{date:"21.02",promo:false,price:6500,shows:">700",posSearch:6, posShelves:5, cpm:350}]},
+      {keyword:"рюкзак туристический",campaignId:1,freq:62100,dates:[{date:"05.03",promo:true, price:3490,shows:">700",posSearch:8, posShelves:6, cpm:340},{date:"28.02",promo:true, price:3490,shows:">700",posSearch:11,posShelves:9, cpm:340},{date:"21.02",promo:false,price:3200,shows:">700",posSearch:14,posShelves:11,cpm:280}]},
+      {keyword:"рюкзак для походов",  campaignId:1,freq:18400,dates:[{date:"05.03",promo:true, price:3490,shows:"480", posSearch:15,posShelves:12,cpm:290},{date:"28.02",promo:true, price:3490,shows:"420", posSearch:15,posShelves:12,cpm:290},{date:"21.02",promo:false,price:3200,shows:"360", posSearch:18,posShelves:14,cpm:240}]},
+      {keyword:"термокружка 450мл",   campaignId:2,freq:24800,dates:[{date:"05.03",promo:true, price:890, shows:">700",posSearch:4, posShelves:3, cpm:180},{date:"28.02",promo:true, price:890, shows:">700",posSearch:6, posShelves:5, cpm:180},{date:"21.02",promo:false,price:850, shows:"510", posSearch:9, posShelves:7, cpm:150}]},
+      {keyword:"куртка зимняя",       campaignId:3,freq:91200,dates:[{date:"05.03",promo:true, price:6800,shows:">700",posSearch:3, posShelves:2, cpm:420},{date:"28.02",promo:true, price:6800,shows:">700",posSearch:4, posShelves:3, cpm:420},{date:"21.02",promo:false,price:6500,shows:">700",posSearch:6, posShelves:5, cpm:350}]},
     ],
     clusters:[
-      {keyword:"рюкзак туристический",freq:62100,cpm:340,avgPos:8,impressions:890,clicks:10,ctr:1.21,cpc:72.0,spend:720,costShare:28.5,baskets:310,orders:220,revenue:4390},
+      {keyword:"рюкзак туристический",campaignId:1,freq:62100,cpm:340,avgPos:8,impressions:890,clicks:10,ctr:1.21,cpc:72.0,spend:720,costShare:28.5,baskets:310,orders:220,revenue:4390},
       {keyword:"рюкзак для походов",  freq:18400,cpm:290,avgPos:15,impressions:720,clicks:6, ctr:0.88,cpc:80.0,spend:480,costShare:19.0,baskets:130,orders:95, revenue:2424},
       {keyword:"термокружка 450мл",   freq:24800,cpm:180,avgPos:4, impressions:650,clicks:10,ctr:1.54,cpc:52.0,spend:520,costShare:20.6,baskets:210,orders:150,revenue:4228,best:true},
       {keyword:"куртка зимняя",       freq:91200,cpm:420,avgPos:3, impressions:1100,clicks:15,ctr:1.38,cpc:39.0,spend:585,costShare:23.2,baskets:260,orders:190,revenue:8239},
       {keyword:"термокружка с крышкой",freq:8900,cpm:155,avgPos:21,impressions:480,clicks:3, ctr:0.62,cpc:70.0,spend:210,costShare:8.3, baskets:65, orders:42, revenue:909, alert:true},
     ],
     minusActive:[
-      {id:1,keyword:"рюкзак детский",impressions:620,clicks:2,ctr:0.32,spend:186,orders:0,addedDaysAgo:2,reason:"low_ctr"},
-      {id:2,keyword:"сумка дорожная",impressions:440,clicks:1,ctr:0.23,spend:132,orders:0,addedDaysAgo:4,reason:"low_ctr"},
+      {id:1,campaignId:1,keyword:"рюкзак детский",impressions:620,clicks:2,ctr:0.32,spend:186,orders:0,addedDaysAgo:2,reason:"low_ctr"},
+      {id:2,campaignId:2,keyword:"сумка дорожная",impressions:440,clicks:1,ctr:0.23,spend:132,orders:0,addedDaysAgo:4,reason:"low_ctr"},
     ],
     minusArchive:[
-      {id:10,keyword:"чемодан",impressions:980,clicks:3,ctr:0.31,spend:294,orders:0,deletedAt:"02.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
-      {id:11,keyword:"сумка городская",impressions:560,clicks:2,ctr:0.36,spend:168,orders:0,deletedAt:"28.02.2026",deletedBy:"ручное",reason:"Ручное удаление"},
+      {id:10,campaignId:1,keyword:"чемодан",impressions:980,clicks:3,ctr:0.31,spend:294,orders:0,deletedAt:"02.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
+      {id:11,campaignId:2,keyword:"сумка городская",impressions:560,clicks:2,ctr:0.36,spend:168,orders:0,deletedAt:"28.02.2026",deletedBy:"ручное",reason:"Ручное удаление"},
     ],
   },
 };
@@ -113,9 +116,37 @@ const fmt={
   pct:v=>v==null?"—":`${v.toFixed(2)}%`,
   pct1:v=>v==null?"—":`${v.toFixed(1)}%`,
   rub:v=>v==null?"—":`${Math.round(v).toLocaleString("ru-RU")} ₽`,
-  rubK:v=>v==null?"—":v>=1000?`${(v/1000).toFixed(0)} 000 ₽`:`${Math.round(v)} ₽`,
-  num:v=>v==null?"—":Number(v).toLocaleString("ru-RU"),
+  rubK:v=>v==null?"—":v>=1000?`${(Math.round(v)/1000).toFixed(0)} 000 ₽`:`${Math.round(v)} ₽`,
+  num:v=>v==null?"—":Math.round(Number(v)).toLocaleString("ru-RU"),
 };
+
+// ── кампания → масштаб (для демо-данных) ─────────────────────────────────────
+function getCampScale(campaigns, selCamp){
+  if(selCamp==="all"||!selCamp) return {spendScale:1,ordersScale:1,camp:null};
+  const allSpend=campaigns.reduce((s,c)=>s+c.spend,0)||1;
+  const allOrders=campaigns.reduce((s,c)=>s+c.orders,0)||1;
+  const camp=campaigns.find(c=>String(c.id)===String(selCamp));
+  if(!camp) return {spendScale:1,ordersScale:1,camp:null};
+  return {spendScale:camp.spend/allSpend, ordersScale:camp.orders/allOrders, camp};
+}
+function scaleDays(days, spendScale, ordersScale){
+  return days.map(d=>({
+    ...d,
+    spend:      d.spend       * spendScale,
+    revenue:    d.revenue     * ordersScale,
+    impressions:d.impressions * spendScale,
+    clicks:     d.clicks      * spendScale,
+    baskets:    d.baskets     * ordersScale,
+    orders:     d.orders      * ordersScale,
+    sources:(d.sources||[]).map(s=>({
+      ...s,
+      spend:      (s.spend||0)       * spendScale,
+      impressions:(s.impressions||0) * spendScale,
+      clicks:     (s.clicks||0)      * spendScale,
+      orders:     (s.orders||0)      * ordersScale,
+    })),
+  }));
+}
 function getDrrStatus(drr,target){
   if(!target||drr==null||drr===0)return"neutral";
   if(drr<=target*0.9)return"great";
@@ -138,10 +169,10 @@ function DrrBadge({drr,target}){
 }
 function getCtrSt(ctr){
   if(ctr===0)return{bg:"rgba(255,255,255,0.05)",c:T.sub};
-  if(ctr>=3) return{bg:"#7c3aed",c:"#fff"};
-  if(ctr>=1) return{bg:"#15803d",c:"#fff"};
-  if(ctr>=0.7)return{bg:"transparent",c:T.text};
-  return{bg:"#dc2626",c:"#fff"};
+  if(ctr>=3) return{bg:"rgba(124,58,237,0.25)",c:"#c4b5fd"};
+  if(ctr>=1) return{bg:"rgba(74,222,128,0.18)",c:"#4ade80"};
+  if(ctr>=0.7)return{bg:"rgba(255,255,255,0.06)",c:T.text};
+  return{bg:"rgba(248,113,113,0.2)",c:"#fca5a5"};
 }
 function SectionTitle({children,marginBottom=10}){
   return <div style={{fontSize:11,fontWeight:700,color:T.sub,letterSpacing:1,textTransform:"uppercase",marginBottom}}>{children}</div>;
@@ -197,6 +228,33 @@ function PeriodPicker({period,onChange,campaigns,selectedCampaign,onChangeCampai
   );
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ВЫБОР КАМПАНИИ — universal dropdown
+// ═══════════════════════════════════════════════════════════════════════════════
+function CampaignSelect({campaigns,value,onChange,style={}}){
+  const SS={
+    background:T.card2,
+    border:`1px solid rgba(124,58,237,0.4)`,
+    borderRadius:9,
+    padding:"6px 10px",
+    fontSize:12,
+    color:T.text,
+    outline:"none",
+    cursor:"pointer",
+    width:"100%",
+    marginBottom:12,
+    ...style,
+  };
+  return(
+    <select value={value} onChange={e=>onChange(e.target.value)} style={SS}>
+      <option value="all">📋 Все кампании</option>
+      {(campaigns||[]).map(c=>(
+        <option key={c.id} value={String(c.id)}>{c.name}</option>
+      ))}
+    </select>
+  );
+}
 // ═══════════════════════════════════════════════════════════════════════════════
 // ОБЗОР
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -210,6 +268,7 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
   const [metricsPeriod,setMetricsPeriod]=useState("7d");
   const [placementsPeriod,setPlacementsPeriod]=useState("7d");
   const [kwPeriod,setKwPeriod]=useState("7d");
+  const [overviewCamp,setOverviewCamp]=useState("all"); // единый фильтр кампании для всего Обзора
 
   function getPeriodDays(period){
     if(period==="today") return allDays.slice(0,1);
@@ -235,12 +294,15 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
 
   // Агрегаты по выбранному периоду — метрики
   const mDays=getPeriodDays(metricsPeriod);
-  const totalSpend=mDays.reduce((s,x)=>s+x.spend,0);
-  const totalRev=mDays.reduce((s,x)=>s+x.revenue,0);
-  const totalImpr=mDays.reduce((s,x)=>s+x.impressions,0);
-  const totalClicks=mDays.reduce((s,x)=>s+x.clicks,0);
-  const totalBaskets=mDays.reduce((s,x)=>s+x.baskets,0);
-  const totalOrders=mDays.reduce((s,x)=>s+x.orders,0);
+
+  const {spendScale:campScale,ordersScale:campOrdersScale}=getCampScale(data.campaigns,overviewCamp);
+  const scaledDays=scaleDays(mDays,campScale,campOrdersScale);
+  const totalSpend=scaledDays.reduce((s,x)=>s+x.spend,0);
+  const totalRev=scaledDays.reduce((s,x)=>s+x.revenue,0);
+  const totalImpr=scaledDays.reduce((s,x)=>s+x.impressions,0);
+  const totalClicks=scaledDays.reduce((s,x)=>s+x.clicks,0);
+  const totalBaskets=scaledDays.reduce((s,x)=>s+x.baskets,0);
+  const totalOrders=scaledDays.reduce((s,x)=>s+x.orders,0);
   const factDrr=totalRev>0?totalSpend/totalRev*100:null;
 
   // для спарклайна всегда берём 7 дней
@@ -397,6 +459,10 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
         </div>
       </div>
 
+      {/* ── ЕДИНЫЙ ФИЛЬТР КАМПАНИИ ── */}
+      <CampaignSelect campaigns={data.campaigns} value={overviewCamp} onChange={setOverviewCamp}
+        style={{marginBottom:4}}/>
+
       {/* ── ПОЛНЫЕ МЕТРИКИ РЕКЛАМЫ ── */}
       <div style={S.card}>
         <SectionTitle>📊 Метрики рекламы</SectionTitle>
@@ -420,12 +486,20 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
           ))}
         </div>
         {/* Доп. метрики */}
+        {(()=>{
+          // Данные "с рекламы" — берём из выбранной кампании или суммируем все
+          const campObj=overviewCamp==="all"?null:data.campaigns.find(c=>String(c.id)===String(overviewCamp));
+          const adOrdered=campObj?campObj.orders:data.campaigns.reduce((s,c)=>s+c.orders,0);
+          const adRevenue=campObj?campObj.orderedRevenue||Math.round(campObj.orders*campObj.cpo*3.2):d.fromAd.orderedRevenue;
+          const buyoutPct=campObj?campObj.buyoutPct:d.fromAd.buyoutPct;
+          const crf=totalBaskets>0&&totalOrders>0?(totalOrders/totalBaskets*100).toFixed(1):null;
+          return(
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           {[
-            {l:"📋 Заказано с рекламы",v:`${d.fromAd.ordered} шт | ${fmt.rubK(d.fromAd.orderedRevenue)}`},
-            {l:"📊 % выкупа трафика",  v:`${d.fromAd.buyoutPct}%`,c:d.fromAd.buyoutPct>=80?T.green:d.fromAd.buyoutPct>=60?T.yellow:T.red},
+            {l:"📋 Заказано с рекламы",v:`${adOrdered} шт | ${fmt.rubK(adRevenue)}`},
+            {l:"📊 % выкупа трафика",  v:`${buyoutPct}%`,c:buyoutPct>=80?T.green:buyoutPct>=60?T.yellow:T.red},
             {l:"💸 Доля затрат в выручке",v:totalRev>0?`${(totalSpend/totalRev*100).toFixed(1)}%`:"—"},
-            {l:"📈 CRF (корзина→заказ)", v:`${(totalOrders>0&&totalBaskets>0?(totalOrders/totalBaskets*100).toFixed(1):"—")}%`},
+            {l:"📈 CRF (корзина→заказ)", v:crf?`${crf}%`:"—"},
           ].map(m=>(
             <div key={m.l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
               <span style={{fontSize:12,color:T.sub}}>{m.l}</span>
@@ -433,6 +507,8 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
             </div>
           ))}
         </div>
+          );
+        })()}
       </div>
 
       {/* ── МЕСТА РАЗМЕЩЕНИЯ ── */}
@@ -441,8 +517,10 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
         <PeriodSwitch value={placementsPeriod} onChange={setPlacementsPeriod}/>
         {(()=>{
           const pDays=getPeriodDays(placementsPeriod);
+          // масштаб по той же выбранной кампании
+          const pScaled=scaleDays(pDays,campScale,campOrdersScale);
           const pSrcAgg={};
-          pDays.forEach(day=>{
+          pScaled.forEach(day=>{
             (day.sources||[]).forEach(s=>{
               if(!pSrcAgg[s.type])pSrcAgg[s.type]={type:s.type,spend:0,impressions:0,clicks:0,orders:0};
               pSrcAgg[s.type].spend+=s.spend;
@@ -451,7 +529,7 @@ function TabOverview({data,platform,targetDrr,onGoToPlanFact}){
               pSrcAgg[s.type].orders+=s.orders||0;
             });
           });
-          const pTotalSpend=pDays.reduce((s,x)=>s+x.spend,0);
+          const pTotalSpend=Object.values(pSrcAgg).reduce((s,x)=>s+x.spend,0)||1;
           Object.values(pSrcAgg).forEach(s=>{
             s.ctr=s.impressions>0?s.clicks/s.impressions*100:0;
             s.cpm=s.impressions>0?s.spend/s.impressions*1000:0;
@@ -546,12 +624,14 @@ function TabFunnel({data}){
   // Фильтр ключей по кампании
   const kws=selCamp==="all"?data.keywords:data.keywords.filter(k=>String(k.campaignId)===String(selCamp));
 
+  const {spendScale:funnelScale,ordersScale:funnelOrdScale}=getCampScale(data.campaigns,selCamp);
+  const funnelDays=scaleDays(days,funnelScale,funnelOrdScale);
   const totals={
-    impressions:days.reduce((s,d)=>s+d.impressions,0),
-    clicks:days.reduce((s,d)=>s+d.clicks,0),
-    baskets:days.reduce((s,d)=>s+d.baskets,0),
-    orders:days.reduce((s,d)=>s+d.orders,0),
-    buyout:Math.round(days.reduce((s,d)=>s+d.orders,0)*0.873),
+    impressions:funnelDays.reduce((s,d)=>s+d.impressions,0),
+    clicks:funnelDays.reduce((s,d)=>s+d.clicks,0),
+    baskets:funnelDays.reduce((s,d)=>s+d.baskets,0),
+    orders:funnelDays.reduce((s,d)=>s+d.orders,0),
+    buyout:Math.round(funnelDays.reduce((s,d)=>s+d.orders,0)*0.873),
   };
   const steps=[
     {label:"👁 Показы",  val:totals.impressions,pct:100,cr:null},
@@ -667,7 +747,9 @@ function TabFunnel({data}){
 function TabPlacements({data,targetDrr}){
   const [period,setPeriod]=useState("7d");
   const [kwPeriod,setKwPeriod]=useState("7d");
+  const [selCamp,setSelCamp]=useState("all");
   const days=period==="today"?data.daily.slice(0,1):period==="yesterday"?data.daily.slice(1,2):data.daily;
+  const campKws=selCamp==="all"?data.keywords:data.keywords.filter(k=>String(k.campaignId)===String(selCamp));
   const PERIOD_BTNS2=[{id:"today",l:"Сегодня"},{id:"yesterday",l:"Вчера"},{id:"7d",l:"7 дней"}];
   function PeriodSwitch2({value,onChange}){
     return(
@@ -685,9 +767,16 @@ function TabPlacements({data,targetDrr}){
   }
   const placementIcons={"поиск":"🔍","полки":"🗂","каталог":"📋"};
   const types=["поиск","полки","каталог"];
+  const {spendScale:placScale,ordersScale:placOrdScale}=getCampScale(data.campaigns,selCamp);
+  const placDays=scaleDays(days,placScale,placOrdScale);
   const totals=types.map(type=>{
-    const rows=days.flatMap(d=>(d.sources||[]).filter(s=>s.type===type));
-    return{type,spend:rows.reduce((s,r)=>s+r.spend,0),impressions:rows.reduce((s,r)=>s+(r.impressions||0),0),clicks:rows.reduce((s,r)=>s+(r.clicks||0),0),orders:rows.reduce((s,r)=>s+(r.orders||0),0)};
+    const rows=placDays.flatMap(d=>(d.sources||[]).filter(s=>s.type===type));
+    return{type,
+      spend:rows.reduce((s,r)=>s+r.spend,0),
+      impressions:rows.reduce((s,r)=>s+(r.impressions||0),0),
+      clicks:rows.reduce((s,r)=>s+(r.clicks||0),0),
+      orders:rows.reduce((s,r)=>s+(r.orders||0),0),
+    };
   }).filter(t=>t.impressions>0);
   const totalSpendAll=totals.reduce((s,t)=>s+t.spend,0);
 
@@ -695,6 +784,7 @@ function TabPlacements({data,targetDrr}){
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={S.card}>
         <SectionTitle>Сводка по типам размещения</SectionTitle>
+        <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
         <PeriodPicker period={period} onChange={setPeriod}/>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {totals.map(t=>{
@@ -733,13 +823,14 @@ function TabPlacements({data,targetDrr}){
       {/* ── КЛЮЧИ — расширенная таблица ── */}
       <div style={S.card}>
         <SectionTitle>По ключевым словам — полные метрики</SectionTitle>
+        <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
         <PeriodSwitch2 value={kwPeriod} onChange={setKwPeriod}/>
         {(()=>{
           // Масштабируем метрики ключей по выбранному периоду
           const kwScale=kwPeriod==="today"?1/7:kwPeriod==="yesterday"?1/6:1;
           return(
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {data.keywords.map((kw,ki)=>{
+          {campKws.map((kw,ki)=>{
             const kwS={...kw,
               impressions:Math.round(kw.impressions*kwScale),
               clicks:Math.max(1,Math.round(kw.clicks*kwScale)),
@@ -867,11 +958,16 @@ function TabPlacements({data,targetDrr}){
 // ДИАГНОСТИКА
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
-  const days=data.daily.filter(d=>d.drr>0);
+  const [selCamp,setSelCamp]=useState("all");
+  const {spendScale:diagScale,ordersScale:diagOrdScale}=getCampScale(data.campaigns,selCamp);
+  const diagKws=selCamp==="all"?data.keywords:data.keywords.filter(k=>String(k.campaignId)===String(selCamp));
+  const diagClusters=selCamp==="all"?data.clusters:data.clusters.filter(k=>String(k.campaignId)===String(selCamp));
+  const rawDays=data.daily.filter(d=>d.drr>0);
+  const days=scaleDays(rawDays,diagScale,diagOrdScale);
   const totalSpend=days.reduce((s,d)=>s+d.spend,0);
   const totalRevenue=days.reduce((s,d)=>s+d.revenue,0);
   const factDrr=totalRevenue>0?totalSpend/totalRevenue*100:null;
-  const totalCtr=data.clusters.reduce((s,k)=>s+k.impressions,0)?data.clusters.reduce((s,k)=>s+k.clicks,0)/data.clusters.reduce((s,k)=>s+k.impressions,0)*100:0;
+  const totalCtr=diagClusters.reduce((s,k)=>s+k.impressions,0)?diagClusters.reduce((s,k)=>s+k.clicks,0)/diagClusters.reduce((s,k)=>s+k.impressions,0)*100:0;
   const issues=[];
   if(targetDrr&&factDrr&&factDrr>targetDrr*1.15)
     issues.push({level:"critical",icon:"🔴",title:"ДРР значительно выше цели",desc:`Факт ${factDrr.toFixed(1)}% при цели ${targetDrr}%. Превышение: +${(factDrr-targetDrr).toFixed(1)}%.`,rec:"Снизьте ставки у кампаний с высоким ДРР или уменьшите бюджет."});
@@ -883,18 +979,19 @@ function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
     issues.push({level:"warn",icon:"🟡",title:"Целевой ДРР не установлен",desc:"Невозможно оценить эффективность без ориентира.",rec:"Установите целевой ДРР в разделе «План/Факт».",action:{label:"Установить →",fn:onGoToPlanFact}});
   if(totalCtr<0.7)
     issues.push({level:"critical",icon:"🔴",title:"Низкий CTR в кластерах",desc:`Средний CTR ${totalCtr.toFixed(2)}% — ниже нормы 0.7%.`,rec:"Проверьте главное фото, заголовок и цену. Возможно нужна акция."});
-  const fallingKws=data.keywords.filter(k=>k.posPrev-k.pos<-2);
+  const fallingKws=diagKws.filter(k=>k.posPrev-k.pos<-2);
   if(fallingKws.length>0)
     issues.push({level:"critical",icon:"🔴",title:`Позиции падают: ${fallingKws.length} ключей`,desc:fallingKws.map(k=>`«${k.keyword}» ${k.posPrev}→${k.pos}`).join(", "),rec:"Повысьте ставки CPM на эти ключевые слова."});
-  const highDrrKws=data.keywords.filter(k=>targetDrr&&k.drr>targetDrr*1.3);
+  const highDrrKws=diagKws.filter(k=>targetDrr&&k.drr>targetDrr*1.3);
   if(highDrrKws.length>0)
     issues.push({level:"warn",icon:"🟡",title:`${highDrrKws.length} ключей с высоким ДРР`,desc:highDrrKws.map(k=>`«${k.keyword}» ДРР ${k.drr}%`).join(", "),rec:"Рассмотрите снижение ставок или перевод в минус-слова."});
-  const zeroKws=data.keywords.filter(k=>k.orders===0&&k.spend>200);
+  const zeroKws=diagKws.filter(k=>k.orders===0&&k.spend>200);
   if(zeroKws.length>0)
     issues.push({level:"warn",icon:"🟡",title:`${zeroKws.length} ключей без заказов с расходом`,desc:zeroKws.map(k=>`«${k.keyword}» ${k.spend}₽`).join(", "),rec:"Добавьте в минус-слова или снизьте ставки."});
 
   // Рекомендации по ставкам — с текущей, рекомендованной, конкурентной и причиной
-  const bidRecs=data.keywords.map(kw=>{
+  const filtKwsForRec=diagKws;
+  const bidRecs=filtKwsForRec.map(kw=>{
     const drr=kw.revenue>0?kw.spend/kw.revenue*100:null;
     let action,newBidSearch,newBidShelves,reason,priority;
     if(kw.pos>15&&kw.ctr>=0.9){
@@ -936,6 +1033,7 @@ function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
 
       <div style={S.card}>
         <SectionTitle>📊 Рекомендации по ставкам</SectionTitle>
+        <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {bidRecs.map((r,i)=>{
             const actionCol=r.action.startsWith("↑")?T.green:r.action.startsWith("↓")?T.red:T.sub;
@@ -1011,15 +1109,20 @@ function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
 function TabPositionsByPlacement({data,targetDrr}){
   const [expanded,setExpanded]=useState(null);
   const [period,setPeriod]=useState("7d");
-  const dates=data.positions[0]?.dates||[];
+  const [selCamp,setSelCamp]=useState("all");
+  // dates для header — из первой отфильтрованной записи (обновляется при смене кампании ниже)
   const pc=pos=>pos<=5?"#4ade80":pos<=10?"#86efac":pos<=20?"#fbbf24":"#f87171";
+  const filtKws=selCamp==="all"?data.keywords:data.keywords.filter(k=>String(k.campaignId)===String(selCamp));
+  const filtPos=selCamp==="all"?data.positions:data.positions.filter(k=>String(k.campaignId)===String(selCamp));
+  const dates=(filtPos[0]||data.positions[0])?.dates||[];
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={S.card}>
         <SectionTitle>📍 Позиции по ключам с местами размещения</SectionTitle>
+        <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {data.keywords.map(kw=>{
+          {filtKws.map(kw=>{
             const delta=kw.posPrev-kw.pos;
             const drr=kw.revenue>0?kw.spend/kw.revenue*100:null;
             const isExp=expanded===kw.keyword;
@@ -1075,6 +1178,7 @@ function TabPositionsByPlacement({data,targetDrr}){
       {/* История позиций было/стало */}
       <div style={S.card}>
         <SectionTitle>📈 История позиций — было / стало</SectionTitle>
+        <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
         <PeriodPicker period={period} onChange={setPeriod}/>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
@@ -1096,7 +1200,7 @@ function TabPositionsByPlacement({data,targetDrr}){
               </tr>
             </thead>
             <tbody>
-              {data.positions.map((kw,ki)=>{
+              {filtPos.map((kw,ki)=>{
                 const first=kw.dates[kw.dates.length-1];
                 const last=kw.dates[0];
                 const deltaS=first&&last?first.posSearch-last.posSearch:0;
@@ -1158,10 +1262,13 @@ function TabPositionsByPlacement({data,targetDrr}){
 function TabAutoMinus({data}){
   const [subTab,setSubTab]=useState("active");
   const [mode,setMode]=useState("manual");
+  const [selCamp,setSelCamp]=useState("all");
   const [selected,setSelected]=useState(new Set());
   const [archived,setArchived]=useState(data.minusArchive);
   const [active,setActive]=useState(data.minusActive);
   const REASON_LABELS={low_ctr:"CTR ниже нормы",no_orders:"Нет заказов",high_drr:"Высокий ДРР",manual:"Ручное"};
+  const filtActive=selCamp==="all"?active:active.filter(k=>String(k.campaignId)===String(selCamp));
+  const filtArchived=selCamp==="all"?archived:archived.filter(k=>String(k.campaignId)===String(selCamp));
 
   function deleteSelected(){
     const toArchive=active.filter(k=>selected.has(k.id)).map(k=>({...k,deletedAt:new Date().toLocaleDateString("ru-RU"),deletedBy:"ручное",reason:"Ручное удаление"}));
@@ -1172,7 +1279,7 @@ function TabAutoMinus({data}){
     setActive(prev=>[{...item,addedDaysAgo:0,reason:"restored"},...prev]);setArchived(prev=>prev.filter(k=>k.id!==id));
   }
   function autoDelete(){
-    const cands=active.filter(k=>k.ctr<0.5||k.orders===0);
+    const cands=filtActive.filter(k=>k.ctr<0.5||k.orders===0);
     const toArchive=cands.map(k=>({...k,deletedAt:new Date().toLocaleDateString("ru-RU"),deletedBy:"авто",reason:k.ctr<0.5?"CTR < 0.5%":"0 заказов при расходе > 200₽"}));
     setArchived(prev=>[...toArchive,...prev]);setActive(prev=>prev.filter(k=>!cands.find(c=>c.id===k.id)));
   }
@@ -1181,6 +1288,7 @@ function TabAutoMinus({data}){
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={S.card}>
         <SectionTitle>Режим работы</SectionTitle>
+        <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           {[{id:"manual",icon:"✋",label:"Ручное удаление",desc:"Выбираешь запросы сам"},{id:"auto",icon:"🤖",label:"Авто-удаление",desc:"Система сама удаляет по порогам"}].map(m=>(
             <button key={m.id} onClick={()=>setMode(m.id)}
@@ -1195,12 +1303,12 @@ function TabAutoMinus({data}){
           <div style={{marginTop:12,background:"rgba(248,113,113,0.08)",border:"1px solid rgba(248,113,113,0.2)",borderRadius:12,padding:12}}>
             <div style={{fontSize:11,color:T.sub,marginBottom:10}}>CTR &lt; 0.5% при показах &gt; 300 · Нет заказов при расходе &gt; 200₽</div>
             <button onClick={autoDelete} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer",width:"100%"}}>
-              🤖 Применить авто-минусовку ({active.filter(k=>k.ctr<0.5||k.orders===0).length} запросов)
+              🤖 Применить авто-минусовку ({filtActive.filter(k=>k.ctr<0.5||k.orders===0).length} запросов)
             </button>
           </div>
         )}
       </div>
-      <Tabs tabs={[{id:"active",label:`🚫 Нерелевантные (${active.length})`},{id:"archive",label:`📦 Архив (${archived.length})`}]} active={subTab} onChange={setSubTab}/>
+      <Tabs tabs={[{id:"active",label:`🚫 Нерелевантные (${filtActive.length})`},{id:"archive",label:`📦 Архив (${filtArchived.length})`}]} active={subTab} onChange={setSubTab}/>
 
       {subTab==="active"&&(
         <div style={S.card}>
@@ -1211,7 +1319,7 @@ function TabAutoMinus({data}){
             </div>
           )}
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {active.map(kw=>(
+            {filtActive.map(kw=>(
               <div key={kw.id} style={{...S.card2,border:`1px solid ${selected.has(kw.id)?"rgba(248,113,113,0.4)":T.border}`,background:selected.has(kw.id)?"rgba(248,113,113,0.06)":T.card2}}>
                 <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                   {mode==="manual"&&<input type="checkbox" checked={selected.has(kw.id)} onChange={()=>setSelected(prev=>{const n=new Set(prev);n.has(kw.id)?n.delete(kw.id):n.add(kw.id);return n;})} style={{marginTop:3,accentColor:"#dc2626",flexShrink:0}}/>}
@@ -1227,7 +1335,7 @@ function TabAutoMinus({data}){
                 </div>
               </div>
             ))}
-            {active.length===0&&<div style={{textAlign:"center",padding:24,color:T.sub,fontSize:13}}>✅ Нет нерелевантных запросов</div>}
+            {filtActive.length===0&&<div style={{textAlign:"center",padding:24,color:T.sub,fontSize:13}}>✅ Нет нерелевантных запросов</div>}
           </div>
         </div>
       )}
@@ -1236,7 +1344,7 @@ function TabAutoMinus({data}){
         <div style={S.card}>
           <div style={{fontSize:11,color:T.sub,marginBottom:12}}>Удалённые запросы — можно восстановить обратно</div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {archived.map(kw=>(
+            {filtArchived.map(kw=>(
               <div key={kw.id} style={S.card2}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div style={{flex:1}}>
@@ -1252,7 +1360,7 @@ function TabAutoMinus({data}){
                 </div>
               </div>
             ))}
-            {archived.length===0&&<div style={{textAlign:"center",padding:24,color:T.sub,fontSize:13}}>Архив пуст</div>}
+            {filtArchived.length===0&&<div style={{textAlign:"center",padding:24,color:T.sub,fontSize:13}}>Архив пуст</div>}
           </div>
         </div>
       )}
@@ -1590,6 +1698,7 @@ function TabBids({data,targetDrr}){
 
 // ─── АВТО-УМНОЕ управление ────────────────────────────────────────────────────
 function SmartBidsTab({data,targetDrr,inp}){
+  const [selCamp,setSelCamp]=useState("all");
   const [settings,setSettings]=useState(
     data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{
       enabled:false, mode:"position", targetPos:5,
@@ -1634,7 +1743,8 @@ function SmartBidsTab({data,targetDrr,inp}){
       </div>
 
       {/* Настройки по кампаниям */}
-      {data.campaigns.map(c=>{
+      <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
+      {data.campaigns.filter(c=>selCamp==="all"||String(c.id)===String(selCamp)).map(c=>{
         const s=settings[c.id];
         return(
           <div key={c.id} style={{...S.card,borderColor:s.enabled?"rgba(74,222,128,0.25)":T.border,
@@ -1773,6 +1883,8 @@ function SmartBidsTab({data,targetDrr,inp}){
 
 // ─── РУЧНОЕ управление ────────────────────────────────────────────────────────
 function ManualBidsTab({data,inp}){
+  const [selCamp,setSelCamp]=useState("all");
+  const filtCampaigns=selCamp==="all"?data.campaigns:data.campaigns.filter(c=>String(c.id)===String(selCamp));
   const [bids,setBids]=useState(
     data.keywords.reduce((acc,k)=>({...acc,[k.keyword]:{search:k.bidSearch,shelves:k.bidShelves,type:"CPM"}}),{})
   );
@@ -1808,10 +1920,13 @@ function ManualBidsTab({data,inp}){
   function toggleSelect(kw){
     setSelected(p=>{const n=new Set(p);n.has(kw)?n.delete(kw):n.add(kw);return n;});
   }
-  function selectAll(){setSelected(p=>p.size===data.keywords.length?new Set():new Set(data.keywords.map(k=>k.keyword)));}
+  function selectAll(){setSelected(p=>p.size===filtKwBids.length?new Set():new Set(filtKwBids.map(k=>k.keyword)));}
+
+  const filtKwBids=selCamp==="all"?data.keywords:data.keywords.filter(k=>String(k.campaignId)===String(selCamp));
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={c=>{setSelCamp(c);setSelected(new Set());}}/>
       {/* Массовое изменение */}
       {selected.size>0&&(
         <div style={{...S.card,background:"rgba(124,58,237,0.06)",borderColor:"rgba(124,58,237,0.3)"}}>
@@ -1852,12 +1967,12 @@ function ManualBidsTab({data,inp}){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <SectionTitle marginBottom={0}>Ставки по ключевым словам</SectionTitle>
           <button onClick={selectAll} style={{fontSize:11,color:"#a78bfa",background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.2)",borderRadius:8,padding:"4px 10px",cursor:"pointer"}}>
-            {selected.size===data.keywords.length?"Снять всё":"Выбрать всё"}
+            {selected.size===filtKwBids.length?"Снять всё":"Выбрать всё"}
           </button>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {data.keywords.map(kw=>{
-            const b=bids[kw.keyword];
+          {filtKwBids.map(kw=>{
+            const b=bids[kw.keyword]||{search:kw.bidSearch,shelves:kw.bidShelves,type:"CPM"};
             const isSel=selected.has(kw.keyword);
             const origSearch=kw.bidSearch;
             const changedS=b.search!==origSearch;
@@ -1945,6 +2060,7 @@ function ManualBidsTab({data,inp}){
 
 // ─── СТРАТЕГИИ ────────────────────────────────────────────────────────────────
 function StrategyTab({data,inp}){
+  const [selCamp,setSelCamp]=useState("all");
   const [strategies,setStrategies]=useState(
     data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{
       scheduleEnabled:false,
@@ -1976,8 +2092,8 @@ function StrategyTab({data,inp}){
         </div>
       </div>
 
-      {data.campaigns.map(c=>{
-        const s=strategies[c.id];
+      <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
+      {data.campaigns.filter(c=>selCamp==="all"||String(c.id)===String(selCamp)).map(c=>{
         const activeCount=[s.scheduleEnabled,s.autoPause&&s.budgetLimit>0,s.peakHours].filter(Boolean).length;
         return(
           <div key={c.id} style={{...S.card,borderColor:activeCount>0?"rgba(251,191,36,0.2)":T.border}}>
