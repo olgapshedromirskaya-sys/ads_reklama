@@ -1656,12 +1656,13 @@ function TabSettings({currentUserTgId}){
 // УПРАВЛЕНИЕ СТАВКАМИ
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabBids({data,targetDrr}){
-  const [mode,setMode]=useState("smart"); // smart | manual | strategy
+  const [mode,setMode]=useState("smart"); // smart | manual | strategy | autostrategy
 
   const MODES=[
-    {id:"smart",    icon:"🤖", label:"Авто-умное"},
-    {id:"manual",   icon:"✋", label:"Ручное"},
-    {id:"strategy", icon:"⚡", label:"Стратегии"},
+    {id:"smart",       icon:"🤖", label:"Авто-умное"},
+    {id:"manual",      icon:"✋", label:"Ручное"},
+    {id:"strategy",    icon:"⚡", label:"Стратегии"},
+    {id:"autostrategy",icon:"🎯", label:"Авто-план"},
   ];
 
   const inp=(extra={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...extra});
@@ -1670,28 +1671,24 @@ function TabBids({data,targetDrr}){
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       {/* Переключатель режима */}
       <div style={{...S.card,padding:8}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
           {MODES.map(m=>(
             <button key={m.id} onClick={()=>setMode(m.id)}
-              style={{padding:"10px 6px",borderRadius:10,border:`1px solid ${mode===m.id?"rgba(124,58,237,0.5)":T.border}`,
-                background:mode===m.id?"rgba(124,58,237,0.15)":"transparent",
-                color:mode===m.id?"#c4b5fd":T.sub,fontSize:12,fontWeight:mode===m.id?700:400,cursor:"pointer",
+              style={{padding:"10px 4px",borderRadius:10,border:`1px solid ${mode===m.id?(m.id==="autostrategy"?"rgba(16,185,129,0.5)":"rgba(124,58,237,0.5)"):T.border}`,
+                background:mode===m.id?(m.id==="autostrategy"?"rgba(16,185,129,0.15)":"rgba(124,58,237,0.15)"):"transparent",
+                color:mode===m.id?(m.id==="autostrategy"?"#6ee7b7":"#c4b5fd"):T.sub,fontSize:11,fontWeight:mode===m.id?700:400,cursor:"pointer",
                 display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-              <span style={{fontSize:20}}>{m.icon}</span>
+              <span style={{fontSize:18}}>{m.icon}</span>
               <span>{m.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* ═══ АВТО-УМНОЕ ═══ */}
-      {mode==="smart"&&<SmartBidsTab data={data} targetDrr={targetDrr} inp={inp}/>}
-
-      {/* ═══ РУЧНОЕ ═══ */}
-      {mode==="manual"&&<ManualBidsTab data={data} inp={inp}/>}
-
-      {/* ═══ СТРАТЕГИИ ═══ */}
-      {mode==="strategy"&&<StrategyTab data={data} inp={inp}/>}
+      {mode==="smart"        &&<SmartBidsTab       data={data} targetDrr={targetDrr} inp={inp}/>}
+      {mode==="manual"       &&<ManualBidsTab       data={data} inp={inp}/>}
+      {mode==="strategy"     &&<StrategyTab         data={data} inp={inp}/>}
+      {mode==="autostrategy" &&<AutoStrategyTab     data={data} targetDrr={targetDrr} inp={inp}/>}
     </div>
   );
 }
@@ -2094,10 +2091,49 @@ function StrategyTab({data,inp}){
 
       <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
       {data.campaigns.filter(c=>selCamp==="all"||String(c.id)===String(selCamp)).map(c=>{
+        const s=strategies[c.id];
         const activeCount=[s.scheduleEnabled,s.autoPause&&s.budgetLimit>0,s.peakHours].filter(Boolean).length;
+
+        // ── вычисляем текущий статус конфликтов ──
+        const now=new Date();
+        const hhmm=(h,m)=>h*60+m;
+        const nowMin=hhmm(now.getHours(),now.getMinutes());
+        const todayNum=now.getDay()||7; // 1=пн…7=вс
+
+        const inSchedule=s.scheduleEnabled&&(()=>{
+          const [sh,sm]=s.scheduleStart.split(":").map(Number);
+          const [eh,em]=s.scheduleEnd.split(":").map(Number);
+          return s.scheduleDays.includes(todayNum)&&nowMin>=hhmm(sh,sm)&&nowMin<hhmm(eh,em);
+        })();
+        const budgetExhausted=s.autoPause&&s.budgetLimit>0&&(()=>{
+          // демо: считаем расход как ~60% от лимита для наглядности (у включённых кампаний)
+          const demoSpent=c.status==="ok"?Math.round(s.budgetLimit*0.61):0;
+          return demoSpent>=s.budgetLimit;
+        })();
+        const inPeak=s.peakHours&&(()=>{
+          const [ph,pm]=s.peakStart.split(":").map(Number);
+          const [eh,em]=s.peakEnd.split(":").map(Number);
+          return nowMin>=hhmm(ph,pm)&&nowMin<hhmm(eh,em);
+        })();
+
+        // статусные строки с приоритетом: бюджет > расписание > пик
+        const statusLines=[];
+        if(s.scheduleEnabled&&!inSchedule)
+          statusLines.push({icon:"📅",text:"Вне расписания — кампания приостановлена",color:"rgba(156,163,175,1)"});
+        if(s.scheduleEnabled&&inSchedule)
+          statusLines.push({icon:"📅",text:`Расписание активно · до ${s.scheduleEnd}`,color:T.green});
+        if(budgetExhausted&&inPeak)
+          statusLines.push({icon:"⚡",text:"Пиковые часы — но бюджет исчерпан, старт заблокирован",color:T.red});
+        else if(budgetExhausted)
+          statusLines.push({icon:"🛑",text:`Дневной бюджет исчерпан · пауза до 00:00`,color:T.red});
+        else if(inPeak)
+          statusLines.push({icon:"⚡",text:`Пиковые часы активны · ставки +${s.peakBidBoost}% до ${s.peakEnd}`,color:T.yellow});
+        else if(s.peakHours&&!inPeak)
+          statusLines.push({icon:"⏳",text:`Пиковые часы ожидают · старт в ${s.peakStart}`,color:T.sub});
+
         return(
           <div key={c.id} style={{...S.card,borderColor:activeCount>0?"rgba(251,191,36,0.2)":T.border}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:statusLines.length>0?8:14}}>
               <div>
                 <div style={{fontSize:13,fontWeight:700,color:T.text}}>{c.name}</div>
                 <div style={{fontSize:11,color:T.sub,marginTop:2}}>
@@ -2112,6 +2148,19 @@ function StrategyTab({data,inp}){
                 </span>
               </div>
             </div>
+
+            {/* ── Статусные строки конфликтов и активных стратегий ── */}
+            {statusLines.length>0&&(
+              <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:14,padding:"8px 10px",
+                background:"rgba(255,255,255,0.03)",borderRadius:10,border:`1px solid rgba(255,255,255,0.07)`}}>
+                {statusLines.map((line,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:13}}>{line.icon}</span>
+                    <span style={{fontSize:11,color:line.color,fontWeight:500}}>{line.text}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
 
@@ -2280,15 +2329,261 @@ const SUB_TABS={
     {id:"planfact",    label:"План/Факт"},
   ],
   bids:[
-    {id:"bids_smart",    label:"🤖 Авто"},
-    {id:"bids_manual",   label:"✋ Ручное"},
-    {id:"bids_strategy", label:"⚡ Стратегии"},
-    {id:"bids_minus",    label:"🚫 Минусовка"},
+    {id:"bids_smart",        label:"🤖 Авто"},
+    {id:"bids_manual",       label:"✋ Ручное"},
+    {id:"bids_strategy",     label:"⚡ Стратегии"},
+    {id:"bids_autostrategy", label:"🎯 Авто-план"},
+    {id:"bids_minus",        label:"🚫 Минусовка"},
   ],
   settings:[
     {id:"settings_main", label:"Настройки"},
   ],
 };
+
+// ─── АВТО-СТРАТЕГИЯ ──────────────────────────────────────────────────────────
+function AutoStrategyTab({data,targetDrr,inp}){
+  const [goal,setGoal]=useState("balance");   // growth | balance | economy
+  const [autoApply,setAutoApply]=useState(false);
+  const [running,setRunning]=useState(false);
+  const [ran,setRan]=useState(false);
+  const [log,setLog]=useState([]);
+
+  const GOALS=[
+    {id:"growth",  icon:"🚀", label:"Рост продаж",   desc:"Максимум заказов, ДРР может чуть вырасти"},
+    {id:"balance", icon:"⚖️", label:"Баланс",         desc:"Больше продаж при соблюдении ДРР"},
+    {id:"economy", icon:"💰", label:"Экономия",       desc:"Жёсткий контроль ДРР, снижение расходов"},
+  ];
+
+  // ── Алгоритм анализа на демо-данных ────────────────────────────────────────
+  function runAnalysis(){
+    setRunning(true);
+    setRan(false);
+    setLog([]);
+    const tDrr=targetDrr||20;
+    const allSpend=data.campaigns.reduce((s,c)=>s+c.spend,0)||1;
+    const steps=[];
+
+    // 1. Оцениваем каждую кампанию
+    data.campaigns.forEach(c=>{
+      const campKws=data.keywords.filter(k=>String(k.campaignId)===String(c.id));
+      const goodKws=campKws.filter(k=>k.drr<=tDrr&&k.orders>0);
+      const badKws=campKws.filter(k=>k.drr>tDrr*1.2||k.orders===0&&k.spend>200);
+      const spendShare=(c.spend/allSpend*100).toFixed(0);
+
+      if(c.drr<=tDrr*0.7){
+        // Кампания очень эффективна — увеличить бюджет
+        const boost=goal==="growth"?"+25%":goal==="balance"?"+15%":"+5%";
+        steps.push({type:"up",camp:c.name,action:`Увеличить бюджет ${boost}`,
+          reason:`ДРР ${c.drr}% — значительно ниже цели ${tDrr}%. Доля бюджета ${spendShare}% — есть потенциал.`,
+          detail:goodKws.length>0?`Эффективные ключи: ${goodKws.map(k=>k.keyword).join(", ")}`:null,
+          priority:1});
+      } else if(c.drr>tDrr*1.15){
+        // Перерасход — снизить
+        const cut=goal==="economy"?"-30%":goal==="balance"?"-20%":"-10%";
+        steps.push({type:"down",camp:c.name,action:`Снизить бюджет ${cut}`,
+          reason:`ДРР ${c.drr}% — превышает цель ${tDrr}% на ${(c.drr-tDrr).toFixed(1)}%.`,
+          detail:badKws.length>0?`Проблемные ключи: ${badKws.map(k=>k.keyword).join(", ")}`:null,
+          priority:1});
+      } else {
+        steps.push({type:"ok",camp:c.name,action:"Параметры оптимальны",
+          reason:`ДРР ${c.drr}% — в норме. Плавная корректировка ставок.`,
+          detail:null,priority:3});
+      }
+    });
+
+    // 2. Рекомендации по ключам
+    const fallingKws=data.keywords.filter(k=>k.posPrev-k.pos<-3&&k.ctr>=0.8);
+    if(fallingKws.length>0)
+      steps.push({type:"bid_up",camp:"Все кампании",action:`Повысить ставки: ${fallingKws.length} ключей`,
+        reason:"Позиции падают при хорошем CTR — конкуренты подняли ставки.",
+        detail:fallingKws.map(k=>`«${k.keyword}» ${k.posPrev}→${k.pos} · CTR ${k.ctr}%`).join("; "),
+        priority:2});
+
+    const zeroKws=data.keywords.filter(k=>k.orders===0&&k.spend>300);
+    if(zeroKws.length>0)
+      steps.push({type:"minus",camp:"Все кампании",action:`В минус-слова: ${zeroKws.length} ключей`,
+        reason:"Расход без заказов — нецелевой трафик.",
+        detail:zeroKws.map(k=>`«${k.keyword}» −${k.spend}₽`).join("; "),
+        priority:2});
+
+    const highCpoKws=data.keywords.filter(k=>targetDrr&&k.drr>targetDrr*1.5&&k.orders>0);
+    if(highCpoKws.length>0)
+      steps.push({type:"bid_down",camp:"Все кампании",action:`Снизить ставки: ${highCpoKws.length} ключей`,
+        reason:`CPO слишком высокий при цели ДРР ${tDrr}%.`,
+        detail:highCpoKws.map(k=>`«${k.keyword}» ДРР ${k.drr}%`).join("; "),
+        priority:2});
+
+    // 3. Прогноз
+    const projOrders=Math.round(data.campaigns.reduce((s,c)=>s+c.orders,0)*(goal==="growth"?1.22:goal==="balance"?1.12:1.03));
+    const projDrr=(goal==="growth"?Math.min(tDrr*1.08,tDrr+2):goal==="balance"?tDrr*0.96:tDrr*0.85).toFixed(1);
+
+    steps.sort((a,b)=>a.priority-b.priority);
+
+    setTimeout(()=>{
+      setLog(steps);
+      setRunning(false);
+      setRan(true);
+    },1400);
+  }
+
+  const TYPE_STYLE={
+    up:      {icon:"📈",color:T.green,  bg:"rgba(74,222,128,0.08)", border:"rgba(74,222,128,0.2)"},
+    down:    {icon:"📉",color:T.red,    bg:"rgba(248,113,113,0.08)",border:"rgba(248,113,113,0.2)"},
+    ok:      {icon:"✅",color:T.sub,    bg:"rgba(255,255,255,0.03)",border:T.border},
+    bid_up:  {icon:"⬆️",color:"#93c5fd",bg:"rgba(59,130,246,0.08)", border:"rgba(59,130,246,0.2)"},
+    bid_down:{icon:"⬇️",color:T.yellow, bg:"rgba(251,191,36,0.06)", border:"rgba(251,191,36,0.2)"},
+    minus:   {icon:"🚫",color:T.red,    bg:"rgba(248,113,113,0.06)",border:"rgba(248,113,113,0.15)"},
+  };
+
+  const projOrders=ran?Math.round(data.campaigns.reduce((s,c)=>s+c.orders,0)*(goal==="growth"?1.22:goal==="balance"?1.12:1.03)):null;
+  const projDrr=ran?((targetDrr||20)*(goal==="growth"?1.06:goal==="balance"?0.96:0.85)).toFixed(1):null;
+  const tDrr=targetDrr||20;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+      {/* Заголовок */}
+      <div style={{...S.card,background:"rgba(16,185,129,0.05)",borderColor:"rgba(16,185,129,0.2)"}}>
+        <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+          <span style={{fontSize:24}}>🎯</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:4}}>Авто-план роста продаж</div>
+            <div style={{fontSize:11,color:T.sub,lineHeight:1.7}}>
+              Анализирует все кампании и ключи, предлагает конкретные действия для роста заказов при соблюдении целевого ДРР.
+            </div>
+            {!targetDrr&&(
+              <div style={{marginTop:6,fontSize:11,color:T.yellow}}>
+                ⚠️ Целевой ДРР не установлен — расчёт будет приблизительным
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Выбор цели */}
+      <div style={S.card}>
+        <div style={{fontSize:11,color:T.sub,marginBottom:10,fontWeight:600,letterSpacing:"0.05em"}}>ПРИОРИТЕТ СТРАТЕГИИ</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {GOALS.map(g=>(
+            <div key={g.id} onClick={()=>setGoal(g.id)}
+              style={{...S.card2,cursor:"pointer",
+                borderColor:goal===g.id?"rgba(16,185,129,0.4)":T.border,
+                background:goal===g.id?"rgba(16,185,129,0.07)":T.card2,
+                display:"flex",alignItems:"center",gap:12,padding:"10px 12px"}}>
+              <span style={{fontSize:20,flexShrink:0}}>{g.icon}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,fontWeight:700,color:goal===g.id?"#6ee7b7":T.text}}>{g.label}</div>
+                <div style={{fontSize:10,color:T.sub,marginTop:2}}>{g.desc}</div>
+              </div>
+              <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${goal===g.id?"#6ee7b7":T.border}`,
+                background:goal===g.id?"#6ee7b7":"transparent",flexShrink:0}}/>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Автоприменение */}
+      <div style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:600,color:T.text}}>Авто-применение</div>
+          <div style={{fontSize:10,color:T.sub,marginTop:2}}>Применять рекомендации автоматически каждые 6 ч</div>
+        </div>
+        <div onClick={()=>setAutoApply(p=>!p)} style={{cursor:"pointer"}}>
+          <div style={{width:42,height:24,borderRadius:12,
+            background:autoApply?"rgba(16,185,129,0.3)":"rgba(255,255,255,0.08)",
+            border:`1px solid ${autoApply?"rgba(16,185,129,0.5)":T.border}`,position:"relative"}}>
+            <div style={{position:"absolute",top:3,left:autoApply?21:3,width:16,height:16,
+              borderRadius:"50%",background:autoApply?"#6ee7b7":T.sub,transition:"left 0.2s"}}/>
+          </div>
+        </div>
+      </div>
+
+      {/* Кнопка запуска */}
+      <button onClick={()=>{if(!running)runAnalysis()}}
+        disabled={running}
+        style={{width:"100%",padding:"14px",borderRadius:12,border:"none",cursor:running?"wait":"pointer",
+          background:running?"rgba(16,185,129,0.2)":"rgba(16,185,129,0.9)",
+          color:"#fff",fontSize:14,fontWeight:700,letterSpacing:"0.02em",
+          opacity:running?0.7:1,transition:"all 0.2s"}}>
+        {running?"⏳ Анализирую данные...":"🎯 Запустить анализ"}
+      </button>
+
+      {/* Прогноз */}
+      {ran&&(
+        <div style={{...S.card,background:"rgba(16,185,129,0.05)",borderColor:"rgba(16,185,129,0.2)"}}>
+          <div style={{fontSize:11,color:T.sub,marginBottom:8,fontWeight:600,letterSpacing:"0.05em"}}>ПРОГНОЗ ПОСЛЕ ПРИМЕНЕНИЯ</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {[
+              {l:"Заказы",  v:`+${((projOrders/data.campaigns.reduce((s,c)=>s+c.orders,0)-1)*100).toFixed(0)}%`, sub:`~${projOrders} шт`,  c:"#6ee7b7"},
+              {l:"ДРР",     v:`${projDrr}%`,                                                                       sub:`цель ${tDrr}%`,       c:parseFloat(projDrr)<=tDrr?T.green:T.yellow},
+              {l:"Статус",  v:parseFloat(projDrr)<=tDrr?"✅ ОК":"⚠️",                                              sub:parseFloat(projDrr)<=tDrr?"ДРР в норме":"Выше цели",c:parseFloat(projDrr)<=tDrr?T.green:T.yellow},
+            ].map(m=>(
+              <div key={m.l} style={{...S.card2,textAlign:"center",padding:"10px 6px"}}>
+                <div style={{fontSize:9,color:T.sub,marginBottom:3}}>{m.l}</div>
+                <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:m.c}}>{m.v}</div>
+                <div style={{fontSize:9,color:T.sub,marginTop:2}}>{m.sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Лог рекомендаций */}
+      {ran&&log.length>0&&(
+        <div style={S.card}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:11,color:T.sub,fontWeight:600,letterSpacing:"0.05em"}}>ПЛАН ДЕЙСТВИЙ</div>
+            <div style={{fontSize:10,color:T.sub}}>{log.length} рекомендаций</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {log.map((item,i)=>{
+              const st=TYPE_STYLE[item.type]||TYPE_STYLE.ok;
+              return(
+                <div key={i} style={{...S.card2,background:st.bg,borderColor:st.border,padding:"10px 12px"}}>
+                  <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                    <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{st.icon}</span>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
+                        <div style={{fontSize:10,color:T.sub,marginBottom:3}}>{item.camp}</div>
+                        {autoApply&&item.type!=="ok"&&(
+                          <span style={{fontSize:9,color:"#6ee7b7",background:"rgba(16,185,129,0.15)",
+                            padding:"1px 6px",borderRadius:6,flexShrink:0}}>авто ✓</span>
+                        )}
+                      </div>
+                      <div style={{fontSize:12,fontWeight:700,color:st.color,marginBottom:4}}>{item.action}</div>
+                      <div style={{fontSize:11,color:T.sub,lineHeight:1.5}}>{item.reason}</div>
+                      {item.detail&&(
+                        <div style={{marginTop:5,fontSize:10,color:T.sub,
+                          background:"rgba(255,255,255,0.03)",borderRadius:6,padding:"5px 8px",
+                          borderLeft:`2px solid ${st.border}`}}>
+                          {item.detail}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {autoApply&&(
+            <div style={{marginTop:10,padding:"8px 12px",background:"rgba(16,185,129,0.08)",
+              borderRadius:10,border:"1px solid rgba(16,185,129,0.2)",
+              fontSize:11,color:"#6ee7b7",textAlign:"center"}}>
+              ✅ Все рекомендации применены автоматически · Следующий анализ через 6 ч
+            </div>
+          )}
+          {!autoApply&&(
+            <button style={{marginTop:10,width:"100%",padding:"10px",borderRadius:10,border:"1px solid rgba(16,185,129,0.3)",
+              background:"rgba(16,185,129,0.1)",color:"#6ee7b7",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              ✅ Применить все рекомендации
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function App(){
   const MOCK_TG_USERS=[
@@ -2406,10 +2701,11 @@ export default function App(){
         {subTab==="positions"   &&<TabPositionsByPlacement data={data} targetDrr={targetDrr}/>}
         {subTab==="diagnostics" &&<TabDiagnostics data={data} targetDrr={targetDrr} onGoToPlanFact={goToPlanFact}/>}
         {subTab==="planfact"    &&<TabPlanFact    data={data} targetDrr={targetDrr} onSetTargetDrr={setDrr} category={category} onSetCategory={setCat} budget={budget} onSetBudget={setBudget}/>}
-        {subTab==="bids_smart"    &&<SmartBidsTab    data={data} targetDrr={targetDrr} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
-        {subTab==="bids_manual"   &&<ManualBidsTab   data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
-        {subTab==="bids_strategy" &&<StrategyTab     data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
-        {subTab==="bids_minus"    &&<TabAutoMinus    data={data}/>}
+        {subTab==="bids_smart"        &&<SmartBidsTab      data={data} targetDrr={targetDrr} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
+        {subTab==="bids_manual"       &&<ManualBidsTab      data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
+        {subTab==="bids_strategy"     &&<StrategyTab        data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
+        {subTab==="bids_autostrategy" &&<AutoStrategyTab    data={data} targetDrr={targetDrr} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
+        {subTab==="bids_minus"        &&<TabAutoMinus       data={data}/>}
         {subTab==="settings_main" &&<TabSettings     currentUserTgId={tgUser.id}/>}
       </div>
 
