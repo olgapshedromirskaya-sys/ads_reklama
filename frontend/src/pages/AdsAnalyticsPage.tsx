@@ -1217,7 +1217,8 @@ function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
                           <button onClick={()=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:Math.max(50,val-10)}}))}
                             style={{width:28,height:28,borderRadius:7,border:`1px solid ${T.border}`,background:"transparent",color:T.red,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>−</button>
                           <input type="number" value={val}
-                            onChange={e=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:Math.max(50,+e.target.value||50)}}))}
+                            onChange={e=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:e.target.value===""?0:+e.target.value}}))}
+                            onBlur={e=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:Math.max(50,Math.min(2000,+e.target.value||50))}}))}
                             style={{flex:1,background:changed?"rgba(251,191,36,0.08)":"rgba(255,255,255,0.04)",
                               border:`1px solid ${changed?"rgba(251,191,36,0.4)":T.border}`,
                               borderRadius:8,padding:"5px 6px",fontSize:13,fontFamily:"monospace",fontWeight:700,
@@ -2160,7 +2161,13 @@ function ManualBidsTab({data,inp}){
   const [copyFrom,setCopyFrom]=useState("");
 
   function applyBid(kw,field,val){
-    const v=Math.max(50,Math.min(2000,+val||0));
+    // Allow free typing — only store raw value, clamp on blur via applyBidFinal
+    const raw=+val;
+    if(val===""||val==="-") return; // ignore empty/partial input
+    setBids(p=>({...p,[kw]:{...p[kw],[field]:raw}}));
+  }
+  function applyBidFinal(kw,field,val){
+    const v=Math.max(50,Math.min(2000,+val||50));
     setBids(p=>({...p,[kw]:{...p[kw],[field]:v}}));
     setHistory(p=>[{time:new Date().toLocaleTimeString("ru",{hour:"2-digit",minute:"2-digit"}),kw,field,from:bids[kw][field],to:v},...p.slice(0,9)]);
   }
@@ -2292,6 +2299,7 @@ function ManualBidsTab({data,inp}){
                                 style={{width:26,height:26,borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:T.red,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
                               <input type="number" value={b[field.f]}
                                 onChange={e=>applyBid(kw.keyword,field.f,e.target.value)}
+                                onBlur={e=>applyBidFinal(kw.keyword,field.f,e.target.value)}
                                 style={{flex:1,background:changed?"rgba(251,191,36,0.08)":"rgba(255,255,255,0.04)",border:`1px solid ${changed?"rgba(251,191,36,0.3)":T.border}`,borderRadius:8,padding:"5px 8px",fontSize:13,color:changed?T.yellow:T.text,outline:"none",textAlign:"center",fontFamily:"monospace",fontWeight:700}}/>
                               <button onClick={()=>applyBid(kw.keyword,field.f,b[field.f]+10)}
                                 style={{width:26,height:26,borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:T.green,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
