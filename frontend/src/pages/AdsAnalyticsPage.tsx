@@ -1234,9 +1234,9 @@ function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
                           <span>Конкурент: <b style={{color:f.colText}}>{f.comp} ₽</b></span>
                         </div>
                         {/* Инпут с кнопками */}
-                        <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0}}>
                           <button onClick={()=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:Math.max(50,val-10)}}))}
-                            style={{width:28,height:28,borderRadius:7,border:`1px solid ${T.border}`,background:"transparent",color:T.red,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>−</button>
+                            style={{width:36,height:36,borderRadius:9,border:`1px solid ${T.border}`,background:"rgba(248,113,113,0.08)",color:T.red,fontSize:17,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>−</button>
                           <input type="number" value={val}
                             onChange={e=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:e.target.value===""?0:+e.target.value}}))}
                             onBlur={e=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:Math.max(50,Math.min(2000,+e.target.value||50))}}))}
@@ -1245,7 +1245,7 @@ function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
                               borderRadius:8,padding:"8px 4px",fontSize:14,fontFamily:"monospace",fontWeight:700,
                               color:changed?T.yellow:T.text,outline:"none",textAlign:"center",minWidth:0}}/>
                           <button onClick={()=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:Math.min(2000,val+10)}}))}
-                            style={{width:28,height:28,borderRadius:7,border:`1px solid ${T.border}`,background:"transparent",color:T.green,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>+</button>
+                            style={{width:36,height:36,borderRadius:9,border:`1px solid ${T.border}`,background:"rgba(74,222,128,0.08)",color:T.green,fontSize:17,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>+</button>
                         </div>
                         {changed&&<div style={{fontSize:9,color:T.sub,textAlign:"center",marginTop:3}}>
                           было: {f.field==="search"?r.curSearch:r.curShelves} ₽
@@ -1516,7 +1516,21 @@ function TabAutoMinus({data}){
           </div>
         )}
       </div>
-      <Tabs tabs={[{id:"active",label:`🚫 Нерелевантные (${filtActive.length})`},{id:"relevant",label:`✅ Релевантные (${filtRelevant.length})`},{id:"archive",label:`📦 Архив (${filtArchived.length})`}]} active={subTab} onChange={setSubTab}/>
+      <div style={{display:"flex",gap:4,marginBottom:12,overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
+        {[
+          {id:"active",  label:`🚫 Нерелевантные (${filtActive.length})`},
+          {id:"relevant",label:`✅ Релевантные (${filtRelevant.length})`},
+          {id:"archive", label:`📦 Архив (${filtArchived.length})`},
+        ].map(t=>(
+          <button key={t.id} onClick={()=>setSubTab(t.id)}
+            style={{padding:"7px 12px",borderRadius:9,border:`1px solid ${subTab===t.id?"rgba(124,58,237,0.5)":"rgba(255,255,255,0.08)"}`,
+              whiteSpace:"nowrap",flexShrink:0,cursor:"pointer",fontSize:12,fontWeight:subTab===t.id?700:400,
+              background:subTab===t.id?"rgba(124,58,237,0.2)":"rgba(255,255,255,0.04)",
+              color:subTab===t.id?"#c4b5fd":T.sub}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       {subTab==="active"&&(
         <div style={S.card}>
@@ -2363,7 +2377,7 @@ function ManualBidsTab({data,inp}){
                       ))}
                     </div>
                     {/* Ставки */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
                       {[
                         {l:"🔍 Поиск CPM",f:"search",orig:kw.bidSearch},
                         {l:"🗂 Полки CPM", f:"shelves",orig:kw.bidShelves},
@@ -2377,13 +2391,13 @@ function ManualBidsTab({data,inp}){
                             </div>
                             <div style={{display:"flex",alignItems:"center",gap:4}}>
                               <button onClick={()=>applyBid(kw.keyword,field.f,b[field.f]-10)}
-                                style={{width:26,height:26,borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:T.red,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                                style={{width:34,height:34,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(248,113,113,0.08)",color:T.red,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>−</button>
                               <input type="number" value={b[field.f]}
                                 onChange={e=>applyBid(kw.keyword,field.f,e.target.value)}
                                 onBlur={e=>applyBidFinal(kw.keyword,field.f,e.target.value)}
                                 style={{flex:1,background:changed?"rgba(251,191,36,0.08)":"rgba(255,255,255,0.04)",border:`1px solid ${changed?"rgba(251,191,36,0.3)":T.border}`,borderRadius:8,padding:"8px 4px",fontSize:14,color:changed?T.yellow:T.text,outline:"none",textAlign:"center",fontFamily:"monospace",fontWeight:700,minWidth:0}}/>
                               <button onClick={()=>applyBid(kw.keyword,field.f,b[field.f]+10)}
-                                style={{width:26,height:26,borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:T.green,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                                style={{width:34,height:34,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(74,222,128,0.08)",color:T.green,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>+</button>
                             </div>
                             {changed&&<div style={{fontSize:9,color:T.sub,textAlign:"center",marginTop:2}}>было: {field.orig} ₽</div>}
                           </div>
