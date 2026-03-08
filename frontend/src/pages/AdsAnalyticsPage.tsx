@@ -1518,12 +1518,12 @@ function TabAutoMinus({data}){
       </div>
       <div style={{display:"flex",gap:4,marginBottom:12,overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
         {[
-          {id:"active",  label:`🚫 Нерелевантные (${filtActive.length})`},
-          {id:"relevant",label:`✅ Релевантные (${filtRelevant.length})`},
-          {id:"archive", label:`📦 Архив (${filtArchived.length})`},
+          {id:"active",  label:`Нерелевантные (${filtActive.length})`},
+          {id:"relevant",label:`Релевантные (${filtRelevant.length})`},
+          {id:"archive", label:`Архив (${filtArchived.length})`},
         ].map(t=>(
           <button key={t.id} onClick={()=>setSubTab(t.id)}
-            style={{padding:"7px 12px",borderRadius:9,border:`1px solid ${subTab===t.id?"rgba(124,58,237,0.5)":"rgba(255,255,255,0.08)"}`,
+            style={{padding:"7px 11px",borderRadius:9,border:`1px solid ${subTab===t.id?"rgba(124,58,237,0.5)":"rgba(255,255,255,0.08)"}`,
               whiteSpace:"nowrap",flexShrink:0,cursor:"pointer",fontSize:12,fontWeight:subTab===t.id?700:400,
               background:subTab===t.id?"rgba(124,58,237,0.2)":"rgba(255,255,255,0.04)",
               color:subTab===t.id?"#c4b5fd":T.sub}}>
@@ -1550,21 +1550,18 @@ function TabAutoMinus({data}){
                   <div style={{flex:1}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{fontSize:13,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</div>
+                          {kw.pos&&(
+                            <span style={{fontSize:11,fontFamily:"monospace",fontWeight:700,color:posCol,
+                              background:`${posCol}18`,border:`1px solid ${posCol}30`,borderRadius:6,
+                              padding:"1px 7px",flexShrink:0}}>#{kw.pos}</span>
+                          )}
+                        </div>
                         <div style={{fontSize:11,color:T.sub,marginTop:2}}>Причина: {REASON_LABELS[kw.reason]||kw.reason} · {kw.addedDaysAgo}д. назад</div>
                       </div>
-                      <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,marginLeft:8}}>
-                        {kw.pos&&(
-                          <div style={{textAlign:"center",background:`${posCol}14`,border:`1px solid ${posCol}30`,borderRadius:8,padding:"3px 8px"}}>
-                            <div style={{fontSize:8,color:T.sub}}>Позиция</div>
-                            <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:posCol,lineHeight:1}}>{kw.pos}</div>
-                          </div>
-                        )}
-                        <button onClick={()=>moveToRelevant(kw.id)} title="Переместить в релевантные"
-                          style={{background:"rgba(99,102,241,0.12)",color:"#a78bfa",border:"1px solid rgba(99,102,241,0.25)",borderRadius:7,padding:"5px 9px",fontSize:11,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>→ В релевантные</button>
-                      </div>
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5,marginBottom:8}}>
                       {[{l:"Показы",v:fmt.num(kw.impressions)},{l:"Клики",v:kw.clicks},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kw.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:kw.orders===0?T.red:T.green}].map(m=>(
                         <div key={m.l} style={{textAlign:"center",background:"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
                           <div style={{fontSize:8,color:T.sub}}>{m.l}</div>
@@ -1572,6 +1569,14 @@ function TabAutoMinus({data}){
                         </div>
                       ))}
                     </div>
+                    <button onClick={()=>{
+                        const toArchive={...kw,deletedAt:new Date().toLocaleDateString("ru-RU"),deletedBy:"ручное",reason:"Нерелевантный запрос"};
+                        setArchived(prev=>[toArchive,...prev]);
+                        setActive(prev=>prev.filter(k=>k.id!==kw.id));
+                      }}
+                      style={{width:"100%",padding:"8px",borderRadius:8,background:"rgba(248,113,113,0.08)",
+                        color:T.red,border:"1px solid rgba(248,113,113,0.2)",fontSize:12,
+                        fontWeight:600,cursor:"pointer"}}>🗑 Удалить в архив</button>
                   </div>
                 </div>
               </div>
@@ -1586,7 +1591,7 @@ function TabAutoMinus({data}){
           <div style={{...S.card,background:"rgba(74,222,128,0.04)",borderColor:"rgba(74,222,128,0.15)",padding:"10px 14px"}}>
             <div style={{fontSize:12,fontWeight:600,color:"#6ee7b7",marginBottom:3}}>✅ Релевантные ключи</div>
             <div style={{fontSize:11,color:T.sub,lineHeight:1.6}}>
-              Эти ключи были временно отключены, но остаются целевыми. Когда поднимете ставку — вернёте одной кнопкой и отследите динамику.
+              Целевые ключи, временно отключённые из кампании. Например: ставка была недостаточна — подняли, теперь можно вернуть и отследить динамику.
             </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -1646,7 +1651,7 @@ function TabAutoMinus({data}){
               <div style={{...S.card,textAlign:"center",padding:"32px 20px"}}>
                 <div style={{fontSize:28,marginBottom:8}}>📋</div>
                 <div style={{fontSize:13,color:T.text,fontWeight:600,marginBottom:4}}>Нет релевантных ключей</div>
-                <div style={{fontSize:11,color:T.sub}}>Нажмите «→ В релевантные» у любого ключа в Нерелевантных</div>
+                <div style={{fontSize:11,color:T.sub}}>Удалённые ключи попадают в Архив</div>
               </div>
             )}
           </div>
@@ -1701,16 +1706,11 @@ function TabAutoMinus({data}){
                   ))}
                 </div>
                 {/* Кнопки */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                <div style={{display:"flex",gap:6}}>
                   <button onClick={()=>restore(kw.id)}
-                    style={{padding:"8px 6px",borderRadius:9,border:"1px solid rgba(74,222,128,0.35)",
+                    style={{flex:1,padding:"9px 6px",borderRadius:9,border:"1px solid rgba(74,222,128,0.35)",
                       background:"rgba(74,222,128,0.1)",color:"#6ee7b7",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-                    ↩ В кампанию
-                  </button>
-                  <button onClick={()=>moveArchivedToRelevant(kw.id)}
-                    style={{padding:"8px 6px",borderRadius:9,border:"1px solid rgba(99,102,241,0.3)",
-                      background:"rgba(99,102,241,0.08)",color:"#a78bfa",fontSize:12,cursor:"pointer"}}>
-                    → В релевантные
+                    ↩ Вернуть в кампанию
                   </button>
                 </div>
               </div>
