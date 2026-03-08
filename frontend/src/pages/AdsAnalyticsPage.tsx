@@ -49,18 +49,18 @@ const DEMO={
       {keyword:"женские кроссовки купить",freq:38228,cpm:220,avgPos:5,impressions:98,clicks:3,ctr:3.06,cpc:25.3,spend:76,costShare:2.6,baskets:15,orders:8,revenue:640,best:true},
     ],
     minusActive:[
-      {id:1,campaignId:1,keyword:"мужские кроссовки",impressions:820,clicks:3,ctr:0.37,spend:248,orders:0,addedDaysAgo:3,reason:"low_ctr"},
-      {id:2,campaignId:1,keyword:"детские кроссовки",impressions:540,clicks:1,ctr:0.19,spend:163,orders:0,addedDaysAgo:5,reason:"low_ctr"},
+      {id:1,campaignId:1,keyword:"мужские кроссовки",impressions:820,clicks:3,ctr:0.37,spend:248,orders:0,addedDaysAgo:3,reason:"low_ctr",pos:78},
+      {id:2,campaignId:1,keyword:"детские кроссовки",impressions:540,clicks:1,ctr:0.19,spend:163,orders:0,addedDaysAgo:5,reason:"low_ctr",pos:112},
       {id:3,campaignId:2,keyword:"джинсы широкие",impressions:310,clicks:2,ctr:0.65,spend:194,orders:0,addedDaysAgo:1,reason:"no_orders"},
       {id:4,campaignId:2,keyword:"брюки slim",impressions:290,clicks:4,ctr:1.38,spend:316,orders:0,addedDaysAgo:2,reason:"no_orders"},
-      {id:5,campaignId:3,keyword:"кроссовки серые",impressions:480,clicks:3,ctr:0.63,spend:214,orders:0,addedDaysAgo:2,reason:"low_ctr"},
-      {id:6,campaignId:3,keyword:"кроссовки цветные",impressions:340,clicks:1,ctr:0.29,spend:175,orders:0,addedDaysAgo:4,reason:"low_ctr"},
+      {id:5,campaignId:3,keyword:"кроссовки серые",impressions:480,clicks:3,ctr:0.63,spend:214,orders:0,addedDaysAgo:2,reason:"low_ctr",pos:67},
+      {id:6,campaignId:3,keyword:"кроссовки цветные",impressions:340,clicks:1,ctr:0.29,spend:175,orders:0,addedDaysAgo:4,reason:"low_ctr",pos:143},
     ],
     minusArchive:[
-      {id:10,campaignId:1,keyword:"обувь женская",impressions:1240,clicks:4,ctr:0.32,spend:410,orders:0,deletedAt:"01.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
-      {id:11,campaignId:1,keyword:"туфли",impressions:890,clicks:2,ctr:0.22,spend:280,orders:0,deletedAt:"28.02.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
-      {id:12,campaignId:2,keyword:"штаны мужские",impressions:320,clicks:3,ctr:0.94,spend:195,orders:0,deletedAt:"25.02.2026",deletedBy:"ручное",reason:"Ручное удаление"},
-      {id:13,campaignId:3,keyword:"кроссовки чёрные",impressions:560,clicks:2,ctr:0.36,spend:198,orders:0,deletedAt:"03.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
+      {id:10,campaignId:1,keyword:"обувь женская",impressions:1240,clicks:4,ctr:0.32,spend:410,orders:0,pos:87,deletedAt:"01.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
+      {id:11,campaignId:1,keyword:"туфли",impressions:890,clicks:2,ctr:0.22,spend:280,orders:0,pos:134,deletedAt:"28.02.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
+      {id:12,campaignId:2,keyword:"штаны мужские",impressions:320,clicks:3,ctr:0.94,spend:195,orders:0,pos:52,deletedAt:"25.02.2026",deletedBy:"ручное",reason:"Ручное удаление"},
+      {id:13,campaignId:3,keyword:"кроссовки чёрные",impressions:560,clicks:2,ctr:0.36,spend:198,orders:0,pos:102,deletedAt:"03.03.2026",deletedBy:"авто",reason:"CTR < 0.5%"},
     ],
   },
   ozon:{
@@ -642,62 +642,83 @@ function TabFunnel({data,targetDrr}){
         })}
       </div>
 
+      {/* ── ПОЛНАЯ СТАТИСТИКА РЕКЛАМНЫХ КАМПАНИЙ ── */}
+      <div style={{...S.card,background:"rgba(99,102,241,0.04)",borderColor:"rgba(99,102,241,0.2)",padding:"10px 14px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#c4b5fd"}}>📊 Полная статистика рекламных кампаний</div>
+          <div style={{fontSize:10,color:T.sub}}>по ключевым запросам</div>
+        </div>
+        <div style={{fontSize:11,color:T.sub,marginTop:3}}>Все показатели по каждому ключу — прокрутите таблицу вправо</div>
+      </div>
+      <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
+
       {/* По ключевым словам — все ключи, полные метрики по каждой кампании */}
-      {data.campaigns.map(camp=>{
+      {data.campaigns.filter(c=>selCamp==="all"||String(c.id)===String(selCamp)).map(camp=>{
         const campKwsFull=kws.filter(k=>String(k.campaignId)===String(camp.id));
         const kwScale=period==="today"?1/7:period==="yesterday"?1/6:1;
         if(campKwsFull.length===0) return null;
         return(
           <div key={camp.id} style={S.card}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{fontSize:13,fontWeight:700,color:T.text}}>{camp.name}</div>
-              <div style={{display:"flex",gap:6,fontSize:10}}>
-                <span style={{color:T.sub}}>ДРР: </span>
-                <span style={{color:camp.drr<=(targetDrr||20)?T.green:T.red,fontWeight:700}}>{camp.drr}%</span>
+              <div style={{fontSize:14,fontWeight:700,color:T.text}}>{camp.name}</div>
+              <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,
+                background:camp.drr<=(targetDrr||20)?"rgba(74,222,128,0.12)":"rgba(248,113,113,0.12)",
+                color:camp.drr<=(targetDrr||20)?T.green:T.red}}>ДРР {camp.drr}%</span>
+            </div>
+            {/* Горизонтальный скролл */}
+            <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginLeft:-4,marginRight:-4,paddingLeft:4,paddingRight:4}}>
+              <div style={{minWidth:680}}>
+                {/* Заголовок */}
+                <div style={{display:"grid",gridTemplateColumns:"140px 64px 56px 60px 56px 56px 68px 60px 56px 60px 64px 32px",
+                  gap:0,paddingBottom:5,borderBottom:`1px solid ${T.border}`,marginBottom:2}}>
+                  {["Запрос","Показы","CPM","Переход","CTR","CPC","Затраты","Корзины","CPL","Заказы","ДРР РК",""].map((h,hi)=>(
+                    <div key={hi} style={{fontSize:9,color:T.sub,textAlign:hi>0?"center":"left",
+                      fontWeight:600,padding:"0 3px",letterSpacing:"0.02em"}}>{h}</div>
+                  ))}
+                </div>
+                {campKwsFull.map((kw,ki)=>{
+                  const imp=Math.round(kw.impressions*kwScale);
+                  const cl=Math.max(0,Math.round(kw.clicks*kwScale));
+                  const bsk=Math.max(0,Math.round(kw.baskets*kwScale));
+                  const ord=Math.max(0,Math.round(kw.orders*kwScale));
+                  const sp=Math.round(kw.spend*kwScale);
+                  const rev=Math.round(kw.revenue*kwScale);
+                  const cpm=imp>0?(sp/imp*1000):0;
+                  const cpc=cl>0?sp/cl:0;
+                  const ctrSt=getCtrSt(kw.ctr);
+                  const cpl=bsk>0?sp/bsk:0;
+                  const drr=rev>0?(sp/rev*100):null;
+                  const isOdd=ki%2===1;
+                  return(
+                    <div key={kw.keyword} style={{display:"grid",
+                      gridTemplateColumns:"140px 64px 56px 60px 56px 56px 68px 60px 56px 60px 64px 32px",
+                      gap:0,padding:"7px 0",borderBottom:`1px solid rgba(255,255,255,0.04)`,
+                      background:isOdd?"rgba(255,255,255,0.015)":"transparent",alignItems:"center"}}>
+                      <div style={{fontSize:11,color:T.text,fontWeight:600,
+                        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",padding:"0 3px"}}
+                        title={kw.keyword}>{kw.keyword}</div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:11,fontFamily:"monospace",color:T.sub}}>{fmt.num(imp)}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:11,fontFamily:"monospace",color:T.sub}}>{cpm>0?`${cpm.toFixed(0)}₽`:"—"}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:12,fontFamily:"monospace",color:T.text,fontWeight:600}}>{cl}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:11,fontFamily:"monospace",padding:"2px 5px",borderRadius:5,background:ctrSt.bg,color:ctrSt.c,fontWeight:700}}>{fmt.pct(kw.ctr)}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:11,fontFamily:"monospace",color:T.sub}}>{cpc>0?`${cpc.toFixed(0)}₽`:"—"}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:11,fontFamily:"monospace",color:T.yellow,fontWeight:700}}>{fmt.rub(sp)}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:12,fontFamily:"monospace",color:T.text,fontWeight:600}}>{bsk}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:11,fontFamily:"monospace",color:T.sub}}>{cpl>0?`${cpl.toFixed(0)}₽`:"—"}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:13,fontFamily:"monospace",color:ord>0?T.green:T.red,fontWeight:700}}>{ord}</span></div>
+                      <div style={{textAlign:"center",padding:"0 2px"}}><span style={{fontSize:11,fontFamily:"monospace",
+                        color:drr==null?T.sub:drr<=(targetDrr||20)?T.green:T.red,fontWeight:600}}>
+                        {drr!=null?`${drr.toFixed(1)}%`:"—"}</span></div>
+                      <div style={{textAlign:"center"}}>
+                        <button onClick={()=>deleteFunnelKw(kw.keyword)} title="Удалить ключ"
+                          style={{background:"transparent",border:"none",cursor:"pointer",padding:"3px",color:"rgba(248,113,113,0.6)",fontSize:15,lineHeight:1}}>🗑</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            {/* Заголовок таблицы */}
-            <div style={{display:"grid",gridTemplateColumns:"minmax(90px,1.5fr) repeat(10,1fr) 28px",gap:3,marginBottom:4,paddingBottom:4,borderBottom:`1px solid ${T.border}`}}>
-              {["Запрос","Показы","CPM","Переход","CTR","CPC","Затрат","Корзин","CPL","Заказы","ДРР РК",""].map((h,hi)=>(
-                <div key={hi} style={{fontSize:8,color:T.sub,textAlign:hi>0?"center":"left",fontWeight:600,letterSpacing:"0.03em"}}>{h}</div>
-              ))}
-            </div>
-            {/* Строки ключей */}
-            {campKwsFull.map((kw,ki)=>{
-              const imp=Math.round(kw.impressions*kwScale);
-              const cl=Math.max(0,Math.round(kw.clicks*kwScale));
-              const bsk=Math.max(0,Math.round(kw.baskets*kwScale));
-              const ord=Math.max(0,Math.round(kw.orders*kwScale));
-              const sp=Math.round(kw.spend*kwScale);
-              const rev=Math.round(kw.revenue*kwScale);
-              const cpm=imp>0?(sp/imp*1000):0;
-              const cpc=cl>0?sp/cl:0;
-              const ctrSt=getCtrSt(kw.ctr);
-              const cpl=bsk>0?sp/bsk:0;
-              const cpo=ord>0?sp/ord:0;
-              const drr=rev>0?(sp/rev*100):null;
-              const cro=bsk>0?ord/bsk*100:0;
-              const isOdd=ki%2===1;
-              return(
-                <div key={kw.keyword} style={{display:"grid",gridTemplateColumns:"minmax(90px,1.5fr) repeat(10,1fr) 28px",gap:3,padding:"5px 0",borderBottom:`1px solid rgba(255,255,255,0.04)`,background:isOdd?"rgba(255,255,255,0.01)":"transparent",alignItems:"center"}}>
-                  <div style={{fontSize:10,color:T.text,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={kw.keyword}>{kw.keyword}</div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",color:T.sub}}>{fmt.num(imp)}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",color:T.sub}}>{cpm>0?`${cpm.toFixed(0)}₽`:"—"}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",color:T.sub}}>{cl}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",padding:"1px 4px",borderRadius:4,background:ctrSt.bg,color:ctrSt.c,fontWeight:700}}>{fmt.pct(kw.ctr)}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",color:T.sub}}>{cpc>0?`${cpc.toFixed(0)}₽`:"—"}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",color:T.yellow,fontWeight:600}}>{fmt.rub(sp)}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",color:T.sub}}>{bsk}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",color:T.sub}}>{cpl>0?`${cpl.toFixed(0)}₽`:"—"}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:11,fontFamily:"monospace",color:ord>0?T.green:T.red,fontWeight:700}}>{ord}</span></div>
-                  <div style={{textAlign:"center"}}><span style={{fontSize:10,fontFamily:"monospace",color:drr==null?"—":drr<=(targetDrr||20)?T.green:T.red,fontWeight:600}}>{drr!=null?`${drr.toFixed(1)}%`:"—"}</span></div>
-                  <div style={{textAlign:"center"}}>
-                    <button onClick={()=>deleteFunnelKw(kw.keyword)} title="Удалить ключ"
-                      style={{background:"transparent",border:"none",cursor:"pointer",padding:2,color:T.red,fontSize:14,lineHeight:1}}>🗑</button>
-                  </div>
-                </div>
-              );
-            })}
+            <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.2)",marginTop:6}}>← прокрутите →</div>
           </div>
         );
       })}
@@ -1196,7 +1217,7 @@ function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
                 )}
 
                 {/* Поля ставок — редактируемые */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>
                   {[
                     {label:"🔍 Поиск CPM",field:"search",rec:r.newSearch,comp:r.compSearch,colBg:"rgba(99,102,241,0.06)",colBorder:"rgba(99,102,241,0.2)",colText:"#a5b4fc"},
                     {label:"🗂 Полки CPM", field:"shelves",rec:r.newShelves,comp:r.compShelves,colBg:"rgba(59,130,246,0.06)",colBorder:"rgba(59,130,246,0.2)",colText:"#93c5fd"},
@@ -1221,8 +1242,8 @@ function TabDiagnostics({data,targetDrr,onGoToPlanFact}){
                             onBlur={e=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:Math.max(50,Math.min(2000,+e.target.value||50))}}))}
                             style={{flex:1,background:changed?"rgba(251,191,36,0.08)":"rgba(255,255,255,0.04)",
                               border:`1px solid ${changed?"rgba(251,191,36,0.4)":T.border}`,
-                              borderRadius:8,padding:"5px 6px",fontSize:13,fontFamily:"monospace",fontWeight:700,
-                              color:changed?T.yellow:T.text,outline:"none",textAlign:"center"}}/>
+                              borderRadius:8,padding:"8px 4px",fontSize:14,fontFamily:"monospace",fontWeight:700,
+                              color:changed?T.yellow:T.text,outline:"none",textAlign:"center",minWidth:0}}/>
                           <button onClick={()=>setDiagBids(p=>({...p,[r.keyword]:{...p[r.keyword],[f.field]:Math.min(2000,val+10)}}))}
                             style={{width:28,height:28,borderRadius:7,border:`1px solid ${T.border}`,background:"transparent",color:T.green,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>+</button>
                         </div>
@@ -1506,26 +1527,41 @@ function TabAutoMinus({data}){
             </div>
           )}
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {filtActive.map(kw=>(
+            {filtActive.map(kw=>{
+              const posCol=!kw.pos?T.sub:kw.pos<=20?"#4ade80":kw.pos<=50?"#fbbf24":kw.pos<=100?"#fb923c":"#f87171";
+              return(
               <div key={kw.id} style={{...S.card2,border:`1px solid ${selected.has(kw.id)?"rgba(248,113,113,0.4)":T.border}`,background:selected.has(kw.id)?"rgba(248,113,113,0.06)":T.card2}}>
                 <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                   {mode==="manual"&&<input type="checkbox" checked={selected.has(kw.id)} onChange={()=>setSelected(prev=>{const n=new Set(prev);n.has(kw.id)?n.delete(kw.id):n.add(kw.id);return n;})} style={{marginTop:3,accentColor:"#dc2626",flexShrink:0}}/>}
                   <div style={{flex:1}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                      <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kw.keyword}</div>
-                      <button onClick={()=>moveToRelevant(kw.id)} title="Переместить в релевантные"
-                        style={{marginLeft:8,background:"rgba(74,222,128,0.12)",color:T.green,border:"1px solid rgba(74,222,128,0.3)",borderRadius:7,padding:"3px 8px",fontSize:11,cursor:"pointer",flexShrink:0}}>✅ Релевантный</button>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</div>
+                        <div style={{fontSize:11,color:T.sub,marginTop:2}}>Причина: {REASON_LABELS[kw.reason]||kw.reason} · {kw.addedDaysAgo}д. назад</div>
+                      </div>
+                      <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0,marginLeft:8}}>
+                        {kw.pos&&(
+                          <div style={{textAlign:"center",background:`${posCol}14`,border:`1px solid ${posCol}30`,borderRadius:8,padding:"3px 8px"}}>
+                            <div style={{fontSize:8,color:T.sub}}>Позиция</div>
+                            <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:posCol,lineHeight:1}}>{kw.pos}</div>
+                          </div>
+                        )}
+                        <button onClick={()=>moveToRelevant(kw.id)} title="Переместить в релевантные"
+                          style={{background:"rgba(99,102,241,0.12)",color:"#a78bfa",border:"1px solid rgba(99,102,241,0.25)",borderRadius:7,padding:"5px 9px",fontSize:11,cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>→ В релевантные</button>
+                      </div>
                     </div>
-                    <div style={{fontSize:11,color:T.sub,marginTop:2}}>Причина: {REASON_LABELS[kw.reason]||kw.reason} · {kw.addedDaysAgo}д. назад</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:8}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:5}}>
                       {[{l:"Показы",v:fmt.num(kw.impressions)},{l:"Клики",v:kw.clicks},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kw.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:kw.orders===0?T.red:T.green}].map(m=>(
-                        <div key={m.l}><div style={{fontSize:9,color:T.sub}}>{m.l}</div><div style={{fontSize:12,fontFamily:"monospace",fontWeight:600,color:m.c||T.text}}>{m.v}</div></div>
+                        <div key={m.l} style={{textAlign:"center",background:"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
+                          <div style={{fontSize:8,color:T.sub}}>{m.l}</div>
+                          <div style={{fontSize:12,fontFamily:"monospace",fontWeight:600,color:m.c||T.text}}>{m.v}</div>
+                        </div>
                       ))}
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
+            );})}
             {filtActive.length===0&&<div style={{textAlign:"center",padding:24,color:T.sub,fontSize:13}}>✅ Нет нерелевантных запросов</div>}
           </div>
         </div>
@@ -1596,7 +1632,7 @@ function TabAutoMinus({data}){
               <div style={{...S.card,textAlign:"center",padding:"32px 20px"}}>
                 <div style={{fontSize:28,marginBottom:8}}>📋</div>
                 <div style={{fontSize:13,color:T.text,fontWeight:600,marginBottom:4}}>Нет релевантных ключей</div>
-                <div style={{fontSize:11,color:T.sub}}>Нажмите «✅ Релевантный» у любого ключа в Нерелевантных</div>
+                <div style={{fontSize:11,color:T.sub}}>Нажмите «→ В релевантные» у любого ключа в Нерелевантных</div>
               </div>
             )}
           </div>
@@ -1604,30 +1640,75 @@ function TabAutoMinus({data}){
       )}
 
       {subTab==="archive"&&(
-        <div style={S.card}>
-          <div style={{fontSize:11,color:T.sub,marginBottom:12}}>Удалённые запросы — можно восстановить обратно</div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {filtArchived.map(kw=>(
-              <div key={kw.id} style={S.card2}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:13,color:T.text,fontWeight:500}}>{kw.keyword}</div>
-                    <div style={{fontSize:11,color:T.sub,marginTop:2}}>Удалён: {kw.deletedAt} · {kw.deletedBy} · {kw.reason}</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6,marginTop:8}}>
-                      {[{l:"Показы",v:fmt.num(kw.impressions)},{l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:T.text},{l:"Расход",v:fmt.rub(kw.spend),c:T.yellow},{l:"Заказы",v:kw.orders,c:T.red},{l:"CPO",v:kw.orders>0?fmt.rub(kw.spend/kw.orders):"—",c:T.sub}].map(m=>(
-                        <div key={m.l}><div style={{fontSize:9,color:T.sub}}>{m.l}</div><div style={{fontSize:11,fontFamily:"monospace",fontWeight:600,color:m.c||T.text}}>{m.v}</div></div>
-                      ))}
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{...S.card,padding:"10px 14px",background:"rgba(248,113,113,0.04)",borderColor:"rgba(248,113,113,0.15)"}}>
+            <div style={{fontSize:12,fontWeight:600,color:"#fca5a5",marginBottom:2}}>📦 Архив удалённых ключей</div>
+            <div style={{fontSize:11,color:T.sub}}>Здесь хранятся удалённые запросы. Видно на какой позиции был ключ — можно вернуть или перенести в релевантные.</div>
+          </div>
+          {filtArchived.map(kw=>{
+            const posCol=!kw.pos?T.sub:kw.pos<=20?"#4ade80":kw.pos<=50?"#fbbf24":kw.pos<=100?"#fb923c":"#f87171";
+            const posLabel=!kw.pos?"—":kw.pos<=20?"топ":kw.pos<=50?"средн.":kw.pos<=100?"низкая":"очень низкая";
+            return(
+              <div key={kw.id} style={{...S.card2,borderLeft:`3px solid rgba(248,113,113,0.3)`}}>
+                {/* Шапка */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,color:T.text,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</div>
+                    <div style={{display:"flex",gap:6,marginTop:3,flexWrap:"wrap",alignItems:"center"}}>
+                      <span style={{fontSize:10,color:T.sub}}>удалён {kw.deletedAt}</span>
+                      <span style={{fontSize:9,color:"rgba(255,255,255,0.2)"}}>·</span>
+                      <span style={{fontSize:10,color:kw.deletedBy==="авто"?"#93c5fd":"#c4b5fd"}}>{kw.deletedBy==="авто"?"🤖 авто":"✋ ручное"}</span>
+                      <span style={{fontSize:9,color:"rgba(255,255,255,0.2)"}}>·</span>
+                      <span style={{fontSize:10,color:T.sub}}>{kw.reason}</span>
                     </div>
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:5,marginLeft:10,flexShrink:0}}>
-                    <button onClick={()=>restore(kw.id)} style={{background:"rgba(74,222,128,0.15)",color:T.green,border:"1px solid rgba(74,222,128,0.3)",borderRadius:8,padding:"5px 10px",fontSize:10,fontWeight:600,cursor:"pointer"}}>↩ В кампанию</button>
-                    <button onClick={()=>moveArchivedToRelevant(kw.id)} style={{background:"rgba(99,102,241,0.12)",color:"#a78bfa",border:"1px solid rgba(99,102,241,0.25)",borderRadius:8,padding:"5px 10px",fontSize:10,cursor:"pointer"}}>✅ Релевантный</button>
-                  </div>
+                  {/* Позиция на момент удаления */}
+                  {kw.pos&&(
+                    <div style={{textAlign:"center",flexShrink:0,marginLeft:10,background:`${posCol}14`,border:`1px solid ${posCol}30`,borderRadius:10,padding:"5px 10px"}}>
+                      <div style={{fontSize:8,color:T.sub,marginBottom:1}}>Позиция при удалении</div>
+                      <div style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:posCol,lineHeight:1}}>{kw.pos}</div>
+                      <div style={{fontSize:9,color:posCol,marginTop:1}}>{posLabel}</div>
+                    </div>
+                  )}
+                </div>
+                {/* Метрики */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:4,marginBottom:10}}>
+                  {[
+                    {l:"Показы",v:fmt.num(kw.impressions)},
+                    {l:"Клики",v:kw.clicks||0},
+                    {l:"CTR",v:fmt.pct(kw.ctr),c:kw.ctr<0.5?T.red:kw.ctr<0.8?T.yellow:T.green},
+                    {l:"Расход",v:fmt.rub(kw.spend),c:T.yellow},
+                    {l:"Заказы",v:kw.orders||0,c:kw.orders>0?T.green:T.sub},
+                  ].map(m=>(
+                    <div key={m.l} style={{textAlign:"center",background:"rgba(255,255,255,0.02)",borderRadius:6,padding:"4px 2px"}}>
+                      <div style={{fontSize:8,color:T.sub}}>{m.l}</div>
+                      <div style={{fontSize:11,fontFamily:"monospace",fontWeight:600,color:m.c||T.text}}>{m.v}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Кнопки */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                  <button onClick={()=>restore(kw.id)}
+                    style={{padding:"8px 6px",borderRadius:9,border:"1px solid rgba(74,222,128,0.35)",
+                      background:"rgba(74,222,128,0.1)",color:"#6ee7b7",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                    ↩ В кампанию
+                  </button>
+                  <button onClick={()=>moveArchivedToRelevant(kw.id)}
+                    style={{padding:"8px 6px",borderRadius:9,border:"1px solid rgba(99,102,241,0.3)",
+                      background:"rgba(99,102,241,0.08)",color:"#a78bfa",fontSize:12,cursor:"pointer"}}>
+                    → В релевантные
+                  </button>
                 </div>
               </div>
-            ))}
-            {filtArchived.length===0&&<div style={{textAlign:"center",padding:24,color:T.sub,fontSize:13}}>Архив пуст</div>}
-          </div>
+            );
+          })}
+          {filtArchived.length===0&&(
+            <div style={{...S.card,textAlign:"center",padding:"32px 20px"}}>
+              <div style={{fontSize:28,marginBottom:8}}>📦</div>
+              <div style={{fontSize:13,color:T.text,fontWeight:600,marginBottom:4}}>Архив пуст</div>
+              <div style={{fontSize:11,color:T.sub}}>Удалённые ключи будут отображаться здесь</div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2300,7 +2381,7 @@ function ManualBidsTab({data,inp}){
                               <input type="number" value={b[field.f]}
                                 onChange={e=>applyBid(kw.keyword,field.f,e.target.value)}
                                 onBlur={e=>applyBidFinal(kw.keyword,field.f,e.target.value)}
-                                style={{flex:1,background:changed?"rgba(251,191,36,0.08)":"rgba(255,255,255,0.04)",border:`1px solid ${changed?"rgba(251,191,36,0.3)":T.border}`,borderRadius:8,padding:"5px 8px",fontSize:13,color:changed?T.yellow:T.text,outline:"none",textAlign:"center",fontFamily:"monospace",fontWeight:700}}/>
+                                style={{flex:1,background:changed?"rgba(251,191,36,0.08)":"rgba(255,255,255,0.04)",border:`1px solid ${changed?"rgba(251,191,36,0.3)":T.border}`,borderRadius:8,padding:"8px 4px",fontSize:14,color:changed?T.yellow:T.text,outline:"none",textAlign:"center",fontFamily:"monospace",fontWeight:700,minWidth:0}}/>
                               <button onClick={()=>applyBid(kw.keyword,field.f,b[field.f]+10)}
                                 style={{width:26,height:26,borderRadius:6,border:`1px solid ${T.border}`,background:"transparent",color:T.green,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
                             </div>
