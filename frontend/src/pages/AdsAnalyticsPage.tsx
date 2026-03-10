@@ -2051,142 +2051,156 @@ function TabBids({data,targetDrr,platform}){
 // ─── АВТО-УМНОЕ управление ────────────────────────────────────────────────────
 function SmartBidsTab({data,targetDrr,inp}){
   const [selCamp,setSelCamp]=useState("all");
+  const [campTab,setCampTab]=useState({});   // per-camp inner tab
+  const getCT=(id)=>campTab[id]||"auto";
+
   const [settings,setSettings]=useState(
     data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{
       enabled:false, mode:"position", targetPos:5,
-      minBid:100, maxBid:500, step:20,
-      checkInterval:60,
+      minBid:100, maxBid:500, step:20, checkInterval:60,
+      budget:0,
+      topup:{enabled:false, amount:1000, timesPerDay:1},
     }}),{})
   );
-  const [logs,setLogs]=useState([
+  const [logs]=useState([
     {time:"14:32",kw:"кроссовки женские",action:"↑ повышена",from:220,to:240,reason:"Позиция упала с 3 до 7"},
     {time:"13:15",kw:"белые кроссовки",  action:"↓ снижена", from:210,to:190,reason:"ДРР превысил цель"},
     {time:"11:48",kw:"джинсы slim fit",  action:"→ без изменений",from:155,to:155,reason:"Показатели стабильны"},
   ]);
 
   const SMART_MODES=[
-    {id:"position",label:"Удержание позиции",desc:"Поддерживать топ-N в поиске"},
-    {id:"drr",     label:"Контроль ДРР",     desc:"Не превышать целевой ДРР"},
-    {id:"cpo",     label:"Минимальный CPO",  desc:"Оптимизировать цену заказа"},
-    {id:"balance", label:"Баланс",           desc:"Позиция + ДРР одновременно"},
+    {id:"position",label:"Удержание позиции",desc:"Поддерживать топ-N"},
+    {id:"drr",     label:"Контроль ДРР",     desc:"Не превышать ДРР"},
+    {id:"cpo",     label:"Минимальный CPO",  desc:"Цена заказа"},
+    {id:"balance", label:"Баланс",           desc:"Позиция + ДРР"},
   ];
 
-  function toggle(campId){
-    setSettings(p=>({...p,[campId]:{...p[campId],enabled:!p[campId].enabled}}));
+  function upd(id,key,val){setSettings(p=>({...p,[id]:{...p[id],[key]:val}}));}
+  function updTopup(id,key,val){setSettings(p=>({...p,[id]:{...p[id],topup:{...p[id].topup,[key]:val}}}))}
+  function toggle(id){upd(id,"enabled",!settings[id].enabled);}
+
+  // Генерация демо-статистики за 7 дней для кампании
+  const DAYS7=["03.03","04.03","05.03","06.03","07.03","08.03","09.03"];
+  const [statsCache]=useState(()=>data.campaigns.reduce((acc,c)=>{
+    const base={imp:c.impressions||8000,cpm:c.cpm||180,ctr:c.ctr||0.8,rev:c.revenue||40000};
+    acc[c.id]=DAYS7.map(d=>{
+      const n=()=>0.82+Math.random()*0.36;
+      const imp=Math.round(base.imp/7*n());
+      const cpm=Math.round(base.cpm*n());
+      const clicks=Math.round(imp*(base.ctr/100)*n());
+      const ctr=+(clicks/Math.max(1,imp)*100).toFixed(2);
+      const spend=Math.round(imp/1000*cpm);
+      const cpc=clicks>0?Math.round(spend/clicks):0;
+      const baskets=Math.round(clicks*0.12*n());
+      const cpl=baskets>0?Math.round(spend/baskets):0;
+      const orders=Math.round(baskets*0.35*n());
+      const drr=+(spend/Math.max(1,base.rev/7)*100).toFixed(1);
+      return{d,imp,cpm,clicks,ctr,spend,cpc,baskets,cpl,orders,drr};
+    });
+    return acc;
+  },{}));
+
+  // Топ ключей кампании (по показам), до 20
+  function topKws(campId){
+    return data.keywords
+      .filter(k=>String(k.campaignId)===String(campId))
+      .sort((a,b)=>(b.impressions||0)-(a.impressions||0))
+      .slice(0,20);
   }
-  function upd(campId,key,val){
-    setSettings(p=>({...p,[campId]:{...p[campId],[key]:val}}));
-  }
+
+  const filtCamps=data.campaigns.filter(c=>selCamp==="all"||String(c.id)===String(selCamp));
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {/* Описание */}
       <div style={{...S.card,background:"rgba(124,58,237,0.06)",borderColor:"rgba(124,58,237,0.2)"}}>
         <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
           <span style={{fontSize:22}}>🤖</span>
           <div>
-            <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:4}}>Авто-умное управление ставками</div>
-            <div style={{fontSize:11,color:T.sub,lineHeight:1.7}}>
-              Система автоматически корректирует ставки CPM каждые N минут в рамках заданных лимитов.
-              Никогда не выходит за пределы мин/макс ставки.
-            </div>
+            <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:3}}>Авто-умное управление ставками</div>
+            <div style={{fontSize:11,color:T.sub,lineHeight:1.6}}>Система корректирует ставки CPM автоматически в рамках заданных лимитов.</div>
           </div>
         </div>
       </div>
 
-      {/* Настройки по кампаниям */}
       <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
-      {data.campaigns.filter(c=>selCamp==="all"||String(c.id)===String(selCamp)).map(c=>{
+
+      {filtCamps.map(c=>{
         const s=settings[c.id];
+        const tab=getCT(c.id);
+        const stats=statsCache[c.id];
+        const kws=topKws(c.id);
+        const t=s.topup;
+
         return(
-          <div key={c.id} style={{...S.card,borderColor:s.enabled?"rgba(74,222,128,0.25)":T.border,
-            background:s.enabled?"rgba(74,222,128,0.03)":T.card}}>
-            {/* Заголовок кампании */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.enabled?14:0}}>
+          <div key={c.id} style={{...S.card,borderColor:s.enabled?"rgba(74,222,128,0.25)":T.border,background:s.enabled?"rgba(74,222,128,0.02)":T.card}}>
+            {/* Шапка кампании */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div>
                 <div style={{fontSize:13,fontWeight:700,color:T.text}}>{c.name}</div>
-                <div style={{fontSize:11,color:T.sub,marginTop:2}}>
-                  ДРР {c.drr}% · {c.orders} заказов · CPO {fmt.rub(c.cpo)}
-                </div>
+                <div style={{fontSize:11,color:T.sub,marginTop:1}}>ДРР {c.drr}% · {c.orders} зак. · CPO {fmt.rub(c.cpo)}</div>
               </div>
-              {/* Тогл включения */}
-              <div onClick={()=>toggle(c.id)} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:11,color:s.enabled?T.green:T.sub}}>{s.enabled?"Включено":"Выключено"}</span>
-                <div style={{width:44,height:24,borderRadius:12,background:s.enabled?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",
-                  border:`1px solid ${s.enabled?"rgba(74,222,128,0.5)":T.border}`,position:"relative",transition:"all 0.2s"}}>
-                  <div style={{position:"absolute",top:3,left:s.enabled?22:3,width:16,height:16,borderRadius:"50%",
-                    background:s.enabled?T.green:T.sub,transition:"left 0.2s"}}/>
+              <div onClick={()=>toggle(c.id)} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:11,color:s.enabled?T.green:T.sub}}>{s.enabled?"Вкл":"Выкл"}</span>
+                <div style={{width:44,height:24,borderRadius:12,background:s.enabled?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${s.enabled?"rgba(74,222,128,0.5)":T.border}`,position:"relative"}}>
+                  <div style={{position:"absolute",top:3,left:s.enabled?22:3,width:16,height:16,borderRadius:"50%",background:s.enabled?T.green:T.sub,transition:"left 0.2s"}}/>
                 </div>
               </div>
             </div>
 
-            {s.enabled&&(
-              <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                {/* Стратегия */}
-                <div>
-                  <div style={{fontSize:11,color:T.sub,marginBottom:6}}>Стратегия</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                    {SMART_MODES.map(m=>(
-                      <button key={m.id} onClick={()=>upd(c.id,"mode",m.id)}
-                        style={{padding:"8px 10px",borderRadius:8,border:`1px solid ${s.mode===m.id?"rgba(124,58,237,0.5)":T.border}`,
-                          background:s.mode===m.id?"rgba(124,58,237,0.12)":"transparent",
-                          color:s.mode===m.id?"#c4b5fd":T.sub,fontSize:11,cursor:"pointer",textAlign:"left"}}>
-                        <div style={{fontWeight:s.mode===m.id?700:400}}>{m.label}</div>
-                        <div style={{fontSize:9,marginTop:2,opacity:0.7}}>{m.desc}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            {/* Внутренние табы */}
+            <div style={{display:"flex",gap:4,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
+              {[
+                {id:"auto",   label:"🤖 Авто"},
+                {id:"budget", label:"💵 Бюджет"},
+                {id:"topup",  label:"💳 Пополнение"},
+                {id:"stats",  label:"📊 Статистика"},
+                {id:"keys",   label:"🔑 Ключи"},
+              ].map(tb=>(
+                <button key={tb.id} onClick={()=>setCampTab(p=>({...p,[c.id]:tb.id}))}
+                  style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${tab===tb.id?"rgba(124,58,237,0.45)":T.border}`,
+                    whiteSpace:"nowrap",flexShrink:0,fontSize:11,fontWeight:tab===tb.id?700:400,cursor:"pointer",
+                    background:tab===tb.id?"rgba(124,58,237,0.15)":"rgba(255,255,255,0.03)",
+                    color:tab===tb.id?"#c4b5fd":T.sub}}>
+                  {tb.label}
+                </button>
+              ))}
+            </div>
 
-                {/* Целевая позиция (только для mode=position или balance) */}
+            {/* ─── ТАБ: АВТО ─── */}
+            {tab==="auto"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                  {SMART_MODES.map(m=>(
+                    <button key={m.id} onClick={()=>upd(c.id,"mode",m.id)}
+                      style={{padding:"8px 10px",borderRadius:8,border:`1px solid ${s.mode===m.id?"rgba(124,58,237,0.5)":T.border}`,
+                        background:s.mode===m.id?"rgba(124,58,237,0.12)":"transparent",
+                        color:s.mode===m.id?"#c4b5fd":T.sub,fontSize:11,cursor:"pointer",textAlign:"left"}}>
+                      <div style={{fontWeight:s.mode===m.id?700:400}}>{m.label}</div>
+                      <div style={{fontSize:9,marginTop:1,opacity:0.7}}>{m.desc}</div>
+                    </button>
+                  ))}
+                </div>
                 {(s.mode==="position"||s.mode==="balance")&&(
                   <div>
                     <div style={{fontSize:11,color:T.sub,marginBottom:6}}>🎯 Целевая позиция (топ-N)</div>
                     <div style={{display:"flex",alignItems:"center",gap:10}}>
-                      <input type="range" min={1} max={20} value={s.targetPos}
-                        onChange={e=>upd(c.id,"targetPos",+e.target.value)}
-                        style={{flex:1,accentColor:"#7c3aed"}}/>
-                      <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:"#c4b5fd",minWidth:36,textAlign:"center"}}>
-                        {s.targetPos}
-                      </div>
+                      <input type="range" min={1} max={20} value={s.targetPos} onChange={e=>upd(c.id,"targetPos",+e.target.value)} style={{flex:1,accentColor:"#7c3aed"}}/>
+                      <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:"#c4b5fd",minWidth:36,textAlign:"center"}}>{s.targetPos}</div>
                     </div>
                   </div>
                 )}
-
-                {/* Лимиты ставок */}
                 <div>
-                  <div style={{fontSize:11,color:T.sub,marginBottom:8}}>💰 Лимиты ставки CPM</div>
+                  <div style={{fontSize:11,color:T.sub,marginBottom:6}}>💰 Лимиты ставки CPM</div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                    {[
-                      {l:"Мин. ставка ₽",k:"minBid",min:50,max:300},
-                      {l:"Макс. ставка ₽",k:"maxBid",min:100,max:1000},
-                      {l:"Шаг изменения ₽",k:"step",min:5,max:100},
-                    ].map(f=>(
+                    {[{l:"Мин. ₽",k:"minBid"},{l:"Макс. ₽",k:"maxBid"},{l:"Шаг ₽",k:"step"}].map(f=>(
                       <div key={f.k}>
                         <div style={{fontSize:10,color:T.sub,marginBottom:4}}>{f.l}</div>
-                        <input type="number" value={s[f.k]} min={f.min} max={f.max}
-                          onChange={e=>upd(c.id,f.k,+e.target.value)}
-                          style={{...inp({fontSize:14,fontFamily:"monospace",fontWeight:700,padding:"8px 10px"})}}/>
+                        <input type="number" value={s[f.k]} onChange={e=>upd(c.id,f.k,+e.target.value)}
+                          style={{...inp({fontSize:14,fontFamily:"monospace",fontWeight:700,padding:"8px 8px"})}}/>
                       </div>
                     ))}
                   </div>
-                  {/* Визуальная шкала мин/макс */}
-                  <div style={{marginTop:10,position:"relative",height:6,background:"rgba(255,255,255,0.06)",borderRadius:3}}>
-                    <div style={{
-                      position:"absolute",height:"100%",borderRadius:3,background:"linear-gradient(90deg,#4ade80,#7c3aed)",
-                      left:`${(s.minBid/1000)*100}%`,
-                      width:`${((s.maxBid-s.minBid)/1000)*100}%`
-                    }}/>
-                    <div style={{position:"absolute",top:-3,left:`${(s.minBid/1000)*100}%`,width:12,height:12,borderRadius:"50%",background:T.green,transform:"translateX(-50%)",border:"2px solid #151c2e"}}/>
-                    <div style={{position:"absolute",top:-3,left:`${(s.maxBid/1000)*100}%`,width:12,height:12,borderRadius:"50%",background:"#a78bfa",transform:"translateX(-50%)",border:"2px solid #151c2e"}}/>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
-                    <span style={{fontSize:10,color:T.green}}>мин: {s.minBid} ₽</span>
-                    <span style={{fontSize:10,color:"#a78bfa"}}>макс: {s.maxBid} ₽</span>
-                  </div>
                 </div>
-
-                {/* Частота проверки */}
                 <div>
                   <div style={{fontSize:11,color:T.sub,marginBottom:6}}>⏱ Проверять каждые</div>
                   <div style={{display:"flex",gap:6}}>
@@ -2200,35 +2214,219 @@ function SmartBidsTab({data,targetDrr,inp}){
                     ))}
                   </div>
                 </div>
+                {s.enabled&&(
+                  <div style={{padding:"8px 12px",background:"rgba(74,222,128,0.06)",border:"1px solid rgba(74,222,128,0.15)",borderRadius:8,fontSize:11,color:T.green}}>
+                    ✅ Авто-управление активно · Следующая проверка через {s.checkInterval} мин
+                  </div>
+                )}
+              </div>
+            )}
 
-                <div style={{padding:"8px 12px",background:"rgba(74,222,128,0.06)",border:"1px solid rgba(74,222,128,0.15)",borderRadius:8,fontSize:11,color:T.green}}>
-                  ✅ Авто-управление активно · Следующая проверка через {s.checkInterval} мин
+            {/* ─── ТАБ: БЮДЖЕТ ─── */}
+            {tab==="budget"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{...S.card2,background:"rgba(251,191,36,0.04)",borderColor:"rgba(251,191,36,0.2)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:T.yellow}}>💵 Дневной бюджет кампании</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>Максимальная сумма расхода в день. При исчерпании кампания останавливается автоматически.</div>
+                </div>
+                <div style={{...S.card2}}>
+                  <div style={{fontSize:10,color:T.sub,marginBottom:6}}>Бюджет на день, ₽</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>upd(c.id,"budget",Math.max(0,(s.budget||0)-500))}
+                      style={{width:36,height:36,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(248,113,113,0.08)",color:T.red,fontSize:18,cursor:"pointer",flexShrink:0}}>−</button>
+                    <input type="number" value={s.budget||""}
+                      onChange={e=>upd(c.id,"budget",+e.target.value)}
+                      onBlur={e=>upd(c.id,"budget",Math.max(0,+e.target.value))}
+                      placeholder="5 000"
+                      style={{...inp({fontFamily:"monospace",fontWeight:700,fontSize:16,textAlign:"center"})}}/>
+                    <button onClick={()=>upd(c.id,"budget",(s.budget||0)+500)}
+                      style={{width:36,height:36,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(74,222,128,0.08)",color:T.green,fontSize:18,cursor:"pointer",flexShrink:0}}>+</button>
+                  </div>
+                  {(s.budget||0)>0&&(
+                    <div style={{marginTop:10,fontSize:11,color:T.yellow,background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:8,padding:"7px 10px"}}>
+                      💵 Дневной бюджет кампании «{c.name}»: {(s.budget).toLocaleString("ru-RU")} ₽/день
+                    </div>
+                  )}
+                </div>
+                <div style={{...S.card2,padding:"8px 12px"}}>
+                  <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Текущий расход сегодня</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:T.yellow}}>{fmt.rub(Math.round(c.spend/7))}</div>
+                    {(s.budget||0)>0&&(
+                      <div style={{fontSize:11,color:T.sub}}>из {(s.budget).toLocaleString("ru-RU")} ₽</div>
+                    )}
+                  </div>
+                  {(s.budget||0)>0&&(
+                    <div style={{height:5,background:"rgba(255,255,255,0.06)",borderRadius:3,marginTop:8,overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:3,
+                        width:`${Math.min(100,Math.round(c.spend/7)/(s.budget)*100)}%`,
+                        background:Math.round(c.spend/7)/(s.budget)>0.8?"#f87171":"#fbbf24"}}/>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ─── ТАБ: ПОПОЛНЕНИЕ ─── */}
+            {tab==="topup"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{...S.card2,background:"rgba(74,222,128,0.04)",borderColor:"rgba(74,222,128,0.15)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#6ee7b7"}}>💳 Автопополнение кампании</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>На ВБ автопополнение привязано к конкретной кампании — пополняет её бюджет автоматически.</div>
+                </div>
+                <div style={{...S.card2}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:t.enabled?14:0}}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:600,color:T.text}}>Автопополнение</div>
+                      <div style={{fontSize:10,color:T.sub,marginTop:1}}>При заканчивающемся бюджете</div>
+                    </div>
+                    <div onClick={()=>updTopup(c.id,"enabled",!t.enabled)} style={{cursor:"pointer"}}>
+                      <div style={{width:44,height:24,borderRadius:12,background:t.enabled?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${t.enabled?"rgba(74,222,128,0.5)":T.border}`,position:"relative"}}>
+                        <div style={{position:"absolute",top:3,left:t.enabled?22:3,width:16,height:16,borderRadius:"50%",background:t.enabled?"#4ade80":T.sub,transition:"left 0.2s"}}/>
+                      </div>
+                    </div>
+                  </div>
+                  {t.enabled&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        <div>
+                          <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Пополнять на, ₽</div>
+                          <input type="number" value={t.amount}
+                            onChange={e=>updTopup(c.id,"amount",+e.target.value)}
+                            onBlur={e=>updTopup(c.id,"amount",Math.max(1000,+e.target.value))}
+                            style={{...inp({fontFamily:"monospace",fontWeight:700})}}/>
+                          <div style={{fontSize:9,color:T.sub,marginTop:2}}>Мин. 1 000 ₽</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Не чаще раз в день</div>
+                          <input type="number" value={t.timesPerDay} min={1} max={10}
+                            onChange={e=>updTopup(c.id,"timesPerDay",Math.max(1,Math.min(10,+e.target.value)))}
+                            style={{...inp({fontFamily:"monospace",fontWeight:700})}}/>
+                        </div>
+                      </div>
+                      <div style={{fontSize:11,color:T.green,background:"rgba(74,222,128,0.06)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:8,padding:"8px 12px",lineHeight:1.6}}>
+                        ✅ Пополнять «{c.name}» на <strong>{t.amount.toLocaleString("ru-RU")} ₽</strong><br/>
+                        не чаще {t.timesPerDay} {t.timesPerDay===1?"раза":"раз"} в день
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ─── ТАБ: СТАТИСТИКА ─── */}
+            {tab==="stats"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{...S.card2,background:"rgba(59,130,246,0.04)",borderColor:"rgba(59,130,246,0.15)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#93c5fd"}}>📊 Статистика авто-управления за 7 дней</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>Как работает авто-стратегия по дням</div>
+                </div>
+                <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                  <table style={{width:"100%",minWidth:720,borderCollapse:"collapse"}}>
+                    <thead>
+                      <tr style={{background:"rgba(255,255,255,0.03)"}}>
+                        {["Дата","Показы","CPM","Перех.","CTR","CPC","Затраты","Корз.","CPL","Заказы","ДРР"].map(h=>(
+                          <th key={h} style={{padding:"6px 6px",textAlign:"center",fontSize:9,color:T.sub,fontWeight:600,whiteSpace:"nowrap",borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.map((row,i)=>(
+                        <tr key={i} style={{borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                          <td style={{padding:"6px 6px",fontSize:10,color:T.text,fontWeight:600,whiteSpace:"nowrap"}}>{row.d}</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(row.imp)}</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{row.cpm}</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(row.clicks)}</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.ctr>=0.8?T.green:T.yellow}}>{row.ctr}%</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{row.cpc}₽</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{fmt.rub(row.spend)}</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{row.baskets}</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.sub}}>{row.cpl}₽</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.orders>0?T.green:T.red,fontWeight:700}}>{row.orders}</td>
+                          <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.drr>25?T.red:row.drr>18?T.yellow:T.green}}>{row.drr}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{background:"rgba(255,255,255,0.03)",borderTop:`1px solid ${T.border}`}}>
+                        <td style={{padding:"6px 6px",fontSize:10,fontWeight:700,color:T.text}}>Итого</td>
+                        <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text,fontWeight:700}}>{fmt.num(stats.reduce((s,r)=>s+r.imp,0))}</td>
+                        <td style={{padding:"6px 6px",fontSize:10,color:T.sub,textAlign:"center"}}>—</td>
+                        <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text,fontWeight:700}}>{fmt.num(stats.reduce((s,r)=>s+r.clicks,0))}</td>
+                        <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.green}}>{(stats.reduce((s,r)=>s+r.clicks,0)/Math.max(1,stats.reduce((s,r)=>s+r.imp,0))*100).toFixed(2)}%</td>
+                        <td style={{padding:"6px 6px",fontSize:10,color:T.sub,textAlign:"center"}}>—</td>
+                        <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow,fontWeight:700}}>{fmt.rub(stats.reduce((s,r)=>s+r.spend,0))}</td>
+                        <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text,fontWeight:700}}>{stats.reduce((s,r)=>s+r.baskets,0)}</td>
+                        <td style={{padding:"6px 6px",fontSize:10,color:T.sub,textAlign:"center"}}>—</td>
+                        <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.green,fontWeight:700}}>{stats.reduce((s,r)=>s+r.orders,0)}</td>
+                        <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{(stats.reduce((s,r)=>s+r.spend,0)/Math.max(1,stats.reduce((s,r)=>s+r.orders,0)*2500)*100).toFixed(1)}%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                {/* Лог авто-изменений */}
+                <div style={{...S.card2,marginTop:4}}>
+                  <div style={{fontSize:10,fontWeight:700,color:T.sub,marginBottom:8,letterSpacing:"0.05em"}}>ЛОГО АВТО-ИЗМЕНЕНИЙ</div>
+                  {logs.map((l,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,paddingBottom:6,marginBottom:6,borderBottom:i<logs.length-1?`1px solid rgba(255,255,255,0.04)`:"none"}}>
+                      <div style={{fontSize:10,color:T.sub,fontFamily:"monospace",flexShrink:0,minWidth:36}}>{l.time}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:11,color:T.text,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.kw}</div>
+                        <div style={{fontSize:10,color:T.sub}}>{l.reason}</div>
+                      </div>
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{fontSize:11,fontWeight:700,color:l.action.includes("↑")?T.green:l.action.includes("↓")?T.red:T.sub}}>{l.action}</div>
+                        <div style={{fontSize:10,fontFamily:"monospace",color:T.sub}}>{l.from}→{l.to}₽</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ─── ТАБ: КЛЮЧИ ─── */}
+            {tab==="keys"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                <div style={{...S.card2,background:"rgba(99,102,241,0.04)",borderColor:"rgba(99,102,241,0.15)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#c4b5fd"}}>🔑 Топ ключевых запросов</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>До 20 ключей по показам — позиции, CTR, расход, заказы</div>
+                </div>
+                {kws.length===0&&<div style={{textAlign:"center",padding:20,color:T.sub,fontSize:12}}>Нет ключей в этой кампании</div>}
+                <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                  <table style={{width:"100%",minWidth:600,borderCollapse:"collapse"}}>
+                    <thead>
+                      <tr style={{background:"rgba(255,255,255,0.03)"}}>
+                        {["Ключевой запрос","Поз.","Показы","CTR","CPC","Затраты","Корз.","Заказы","ДРР","Ставка"].map(h=>(
+                          <th key={h} style={{padding:"6px 6px",textAlign:h==="Ключевой запрос"?"left":"center",fontSize:9,color:T.sub,fontWeight:600,whiteSpace:"nowrap",borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {kws.map((kw,i)=>{
+                        const posCol=kw.pos<=5?"#4ade80":kw.pos<=15?"#fbbf24":"#fb923c";
+                        return(
+                          <tr key={i} style={{borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                            <td style={{padding:"6px 6px",fontSize:10,color:T.text,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</td>
+                            <td style={{padding:"6px 6px",fontSize:11,fontFamily:"monospace",textAlign:"center",color:posCol,fontWeight:700}}>#{kw.pos}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(kw.impressions||0)}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:kw.ctr>=0.8?T.green:T.yellow}}>{kw.ctr}%</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{kw.cpc||"—"}₽</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{fmt.rub(kw.spend||0)}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{kw.baskets||0}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:(kw.orders||0)>0?T.green:T.red,fontWeight:700}}>{kw.orders||0}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:kw.drr>25?T.red:kw.drr>18?T.yellow:T.green}}>{kw.drr||0}%</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:"#c4b5fd",fontWeight:600}}>{kw.bidSearch||"—"}₽</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
           </div>
         );
       })}
-
-      {/* Лог изменений */}
-      <div style={S.card}>
-        <SectionTitle>📋 Лог авто-изменений</SectionTitle>
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {logs.map((l,i)=>(
-            <div key={i} style={{...S.card2,display:"flex",alignItems:"center",gap:10}}>
-              <div style={{fontSize:10,color:T.sub,fontFamily:"monospace",flexShrink:0,minWidth:36}}>{l.time}</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:12,color:T.text,fontWeight:500}}>{l.kw}</div>
-                <div style={{fontSize:10,color:T.sub,marginTop:1}}>{l.reason}</div>
-              </div>
-              <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontSize:12,fontWeight:700,color:l.action.includes("↑")?T.green:l.action.includes("↓")?T.red:T.sub}}>{l.action}</div>
-                <div style={{fontSize:10,fontFamily:"monospace",color:T.sub}}>{l.from}→{l.to} ₽</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -2436,6 +2634,7 @@ function StrategyTab({data,inp}){
     data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{
       scheduleEnabled:false, scheduleStart:"09:00", scheduleEnd:"23:00", scheduleDays:[1,2,3,4,5],
       bidType:"CPM",
+      budget:0,
       peakHours:false, peakStart:"11:00", peakEnd:"14:00", peakBidBoost:20,
     }}),{})
   );
@@ -2459,7 +2658,8 @@ function StrategyTab({data,inp}){
   const [topups,setTopups]=useState(
     data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{enabled:false,amount:1000,timesPerDay:1}}),{})
   );
-  function updTopup(id,key,val){setTopups(p=>({...p,[id]:{...p[id],[key]:val}}));}
+  function updTopup(id,key,val){setTopups(p=>({...p,[id]:{...p[id],[key]:val}}))};
+  const [campBudgets,setCampBudgets]=useState({});
 
   // ── Демо-статистика за 7 дней ────────────────────────────────────────────
   const DAYS7=["03.03","04.03","05.03","06.03","07.03","08.03","09.03"];
@@ -2552,7 +2752,9 @@ function StrategyTab({data,inp}){
               {[
                 {id:"strategy",label:"📅 Стратегии"},
                 {id:"bids",    label:"💰 Ставки"},
+                {id:"budget",  label:"💵 Бюджет"},
                 {id:"stats",   label:"📊 Статистика"},
+                {id:"keys",    label:"🔑 Ключи"},
                 {id:"topup",   label:"💳 Пополнение"},
               ].map(tb=>(
                 <button key={tb.id} onClick={()=>setCampTab(p=>({...p,[c.id]:tb.id}))}
@@ -2750,6 +2952,48 @@ function StrategyTab({data,inp}){
               </div>
             )}
 
+            {/* ═══ ТАБ: БЮДЖЕТ ═══ */}
+            {tab==="budget"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{...S.card2,background:"rgba(251,191,36,0.04)",borderColor:"rgba(251,191,36,0.2)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:T.yellow}}>💵 Дневной бюджет кампании</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>Максимальная сумма расхода в день. При исчерпании кампания останавливается автоматически.</div>
+                </div>
+                <div style={{...S.card2}}>
+                  <div style={{fontSize:10,color:T.sub,marginBottom:6}}>Бюджет на день, ₽</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>upd(c.id,"budget",Math.max(0,(s.budget||0)-500))}
+                      style={{width:36,height:36,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(248,113,113,0.08)",color:T.red,fontSize:18,cursor:"pointer",flexShrink:0}}>−</button>
+                    <input type="number" value={s.budget||""}
+                      onChange={e=>upd(c.id,"budget",+e.target.value)}
+                      onBlur={e=>upd(c.id,"budget",Math.max(0,+e.target.value))}
+                      placeholder="5 000"
+                      style={{...inp({fontFamily:"monospace",fontWeight:700,fontSize:16,textAlign:"center"})}}/>
+                    <button onClick={()=>upd(c.id,"budget",(s.budget||0)+500)}
+                      style={{width:36,height:36,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(74,222,128,0.08)",color:T.green,fontSize:18,cursor:"pointer",flexShrink:0}}>+</button>
+                  </div>
+                  {(s.budget||0)>0&&(
+                    <div style={{marginTop:10,fontSize:11,color:T.yellow,background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:8,padding:"7px 10px"}}>
+                      💵 Дневной бюджет: {(s.budget).toLocaleString("ru-RU")} ₽/день
+                    </div>
+                  )}
+                </div>
+                <div style={{...S.card2,padding:"10px 12px"}}>
+                  <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Расход сегодня (демо)</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:T.yellow}}>{fmt.rub(Math.round(c.spend/7))}</div>
+                    {(s.budget||0)>0&&<div style={{fontSize:11,color:T.sub}}>из {s.budget.toLocaleString("ru-RU")} ₽</div>}
+                  </div>
+                  {(s.budget||0)>0&&(
+                    <div style={{height:5,background:"rgba(255,255,255,0.06)",borderRadius:3,marginTop:8,overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:3,width:`${Math.min(100,Math.round(c.spend/7)/s.budget*100)}%`,
+                        background:Math.round(c.spend/7)/s.budget>0.8?"#f87171":"#fbbf24"}}/>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ═══ ТАБ: СТАТИСТИКА ═══ */}
             {tab==="stats"&&(
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -2848,6 +3092,47 @@ function StrategyTab({data,inp}){
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* ═══ ТАБ: КЛЮЧИ ═══ */}
+            {tab==="keys"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                <div style={{...S.card2,background:"rgba(99,102,241,0.04)",borderColor:"rgba(99,102,241,0.15)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#c4b5fd"}}>🔑 Топ ключевых запросов</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>До 20 ключей по показам — позиции, CTR, расход, заказы</div>
+                </div>
+                {campKws.length===0&&<div style={{textAlign:"center",padding:20,color:T.sub,fontSize:12}}>Нет ключей в этой кампании</div>}
+                <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                  <table style={{width:"100%",minWidth:600,borderCollapse:"collapse"}}>
+                    <thead>
+                      <tr style={{background:"rgba(255,255,255,0.03)"}}>
+                        {["Ключевой запрос","Поз.","Показы","CTR","CPC","Затраты","Корз.","Заказы","ДРР","Ставка"].map(h=>(
+                          <th key={h} style={{padding:"6px 6px",textAlign:h==="Ключевой запрос"?"left":"center",fontSize:9,color:T.sub,fontWeight:600,whiteSpace:"nowrap",borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campKws.sort((a,b)=>(b.impressions||0)-(a.impressions||0)).slice(0,20).map((kw,i)=>{
+                        const posCol=kw.pos<=5?"#4ade80":kw.pos<=15?"#fbbf24":"#fb923c";
+                        return(
+                          <tr key={i} style={{borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                            <td style={{padding:"6px 6px",fontSize:10,color:T.text,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</td>
+                            <td style={{padding:"6px 6px",fontSize:11,fontFamily:"monospace",textAlign:"center",color:posCol,fontWeight:700}}>#{kw.pos}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(kw.impressions||0)}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:kw.ctr>=0.8?T.green:T.yellow}}>{kw.ctr}%</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{kw.cpc||"—"}₽</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{fmt.rub(kw.spend||0)}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{kw.baskets||0}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:(kw.orders||0)>0?T.green:T.red,fontWeight:700}}>{kw.orders||0}</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:kw.drr>25?T.red:kw.drr>18?T.yellow:T.green}}>{kw.drr||0}%</td>
+                            <td style={{padding:"6px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:"#c4b5fd",fontWeight:600}}>{kw.bidSearch||"—"}₽</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -3068,7 +3353,8 @@ function AutoStrategyTab({data,targetDrr,inp}){
   const [topups,setTopups]=useState(
     data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{enabled:false,amount:1000,timesPerDay:1}}),{})
   );
-  function updTopup(id,key,val){setTopups(p=>({...p,[id]:{...p[id],[key]:val}}));}
+  function updTopup(id,key,val){setTopups(p=>({...p,[id]:{...p[id],[key]:val}}))};
+  const [campBudgets,setCampBudgets]=useState({});
 
   const GOALS=[
     {id:"growth",  icon:"🚀", label:"Рост продаж",   desc:"Максимум заказов, ДРР может вырасти"},
@@ -3354,6 +3640,30 @@ function AutoStrategyTab({data,targetDrr,inp}){
             </div>
           </div>
 
+          {/* Бюджет кампаний */}
+          <div style={S.card}>
+            <div style={{fontSize:11,fontWeight:700,color:T.yellow,marginBottom:10}}>💵 Бюджет кампаний</div>
+            {targetCamps.map(c=>{
+              const bgt=campBudgets[c.id]||0;
+              return(
+                <div key={c.id} style={{...S.card2,marginBottom:8}}>
+                  <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:6}}>{c.name}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>setCampBudgets(p=>({...p,[c.id]:Math.max(0,(p[c.id]||0)-500)}))}
+                      style={{width:34,height:34,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(248,113,113,0.08)",color:T.red,fontSize:16,cursor:"pointer",flexShrink:0}}>−</button>
+                    <input type="number" value={bgt||""} onChange={e=>setCampBudgets(p=>({...p,[c.id]:+e.target.value}))} placeholder="5 000"
+                      style={{flex:1,background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"8px",textAlign:"center",fontSize:15,fontFamily:"monospace",fontWeight:700,color:T.text,outline:"none"}}/>
+                    <button onClick={()=>setCampBudgets(p=>({...p,[c.id]:(p[c.id]||0)+500}))}
+                      style={{width:34,height:34,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(74,222,128,0.08)",color:T.green,fontSize:16,cursor:"pointer",flexShrink:0}}>+</button>
+                  </div>
+                  {bgt>0&&<div style={{marginTop:8,fontSize:10,color:T.yellow,background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:7,padding:"5px 10px"}}>
+                    💵 {bgt.toLocaleString("ru-RU")} ₽/день
+                  </div>}
+                </div>
+              );
+            })}
+          </div>
+
           {/* Автопополнение к каждой кампании */}
           <div style={S.card}>
             <div style={{fontSize:11,fontWeight:700,color:"#6ee7b7",marginBottom:10}}>💳 Автопополнение кампаний</div>
@@ -3395,6 +3705,50 @@ function AutoStrategyTab({data,targetDrr,inp}){
                       </div>
                     </div>
                   )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Ключи по кампаниям */}
+          <div style={S.card}>
+            <div style={{fontSize:11,fontWeight:700,color:"#c4b5fd",marginBottom:10}}>🔑 Ключевые запросы — топ-20 по показам</div>
+            {targetCamps.map(c=>{
+              const kws=data.keywords.filter(k=>String(k.campaignId)===String(c.id)).sort((a,b)=>(b.impressions||0)-(a.impressions||0)).slice(0,20);
+              if(kws.length===0) return null;
+              return(
+                <div key={c.id} style={{marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:6}}>{c.name}</div>
+                  <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                    <table style={{width:"100%",minWidth:600,borderCollapse:"collapse"}}>
+                      <thead>
+                        <tr style={{background:"rgba(255,255,255,0.03)"}}>
+                          {["Запрос","Поз.","Показы","CTR","CPC","Затраты","Корз.","Заказы","ДРР","Ставка"].map(h=>(
+                            <th key={h} style={{padding:"5px 6px",textAlign:h==="Запрос"?"left":"center",fontSize:9,color:T.sub,fontWeight:600,whiteSpace:"nowrap",borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {kws.map((kw,i)=>{
+                          const posCol=kw.pos<=5?"#4ade80":kw.pos<=15?"#fbbf24":"#fb923c";
+                          return(
+                            <tr key={i} style={{borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                              <td style={{padding:"5px 6px",fontSize:10,color:T.text,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</td>
+                              <td style={{padding:"5px 6px",fontSize:11,fontFamily:"monospace",textAlign:"center",color:posCol,fontWeight:700}}>#{kw.pos}</td>
+                              <td style={{padding:"5px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(kw.impressions||0)}</td>
+                              <td style={{padding:"5px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:kw.ctr>=0.8?T.green:T.yellow}}>{kw.ctr}%</td>
+                              <td style={{padding:"5px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right"}}>{kw.cpc||"—"}₽</td>
+                              <td style={{padding:"5px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{fmt.rub(kw.spend||0)}</td>
+                              <td style={{padding:"5px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right"}}>{kw.baskets||0}</td>
+                              <td style={{padding:"5px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:(kw.orders||0)>0?T.green:T.red,fontWeight:700}}>{kw.orders||0}</td>
+                              <td style={{padding:"5px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:kw.drr>25?T.red:kw.drr>18?T.yellow:T.green}}>{kw.drr||0}%</td>
+                              <td style={{padding:"5px 6px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:"#c4b5fd",fontWeight:600}}>{kw.bidSearch||"—"}₽</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               );
             })}
