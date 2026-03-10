@@ -2017,25 +2017,18 @@ function TabSettings({currentUserTgId}){
 // УПРАВЛЕНИЕ СТАВКАМИ
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabBids({data,targetDrr,platform}){
-  const [mode,setMode]=useState("smart"); // smart | manual | strategy | autostrategy
-
+  const [mode,setMode]=useState("smart");
   const MODES=[
-    {id:"smart",       icon:"🤖", label:"Авто-умное"},
-    {id:"manual",      icon:"✋", label:"Ручное"},
+    {id:"smart",       icon:"🤖", label:"Авто"},
     {id:"strategy",    icon:"⚡", label:"Стратегии"},
     {id:"autostrategy",icon:"🎯", label:"Авто-план"},
   ];
-
   const inp=(extra={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...extra});
-
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      {/* Баланс рекламного кабинета */}
-      <BidsCabinetBalance platform={platform} inp={inp}/>
-
-      {/* Переключатель режима */}
+      <BidsCabinetBalance platform={platform}/>
       <div style={{...S.card,padding:8}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
           {MODES.map(m=>(
             <button key={m.id} onClick={()=>setMode(m.id)}
               style={{padding:"10px 4px",borderRadius:10,border:`1px solid ${mode===m.id?(m.id==="autostrategy"?"rgba(16,185,129,0.5)":"rgba(124,58,237,0.5)"):T.border}`,
@@ -2048,9 +2041,7 @@ function TabBids({data,targetDrr,platform}){
           ))}
         </div>
       </div>
-
       {mode==="smart"        &&<SmartBidsTab       data={data} targetDrr={targetDrr} inp={inp}/>}
-      {mode==="manual"       &&<ManualBidsTab       data={data} inp={inp}/>}
       {mode==="strategy"     &&<StrategyTab         data={data} inp={inp}/>}
       {mode==="autostrategy" &&<AutoStrategyTab     data={data} targetDrr={targetDrr} inp={inp}/>}
     </div>
@@ -2437,262 +2428,436 @@ function ManualBidsTab({data,inp}){
 // ─── СТРАТЕГИИ ────────────────────────────────────────────────────────────────
 function StrategyTab({data,inp}){
   const [selCamp,setSelCamp]=useState("all");
+  const [campTab,setCampTab]=useState({}); // per-camp inner tab: strategy | bids | stats | topup
+  const getCampTab=(id)=>campTab[id]||"strategy";
+
+  // ── Стратегии (расписание, бюджет, пик) ──────────────────────────────────
   const [strategies,setStrategies]=useState(
     data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{
-      scheduleEnabled:false,
-      scheduleStart:"09:00", scheduleEnd:"23:00",
-      scheduleDays:[1,2,3,4,5],
+      scheduleEnabled:false, scheduleStart:"09:00", scheduleEnd:"23:00", scheduleDays:[1,2,3,4,5],
       bidType:"CPM",
-      autoPause:true, budgetLimit:0,
-      peakHours:false, peakStart:"11:00", peakEnd:"14:00",
-      peakBidBoost:20,
+      peakHours:false, peakStart:"11:00", peakEnd:"14:00", peakBidBoost:20,
     }}),{})
   );
-
   const DAYS=["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
   function upd(id,key,val){setStrategies(p=>({...p,[id]:{...p[id],[key]:val}}));}
-  function toggleDay(id,d){
-    const days=strategies[id].scheduleDays;
-    upd(id,"scheduleDays",days.includes(d)?days.filter(x=>x!==d):[...days,d].sort());
+  function toggleDay(id,d){const days=strategies[id].scheduleDays;upd(id,"scheduleDays",days.includes(d)?days.filter(x=>x!==d):[...days,d].sort());}
+
+  // ── Ставки по ключам (перенесены из ManualBidsTab) ───────────────────────
+  const [bids,setBids]=useState(
+    data.keywords.reduce((acc,k)=>({...acc,[k.keyword]:{search:k.bidSearch,shelves:k.bidShelves}}),{})
+  );
+  const [bidHistory,setBidHistory]=useState([]);
+  function setBid(kw,field,val){setBids(p=>({...p,[kw]:{...p[kw],[field]:val}}));}
+  function setBidFinal(kw,field,val){
+    const v=Math.max(50,Math.min(2000,+val||50));
+    setBids(p=>({...p,[kw]:{...p[kw],[field]:v}}));
+    setBidHistory(p=>[{time:new Date().toLocaleTimeString("ru",{hour:"2-digit",minute:"2-digit"}),kw,field,from:bids[kw][field],to:v},...p.slice(0,9)]);
+  }
+
+  // ── Автопополнение кампании ──────────────────────────────────────────────
+  const [topups,setTopups]=useState(
+    data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{enabled:false,amount:1000,timesPerDay:1}}),{})
+  );
+  function updTopup(id,key,val){setTopups(p=>({...p,[id]:{...p[id],[key]:val}}));}
+
+  // ── Демо-статистика за 7 дней ────────────────────────────────────────────
+  const DAYS7=["03.03","04.03","05.03","06.03","07.03","08.03","09.03"];
+  function genStats(campId){
+    const base=data.campaigns.find(c=>c.id===campId)||{};
+    return DAYS7.map((d,i)=>{
+      const noise=()=>0.85+Math.random()*0.3;
+      const imp=Math.round((base.impressions||8000)/7*noise());
+      const cpm=Math.round((base.cpm||180)*noise());
+      const clicks=Math.round(imp*((base.ctr||0.8)/100)*noise());
+      const ctr=+(clicks/imp*100).toFixed(2);
+      const spend=Math.round(imp/1000*cpm);
+      const cpc=clicks>0?+(spend/clicks).toFixed(0):0;
+      const baskets=Math.round(clicks*0.12*noise());
+      const cpl=baskets>0?+(spend/baskets).toFixed(0):0;
+      const orders=Math.round(baskets*0.35*noise());
+      const drr=base.revenue?+(spend/(base.revenue/7)*100).toFixed(1):0;
+      const pos=Math.round(5*noise());
+      return {d,imp,cpm,clicks,ctr,spend,cpc,baskets,cpl,orders,drr,pos};
+    });
+  }
+  const [statsCache]=useState(()=>data.campaigns.reduce((acc,c)=>({...acc,[c.id]:genStats(c.id)}),{}));
+
+  // ── Стратегия ставки: авторасчёт ─────────────────────────────────────────
+  function getStratBid(camp,s){
+    const kws=data.keywords.filter(k=>String(k.campaignId)===String(camp.id));
+    const avgBid=kws.length>0?Math.round(kws.reduce((sum,k)=>sum+k.bidSearch,0)/kws.length):200;
+    const peakBoost=s.peakHours?Math.round(avgBid*s.peakBidBoost/100):0;
+    const recommended=avgBid+peakBoost;
+    const reasons=[];
+    if(s.peakHours) reasons.push(`+${s.peakBidBoost}% в пиковые часы (${s.peakStart}–${s.peakEnd})`);
+    if(s.scheduleEnabled) reasons.push(`работает ${s.scheduleStart}–${s.scheduleEnd}`);
+    if(camp.drr>20) reasons.push("ДРР выше нормы → ставка консервативная");
+    else reasons.push("ДРР в норме → ставка конкурентная");
+    return {recommended, reasons, avgBid};
+  }
+  const [bidOverrides,setBidOverrides]=useState({});
+  function getEffBid(campId,recommended){
+    return bidOverrides[campId]!==undefined?bidOverrides[campId]:recommended;
   }
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={{...S.card,background:"rgba(251,191,36,0.04)",borderColor:"rgba(251,191,36,0.15)"}}>
-        <div style={{display:"flex",gap:10}}>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
           <span style={{fontSize:22}}>⚡</span>
           <div>
-            <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:3}}>Авто-стратегии</div>
-            <div style={{fontSize:11,color:T.sub,lineHeight:1.7}}>Автоматически управляют кампаниями по расписанию, бюджету и пиковым часам.</div>
+            <div style={{fontSize:13,fontWeight:700,color:T.text}}>Стратегии + Ставки</div>
+            <div style={{fontSize:11,color:T.sub,marginTop:2}}>Управляйте ставками и стратегиями по каждой кампании</div>
           </div>
         </div>
       </div>
 
       <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={setSelCamp}/>
+
       {data.campaigns.filter(c=>selCamp==="all"||String(c.id)===String(selCamp)).map(c=>{
         const s=strategies[c.id];
-        const activeCount=[s.scheduleEnabled,s.autoPause&&s.budgetLimit>0,s.peakHours].filter(Boolean).length;
+        const t=topups[c.id];
+        const tab=getCampTab(c.id);
+        const {recommended,reasons,avgBid}=getStratBid(c,s);
+        const effBid=getEffBid(c.id,recommended);
+        const campKws=data.keywords.filter(k=>String(k.campaignId)===String(c.id));
+        const stats=statsCache[c.id];
 
-        // ── вычисляем текущий статус конфликтов ──
-        const now=new Date();
-        const hhmm=(h,m)=>h*60+m;
-        const nowMin=hhmm(now.getHours(),now.getMinutes());
-        const todayNum=now.getDay()||7; // 1=пн…7=вс
-
-        const inSchedule=s.scheduleEnabled&&(()=>{
-          const [sh,sm]=s.scheduleStart.split(":").map(Number);
-          const [eh,em]=s.scheduleEnd.split(":").map(Number);
-          return s.scheduleDays.includes(todayNum)&&nowMin>=hhmm(sh,sm)&&nowMin<hhmm(eh,em);
-        })();
-        const budgetExhausted=s.autoPause&&s.budgetLimit>0&&(()=>{
-          // демо: считаем расход как ~60% от лимита для наглядности (у включённых кампаний)
-          const demoSpent=c.status==="ok"?Math.round(s.budgetLimit*0.61):0;
-          return demoSpent>=s.budgetLimit;
-        })();
-        const inPeak=s.peakHours&&(()=>{
-          const [ph,pm]=s.peakStart.split(":").map(Number);
-          const [eh,em]=s.peakEnd.split(":").map(Number);
-          return nowMin>=hhmm(ph,pm)&&nowMin<hhmm(eh,em);
-        })();
-
-        // статусные строки с приоритетом: бюджет > расписание > пик
-        const statusLines=[];
-        if(s.scheduleEnabled&&!inSchedule)
-          statusLines.push({icon:"📅",text:"Вне расписания — кампания приостановлена",color:"rgba(156,163,175,1)"});
-        if(s.scheduleEnabled&&inSchedule)
-          statusLines.push({icon:"📅",text:`Расписание активно · до ${s.scheduleEnd}`,color:T.green});
-        if(budgetExhausted&&inPeak)
-          statusLines.push({icon:"⚡",text:"Пиковые часы — но бюджет исчерпан, старт заблокирован",color:T.red});
-        else if(budgetExhausted)
-          statusLines.push({icon:"🛑",text:`Дневной бюджет исчерпан · пауза до 00:00`,color:T.red});
-        else if(inPeak)
-          statusLines.push({icon:"⚡",text:`Пиковые часы активны · ставки +${s.peakBidBoost}% до ${s.peakEnd}`,color:T.yellow});
-        else if(s.peakHours&&!inPeak)
-          statusLines.push({icon:"⏳",text:`Пиковые часы ожидают · старт в ${s.peakStart}`,color:T.sub});
+        // активные стратегии
+        const activeCount=[s.scheduleEnabled,s.peakHours].filter(Boolean).length;
+        const now=new Date(),nowMin=now.getHours()*60+now.getMinutes(),todayNum=now.getDay()||7;
+        const hmm=(t)=>{const[h,m]=t.split(":").map(Number);return h*60+m;};
+        const inSchedule=s.scheduleEnabled&&s.scheduleDays.includes(todayNum)&&nowMin>=hmm(s.scheduleStart)&&nowMin<hmm(s.scheduleEnd);
+        const inPeak=s.peakHours&&nowMin>=hmm(s.peakStart)&&nowMin<hmm(s.peakEnd);
 
         return(
-          <div key={c.id} style={{...S.card,borderColor:activeCount>0?"rgba(251,191,36,0.2)":T.border}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:statusLines.length>0?8:14}}>
+          <div key={c.id} style={{...S.card,borderColor:activeCount>0?"rgba(251,191,36,0.25)":T.border}}>
+            {/* Заголовок кампании */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div>
                 <div style={{fontSize:13,fontWeight:700,color:T.text}}>{c.name}</div>
-                <div style={{fontSize:11,color:T.sub,marginTop:2}}>
-                  {activeCount>0
-                    ?<span style={{color:T.yellow}}>⚡ {activeCount} {activeCount===1?"стратегия":"стратегии"} активны</span>
-                    :"Нет активных стратегий"}
+                <div style={{fontSize:11,color:T.sub,marginTop:1}}>
+                  ДРР {c.drr}% · {c.orders} зак. · CPO {fmt.rub(c.cpo)}
+                  {activeCount>0&&<span style={{color:T.yellow,marginLeft:6}}>· ⚡{activeCount} стр.</span>}
                 </div>
               </div>
-              <div style={{...S.card2,padding:"4px 10px"}}>
-                <span style={{fontSize:11,color:c.status==="ok"?T.green:T.red,fontWeight:600}}>
-                  {c.status==="ok"?"● Работает":"● Пауза"}
-                </span>
-              </div>
+              <span style={{fontSize:11,color:c.status==="ok"?T.green:T.red,fontWeight:600,background:c.status==="ok"?"rgba(74,222,128,0.1)":"rgba(248,113,113,0.1)",border:`1px solid ${c.status==="ok"?"rgba(74,222,128,0.2)":"rgba(248,113,113,0.2)"}`,borderRadius:7,padding:"3px 8px"}}>
+                {c.status==="ok"?"● Работает":"● Пауза"}
+              </span>
             </div>
 
-            {/* ── Статусные строки конфликтов и активных стратегий ── */}
-            {statusLines.length>0&&(
-              <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:14,padding:"8px 10px",
-                background:"rgba(255,255,255,0.03)",borderRadius:10,border:`1px solid rgba(255,255,255,0.07)`}}>
-                {statusLines.map((line,i)=>(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:13}}>{line.icon}</span>
-                    <span style={{fontSize:11,color:line.color,fontWeight:500}}>{line.text}</span>
+            {/* Табы внутри кампании */}
+            <div style={{display:"flex",gap:4,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
+              {[
+                {id:"strategy",label:"📅 Стратегии"},
+                {id:"bids",    label:"💰 Ставки"},
+                {id:"stats",   label:"📊 Статистика"},
+                {id:"topup",   label:"💳 Пополнение"},
+              ].map(tb=>(
+                <button key={tb.id} onClick={()=>setCampTab(p=>({...p,[c.id]:tb.id}))}
+                  style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${tab===tb.id?"rgba(251,191,36,0.4)":T.border}`,
+                    whiteSpace:"nowrap",flexShrink:0,fontSize:11,fontWeight:tab===tb.id?700:400,cursor:"pointer",
+                    background:tab===tb.id?"rgba(251,191,36,0.12)":"rgba(255,255,255,0.03)",
+                    color:tab===tb.id?T.yellow:T.sub}}>
+                  {tb.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ═══ ТАБ: СТРАТЕГИИ ═══ */}
+            {tab==="strategy"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+
+                {/* Авто-ставка от стратегии */}
+                <div style={{...S.card2,borderColor:"rgba(251,191,36,0.25)",background:"rgba(251,191,36,0.04)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:700,color:T.yellow}}>🎯 Авто-ставка стратегии</div>
+                      <div style={{fontSize:10,color:T.sub,marginTop:2}}>Ставка рассчитана на основе данных кампании</div>
+                    </div>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:9,color:T.sub}}>Рекомендовано</div>
+                      <div style={{fontSize:20,fontWeight:700,fontFamily:"monospace",color:T.yellow}}>{recommended} ₽</div>
+                      <div style={{fontSize:9,color:T.sub}}>CPM</div>
+                    </div>
                   </div>
-                ))}
+                  <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:10}}>
+                    {reasons.map((r,i)=>(
+                      <div key={i} style={{fontSize:10,color:T.sub,display:"flex",gap:6,alignItems:"flex-start"}}>
+                        <span style={{color:T.yellow,flexShrink:0}}>→</span><span>{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{fontSize:11,fontWeight:600,color:T.text,marginBottom:6}}>Ваша корректировка CPM:</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>setBidOverrides(p=>({...p,[c.id]:Math.max(50,getEffBid(c.id,recommended)-20)}))}
+                      style={{width:36,height:36,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(248,113,113,0.1)",color:T.red,fontSize:18,cursor:"pointer"}}>−</button>
+                    <input type="number"
+                      value={effBid}
+                      onChange={e=>setBidOverrides(p=>({...p,[c.id]:+e.target.value||recommended}))}
+                      onBlur={e=>setBidOverrides(p=>({...p,[c.id]:Math.max(50,Math.min(2000,+e.target.value||recommended))}))}
+                      style={{flex:1,background:T.card2,border:`1px solid ${effBid!==recommended?"rgba(251,191,36,0.5)":T.border}`,borderRadius:10,padding:"8px",textAlign:"center",fontSize:16,fontFamily:"monospace",fontWeight:700,color:effBid!==recommended?T.yellow:T.text,outline:"none"}}/>
+                    <button onClick={()=>setBidOverrides(p=>({...p,[c.id]:Math.min(2000,getEffBid(c.id,recommended)+20)}))}
+                      style={{width:36,height:36,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(74,222,128,0.1)",color:T.green,fontSize:18,cursor:"pointer"}}>+</button>
+                    {effBid!==recommended&&(
+                      <button onClick={()=>setBidOverrides(p=>{const n={...p};delete n[c.id];return n;})}
+                        style={{fontSize:10,color:T.sub,background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,borderRadius:7,padding:"4px 8px",cursor:"pointer"}}>сброс</button>
+                    )}
+                  </div>
+                  {effBid!==recommended&&(
+                    <div style={{marginTop:8,fontSize:10,color:T.yellow,background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:8,padding:"6px 10px"}}>
+                      ⚡ Применена ваша ставка {effBid} ₽ (рекомендовано {recommended} ₽)
+                    </div>
+                  )}
+                </div>
+
+                {/* Расписание */}
+                <div style={{...S.card2,borderColor:s.scheduleEnabled?"rgba(74,222,128,0.2)":T.border}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.scheduleEnabled?12:0}}>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{fontSize:16}}>📅</span>
+                      <div>
+                        <div style={{fontSize:12,fontWeight:600,color:T.text}}>Расписание</div>
+                        <div style={{fontSize:10,color:T.sub}}>Вкл/выкл по времени</div>
+                      </div>
+                    </div>
+                    <div onClick={()=>upd(c.id,"scheduleEnabled",!s.scheduleEnabled)} style={{cursor:"pointer"}}>
+                      <div style={{width:38,height:22,borderRadius:11,background:s.scheduleEnabled?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${s.scheduleEnabled?"rgba(74,222,128,0.5)":T.border}`,position:"relative"}}>
+                        <div style={{position:"absolute",top:3,left:s.scheduleEnabled?18:3,width:14,height:14,borderRadius:"50%",background:s.scheduleEnabled?T.green:T.sub,transition:"left 0.2s"}}/>
+                      </div>
+                    </div>
+                  </div>
+                  {s.scheduleEnabled&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        <div><div style={{fontSize:10,color:T.sub,marginBottom:4}}>Начало</div>
+                          <input type="time" value={s.scheduleStart} onChange={e=>upd(c.id,"scheduleStart",e.target.value)} style={{...inp({fontFamily:"monospace",fontWeight:600})}}/></div>
+                        <div><div style={{fontSize:10,color:T.sub,marginBottom:4}}>Конец</div>
+                          <input type="time" value={s.scheduleEnd} onChange={e=>upd(c.id,"scheduleEnd",e.target.value)} style={{...inp({fontFamily:"monospace",fontWeight:600})}}/></div>
+                      </div>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                        {DAYS.map((d,i)=>(
+                          <button key={d} onClick={()=>toggleDay(c.id,i+1)}
+                            style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${s.scheduleDays.includes(i+1)?"rgba(74,222,128,0.4)":T.border}`,
+                              background:s.scheduleDays.includes(i+1)?"rgba(74,222,128,0.12)":"transparent",
+                              color:s.scheduleDays.includes(i+1)?T.green:T.sub,fontSize:11,cursor:"pointer"}}>
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                      {inSchedule
+                        ?<div style={{fontSize:10,color:T.green,background:"rgba(74,222,128,0.06)",border:"1px solid rgba(74,222,128,0.15)",borderRadius:8,padding:"5px 10px"}}>📅 Расписание активно · до {s.scheduleEnd}</div>
+                        :<div style={{fontSize:10,color:T.sub,background:"rgba(255,255,255,0.03)",border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 10px"}}>⏸ Вне расписания — кампания приостановлена</div>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Авто-пауза */}
+                {/* Пиковые часы */}
+                <div style={{...S.card2,borderColor:s.peakHours?"rgba(251,191,36,0.2)":T.border}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.peakHours?10:0}}>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{fontSize:16}}>🚀</span>
+                      <div>
+                        <div style={{fontSize:12,fontWeight:600,color:T.text}}>Пиковые часы</div>
+                        <div style={{fontSize:10,color:T.sub}}>Повысить ставки в часы пик</div>
+                      </div>
+                    </div>
+                    <div onClick={()=>upd(c.id,"peakHours",!s.peakHours)} style={{cursor:"pointer"}}>
+                      <div style={{width:38,height:22,borderRadius:11,background:s.peakHours?"rgba(251,191,36,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${s.peakHours?"rgba(251,191,36,0.4)":T.border}`,position:"relative"}}>
+                        <div style={{position:"absolute",top:3,left:s.peakHours?18:3,width:14,height:14,borderRadius:"50%",background:s.peakHours?T.yellow:T.sub,transition:"left 0.2s"}}/>
+                      </div>
+                    </div>
+                  </div>
+                  {s.peakHours&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                        <div><div style={{fontSize:10,color:T.sub,marginBottom:4}}>Начало пика</div>
+                          <input type="time" value={s.peakStart} onChange={e=>upd(c.id,"peakStart",e.target.value)} style={inp({fontFamily:"monospace",fontWeight:600})}/></div>
+                        <div><div style={{fontSize:10,color:T.sub,marginBottom:4}}>Конец пика</div>
+                          <input type="time" value={s.peakEnd} onChange={e=>upd(c.id,"peakEnd",e.target.value)} style={inp({fontFamily:"monospace",fontWeight:600})}/></div>
+                        <div><div style={{fontSize:10,color:T.sub,marginBottom:4}}>Буст %</div>
+                          <input type="number" value={s.peakBidBoost} min={5} max={100} onChange={e=>upd(c.id,"peakBidBoost",+e.target.value)} style={inp({fontFamily:"monospace",fontWeight:700})}/></div>
+                      </div>
+                      {inPeak
+                        ?<div style={{fontSize:10,color:T.yellow,background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:8,padding:"5px 10px"}}>⚡ Пиковые часы активны · ставки +{s.peakBidBoost}% до {s.peakEnd}</div>
+                        :<div style={{fontSize:10,color:T.sub,background:"rgba(255,255,255,0.03)",border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 10px"}}>⏳ Ожидают · старт в {s.peakStart}</div>}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-
-              {/* 1. Расписание */}
-              <div style={{...S.card2,borderColor:s.scheduleEnabled?"rgba(74,222,128,0.2)":T.border}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.scheduleEnabled?12:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:16}}>📅</span>
-                    <div>
-                      <div style={{fontSize:12,fontWeight:600,color:T.text}}>Расписание</div>
-                      <div style={{fontSize:10,color:T.sub}}>Включать/выключать по времени</div>
-                    </div>
-                  </div>
-                  <div onClick={()=>upd(c.id,"scheduleEnabled",!s.scheduleEnabled)} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                    <div style={{width:38,height:22,borderRadius:11,background:s.scheduleEnabled?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${s.scheduleEnabled?"rgba(74,222,128,0.5)":T.border}`,position:"relative"}}>
-                      <div style={{position:"absolute",top:3,left:s.scheduleEnabled?18:3,width:14,height:14,borderRadius:"50%",background:s.scheduleEnabled?T.green:T.sub,transition:"left 0.2s"}}/>
-                    </div>
-                  </div>
+            {/* ═══ ТАБ: СТАВКИ ═══ */}
+            {tab==="bids"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{...S.card2,background:"rgba(99,102,241,0.04)",borderColor:"rgba(99,102,241,0.15)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#c4b5fd"}}>💰 Ставки по ключевым словам</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>Корректируйте ставку для каждого ключа. Рекомендованная — от стратегии.</div>
                 </div>
-                {s.scheduleEnabled&&(
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      {[{l:"Старт",k:"scheduleStart"},{l:"Стоп",k:"scheduleEnd"}].map(f=>(
-                        <div key={f.k}>
-                          <div style={{fontSize:10,color:T.sub,marginBottom:4}}>{f.l}</div>
-                          <input type="time" value={s[f.k]} onChange={e=>upd(c.id,f.k,e.target.value)}
-                            style={{...inp({fontFamily:"monospace",fontWeight:600,fontSize:14})}}/>
+                {campKws.length===0&&<div style={{textAlign:"center",padding:20,color:T.sub,fontSize:12}}>Нет ключей в этой кампании</div>}
+                {campKws.map(kw=>{
+                  const b=bids[kw.keyword]||{search:kw.bidSearch,shelves:kw.bidShelves};
+                  const posCol=kw.pos<=5?"#4ade80":kw.pos<=15?"#fbbf24":"#fb923c";
+                  return(
+                    <div key={kw.keyword} style={{...S.card2}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:700,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{kw.keyword}</div>
+                          <div style={{display:"flex",gap:8,marginTop:3}}>
+                            <span style={{fontSize:10,color:posCol,fontFamily:"monospace",fontWeight:700}}>#{kw.pos}</span>
+                            <span style={{fontSize:10,color:kw.ctr>=0.8?T.green:T.yellow}}>CTR {kw.ctr}%</span>
+                            <span style={{fontSize:10,color:T.sub}}>ДРР {kw.drr}%</span>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                    <div>
-                      <div style={{fontSize:10,color:T.sub,marginBottom:6}}>Дни недели</div>
-                      <div style={{display:"flex",gap:5}}>
-                        {DAYS.map((d,i)=>{
-                          const dayNum=i+1;
-                          const active=s.scheduleDays.includes(dayNum);
-                          return(
-                            <button key={d} onClick={()=>toggleDay(c.id,dayNum)}
-                              style={{flex:1,padding:"6px 2px",borderRadius:8,border:`1px solid ${active?"rgba(74,222,128,0.4)":T.border}`,
-                                background:active?"rgba(74,222,128,0.12)":"transparent",
-                                color:active?T.green:T.sub,fontSize:10,cursor:"pointer",fontWeight:active?700:400}}>
-                              {d}
-                            </button>
-                          );
-                        })}
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontSize:9,color:T.sub}}>Стратегия рек.</div>
+                          <div style={{fontSize:13,fontWeight:700,color:T.yellow}}>{effBid} ₽</div>
+                        </div>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8}}>
+                        {[{label:"🔍 Поиск CPM",field:"search"},{label:"🗂 Полки CPM",field:"shelves"}].map(f=>(
+                          <div key={f.field}>
+                            <div style={{fontSize:10,color:T.sub,marginBottom:4}}>{f.label}</div>
+                            <div style={{display:"flex",alignItems:"center",gap:4}}>
+                              <button onClick={()=>setBid(kw.keyword,f.field,Math.max(50,(b[f.field]||50)-20))}
+                                style={{width:34,height:34,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(248,113,113,0.08)",color:T.red,fontSize:16,cursor:"pointer",flexShrink:0}}>−</button>
+                              <input type="number" value={b[f.field]||""}
+                                onChange={e=>setBid(kw.keyword,f.field,e.target.value)}
+                                onBlur={e=>setBidFinal(kw.keyword,f.field,e.target.value)}
+                                style={{flex:1,background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"8px 4px",textAlign:"center",fontSize:14,fontFamily:"monospace",fontWeight:700,color:T.text,outline:"none"}}/>
+                              <button onClick={()=>setBid(kw.keyword,f.field,Math.min(2000,(b[f.field]||50)+20))}
+                                style={{width:34,height:34,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(74,222,128,0.08)",color:T.green,fontSize:16,cursor:"pointer",flexShrink:0}}>+</button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 2. Тип ставки */}
-              <div style={S.card2}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:16}}>💱</span>
-                    <div>
-                      <div style={{fontSize:12,fontWeight:600,color:T.text}}>Тип ставки</div>
-                      <div style={{fontSize:10,color:T.sub}}>CPM (за 1000 показов) или CPC (за клик)</div>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:4}}>
-                    {["CPM","CPC"].map(t=>(
-                      <button key={t} onClick={()=>upd(c.id,"bidType",t)}
-                        style={{padding:"5px 12px",borderRadius:8,border:`1px solid ${s.bidType===t?"rgba(124,58,237,0.5)":T.border}`,
-                          background:s.bidType===t?"rgba(124,58,237,0.15)":"transparent",
-                          color:s.bidType===t?"#c4b5fd":T.sub,fontSize:12,cursor:"pointer",fontWeight:s.bidType===t?700:400}}>
-                        {t}
-                      </button>
+                  );
+                })}
+                {bidHistory.length>0&&(
+                  <div style={{...S.card2,padding:"8px 12px"}}>
+                    <div style={{fontSize:10,fontWeight:600,color:T.sub,marginBottom:6}}>ИСТОРИЯ ИЗМЕНЕНИЙ</div>
+                    {bidHistory.slice(0,5).map((h,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:10,color:T.sub,paddingBottom:4,marginBottom:4,borderBottom:i<4?`1px solid rgba(255,255,255,0.04)`:"none"}}>
+                        <span style={{color:T.text}}>{h.kw}</span>
+                        <span>{h.field==="search"?"Поиск":"Полки"}: {h.from}→<span style={{color:T.green,fontWeight:700}}>{h.to} ₽</span> · {h.time}</span>
+                      </div>
                     ))}
                   </div>
-                </div>
-              </div>
-
-              {/* 3. Авто-пауза по бюджету */}
-              <div style={{...S.card2,borderColor:s.autoPause&&s.budgetLimit>0?"rgba(248,113,113,0.2)":T.border}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.autoPause?10:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:16}}>🛑</span>
-                    <div>
-                      <div style={{fontSize:12,fontWeight:600,color:T.text}}>Авто-пауза при исчерпании бюджета</div>
-                      <div style={{fontSize:10,color:T.sub}}>Остановить кампанию при лимите расхода</div>
-                    </div>
-                  </div>
-                  <div onClick={()=>upd(c.id,"autoPause",!s.autoPause)} style={{cursor:"pointer"}}>
-                    <div style={{width:38,height:22,borderRadius:11,background:s.autoPause?"rgba(248,113,113,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${s.autoPause?"rgba(248,113,113,0.4)":T.border}`,position:"relative"}}>
-                      <div style={{position:"absolute",top:3,left:s.autoPause?18:3,width:14,height:14,borderRadius:"50%",background:s.autoPause?T.red:T.sub,transition:"left 0.2s"}}/>
-                    </div>
-                  </div>
-                </div>
-                {s.autoPause&&(
-                  <div>
-                    <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Лимит расхода в день (₽)</div>
-                    <input type="number" value={s.budgetLimit||""} onChange={e=>upd(c.id,"budgetLimit",+e.target.value)}
-                      placeholder="5000" style={inp({fontFamily:"monospace",fontWeight:600})}/>
-                    {s.budgetLimit>0&&<div style={{fontSize:10,color:T.red,marginTop:4}}>
-                      🛑 Кампания остановится при расходе {fmt.rub(s.budgetLimit)}/день
-                    </div>}
-                  </div>
                 )}
               </div>
+            )}
 
-              {/* 4. Авто-старт в пиковые часы */}
-              <div style={{...S.card2,borderColor:s.peakHours?"rgba(251,191,36,0.2)":T.border}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:s.peakHours?10:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:16}}>🚀</span>
-                    <div>
-                      <div style={{fontSize:12,fontWeight:600,color:T.text}}>Авто-старт в пиковые часы</div>
-                      <div style={{fontSize:10,color:T.sub}}>Повышать ставки в часы пик продаж</div>
-                    </div>
-                  </div>
-                  <div onClick={()=>upd(c.id,"peakHours",!s.peakHours)} style={{cursor:"pointer"}}>
-                    <div style={{width:38,height:22,borderRadius:11,background:s.peakHours?"rgba(251,191,36,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${s.peakHours?"rgba(251,191,36,0.4)":T.border}`,position:"relative"}}>
-                      <div style={{position:"absolute",top:3,left:s.peakHours?18:3,width:14,height:14,borderRadius:"50%",background:s.peakHours?T.yellow:T.sub,transition:"left 0.2s"}}/>
-                    </div>
-                  </div>
+            {/* ═══ ТАБ: СТАТИСТИКА ═══ */}
+            {tab==="stats"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{...S.card2,background:"rgba(59,130,246,0.04)",borderColor:"rgba(59,130,246,0.15)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#93c5fd"}}>📊 Статистика стратегии за 7 дней</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>Эффективность работы стратегии по дням</div>
                 </div>
-                {s.peakHours&&(
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                      <div>
-                        <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Начало пика</div>
-                        <input type="time" value={s.peakStart} onChange={e=>upd(c.id,"peakStart",e.target.value)}
-                          style={inp({fontFamily:"monospace",fontWeight:600})}/>
-                      </div>
-                      <div>
-                        <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Конец пика</div>
-                        <input type="time" value={s.peakEnd} onChange={e=>upd(c.id,"peakEnd",e.target.value)}
-                          style={inp({fontFamily:"monospace",fontWeight:600})}/>
-                      </div>
-                      <div>
-                        <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Буст ставки %</div>
-                        <input type="number" value={s.peakBidBoost} min={5} max={100}
-                          onChange={e=>upd(c.id,"peakBidBoost",+e.target.value)}
-                          style={inp({fontFamily:"monospace",fontWeight:700})}/>
-                      </div>
+                <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                  <table style={{width:"100%",minWidth:700,borderCollapse:"collapse"}}>
+                    <thead>
+                      <tr style={{background:"rgba(255,255,255,0.03)"}}>
+                        {["Дата","Показы","CPM","Перех.","CTR","CPC","Затраты","Корз.","CPL","Заказы","ДРР","Поз."].map(h=>(
+                          <th key={h} style={{padding:"6px 8px",textAlign:"center",fontSize:9,color:T.sub,fontWeight:600,whiteSpace:"nowrap",borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.map((row,i)=>(
+                        <tr key={i} style={{borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                          <td style={{padding:"6px 8px",fontSize:10,color:T.text,fontWeight:600,whiteSpace:"nowrap"}}>{row.d}</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(row.imp)}</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{row.cpm}</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(row.clicks)}</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.ctr>=0.8?T.green:T.yellow}}>{row.ctr}%</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{row.cpc}₽</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{fmt.rub(row.spend)}</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{row.baskets}</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.sub}}>{row.cpl}₽</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.orders>0?T.green:T.red,fontWeight:700}}>{row.orders}</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.drr>25?T.red:row.drr>18?T.yellow:T.green}}>{row.drr}%</td>
+                          <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"center",color:row.pos<=5?"#4ade80":row.pos<=10?"#fbbf24":"#fb923c",fontWeight:700}}>#{row.pos}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{background:"rgba(255,255,255,0.03)",borderTop:`1px solid ${T.border}`}}>
+                        <td style={{padding:"6px 8px",fontSize:10,fontWeight:700,color:T.text}}>Итого</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text,fontWeight:700}}>{fmt.num(stats.reduce((s,r)=>s+r.imp,0))}</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>—</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text,fontWeight:700}}>{fmt.num(stats.reduce((s,r)=>s+r.clicks,0))}</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.green}}>{(stats.reduce((s,r)=>s+r.clicks,0)/Math.max(1,stats.reduce((s,r)=>s+r.imp,0))*100).toFixed(2)}%</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>—</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow,fontWeight:700}}>{fmt.rub(stats.reduce((s,r)=>s+r.spend,0))}</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text,fontWeight:700}}>{stats.reduce((s,r)=>s+r.baskets,0)}</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.sub}}>—</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.green,fontWeight:700}}>{stats.reduce((s,r)=>s+r.orders,0)}</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{(stats.reduce((s,r)=>s+r.spend,0)/Math.max(1,stats.reduce((s,r)=>s+r.orders,0)*2500)*100).toFixed(1)}%</td>
+                        <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"center",color:T.sub}}>—</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ═══ ТАБ: АВТОПОПОЛНЕНИЕ ═══ */}
+            {tab==="topup"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{...S.card2,background:"rgba(74,222,128,0.04)",borderColor:"rgba(74,222,128,0.15)",padding:"8px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#6ee7b7"}}>💳 Автопополнение бюджета кампании</div>
+                  <div style={{fontSize:10,color:T.sub,marginTop:2}}>На ВБ автопополнение привязано к конкретной кампании</div>
+                </div>
+                <div style={{...S.card2}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:t.enabled?14:0}}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:600,color:T.text}}>Автопополнение</div>
+                      <div style={{fontSize:10,color:T.sub,marginTop:1}}>Пополнять бюджет автоматически</div>
                     </div>
-                    <div style={{fontSize:10,color:T.yellow,background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:8,padding:"6px 10px"}}>
-                      🚀 В {s.peakStart}–{s.peakEnd} ставки будут повышены на {s.peakBidBoost}%
+                    <div onClick={()=>updTopup(c.id,"enabled",!t.enabled)} style={{cursor:"pointer"}}>
+                      <div style={{width:42,height:24,borderRadius:12,background:t.enabled?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${t.enabled?"rgba(74,222,128,0.5)":T.border}`,position:"relative"}}>
+                        <div style={{position:"absolute",top:3,left:t.enabled?21:3,width:16,height:16,borderRadius:"50%",background:t.enabled?"#4ade80":T.sub,transition:"left 0.2s"}}/>
+                      </div>
                     </div>
                   </div>
-                )}
+                  {t.enabled&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        <div>
+                          <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Пополнять на, ₽</div>
+                          <input type="number" value={t.amount}
+                            onChange={e=>updTopup(c.id,"amount",+e.target.value)}
+                            onBlur={e=>updTopup(c.id,"amount",Math.max(1000,+e.target.value))}
+                            style={{...inp({fontFamily:"monospace",fontWeight:700})}}/>
+                          <div style={{fontSize:9,color:T.sub,marginTop:2}}>Минимум 1 000 ₽</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Раз в день (не чаще)</div>
+                          <input type="number" value={t.timesPerDay} min={1} max={10}
+                            onChange={e=>updTopup(c.id,"timesPerDay",Math.max(1,Math.min(10,+e.target.value)))}
+                            style={{...inp({fontFamily:"monospace",fontWeight:700})}}/>
+                        </div>
+                      </div>
+                      <div style={{fontSize:11,color:T.green,background:"rgba(74,222,128,0.06)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:8,padding:"8px 12px",lineHeight:1.6}}>
+                        ✅ Пополнять «{c.name}» на <strong>{t.amount.toLocaleString("ru-RU")} ₽</strong><br/>
+                        не чаще {t.timesPerDay} {t.timesPerDay===1?"раза":"раз"} в день
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
 
-            </div>
           </div>
         );
       })}
     </div>
   );
 }
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // APP — 3 главные вкладки + подвкладки
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2707,7 +2872,6 @@ const SUB_TABS={
   ],
   bids:[
     {id:"bids_smart",        label:"🤖 Авто"},
-    {id:"bids_manual",       label:"✋ Ручное"},
     {id:"bids_strategy",     label:"⚡ Стратегии"},
     {id:"bids_autostrategy", label:"🎯 Авто-план"},
     {id:"bids_minus",        label:"🚫 Минусовка"},
@@ -2825,75 +2989,69 @@ function PositionHistoryBlock({data,targetDrr}){
 }
 
 // ─── Баланс рекламного кабинета + авто-пополнение ────────────────────────────
-function BidsCabinetBalance({platform,inp}){
-  const DEMO_BALANCE={wb:4250,ozon:12700};
-  const [balance] = useState(DEMO_BALANCE[platform]||0);
+function CampAutoTopup({campId,campName,inp}){
   const [autoTopup,setAutoTopup]=useState(false);
-  const [topupAmount,setTopupAmount]=useState(5000);
-  const [minBalance,setMinBalance]=useState(1000);
-  const isLow=balance<minBalance;
+  const [topupAmount,setTopupAmount]=useState(1000);
+  const [timesPerDay,setTimesPerDay]=useState(1);
   return(
-    <div style={{...S.card,borderColor:isLow?"rgba(248,113,113,0.3)":autoTopup?"rgba(74,222,128,0.2)":T.border,
-      background:isLow?"rgba(248,113,113,0.04)":autoTopup?"rgba(74,222,128,0.03)":T.card}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+    <div style={{borderTop:`1px solid ${T.border}`,marginTop:10,paddingTop:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:autoTopup?10:0}}>
         <div>
-          <div style={{fontSize:11,color:T.sub,marginBottom:3}}>{platform==="wb"?"🟣 WB":"🔵 Ozon"} · Баланс рекламного кабинета</div>
-          <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-            <span style={{fontSize:26,fontWeight:700,fontFamily:"monospace",color:isLow?T.red:T.text}}>{balance.toLocaleString("ru-RU")} ₽</span>
-            {isLow&&<span style={{fontSize:11,color:T.red,fontWeight:600}}>⚠️ Низкий баланс</span>}
-            {autoTopup&&!isLow&&<span style={{fontSize:11,color:T.green,fontWeight:600}}>✅ Авто-пополнение активно</span>}
-          </div>
+          <div style={{fontSize:12,fontWeight:600,color:T.text}}>💳 Автопополнение кампании</div>
+          <div style={{fontSize:10,color:T.sub,marginTop:1}}>Пополнять бюджет этой кампании автоматически</div>
         </div>
-        <div style={{...S.card2,padding:"6px 12px",textAlign:"center"}}>
-          <div style={{fontSize:9,color:T.sub}}>Статус</div>
-          <div style={{fontSize:12,fontWeight:700,color:T.green}}>● Активен</div>
+        <div onClick={()=>setAutoTopup(p=>!p)} style={{cursor:"pointer"}}>
+          <div style={{width:42,height:24,borderRadius:12,
+            background:autoTopup?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",
+            border:`1px solid ${autoTopup?"rgba(74,222,128,0.5)":T.border}`,position:"relative"}}>
+            <div style={{position:"absolute",top:3,left:autoTopup?21:3,width:16,height:16,
+              borderRadius:"50%",background:autoTopup?"#4ade80":T.sub,transition:"left 0.2s"}}/>
+          </div>
         </div>
       </div>
-
-      {/* Прогресс-бар баланса */}
-      <div style={{height:4,background:"rgba(255,255,255,0.06)",borderRadius:2,marginBottom:12,overflow:"hidden"}}>
-        <div style={{height:"100%",width:`${Math.min(balance/10000*100,100)}%`,
-          background:isLow?"#f87171":balance<3000?"#fbbf24":"#4ade80",borderRadius:2,transition:"width 0.5s"}}/>
-      </div>
-
-      {/* Авто-пополнение */}
-      <div style={{borderTop:`1px solid ${T.border}`,paddingTop:10}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:autoTopup?10:0}}>
-          <div>
-            <div style={{fontSize:12,fontWeight:600,color:T.text}}>Авто-пополнение</div>
-            <div style={{fontSize:10,color:T.sub,marginTop:1}}>Пополнять при снижении ниже порога</div>
-          </div>
-          <div onClick={()=>setAutoTopup(p=>!p)} style={{cursor:"pointer"}}>
-            <div style={{width:42,height:24,borderRadius:12,
-              background:autoTopup?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",
-              border:`1px solid ${autoTopup?"rgba(74,222,128,0.5)":T.border}`,position:"relative"}}>
-              <div style={{position:"absolute",top:3,left:autoTopup?21:3,width:16,height:16,
-                borderRadius:"50%",background:autoTopup?"#4ade80":T.sub,transition:"left 0.2s"}}/>
-            </div>
-          </div>
-        </div>
-        {autoTopup&&(
+      {autoTopup&&(
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <div>
-              <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Порог срабатывания, ₽</div>
-              <input type="number" value={minBalance} onChange={e=>setMinBalance(+e.target.value)}
-                style={{...inp({fontFamily:"monospace",fontWeight:600,fontSize:13})}}/>
+              <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Пополнять на, ₽</div>
+              <input type="number" value={topupAmount} onChange={e=>setTopupAmount(Math.max(1000,+e.target.value))}
+                style={{width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",fontFamily:"monospace",fontWeight:600}}/>
+              <div style={{fontSize:9,color:T.sub,marginTop:2}}>Минимум 1 000 ₽</div>
             </div>
             <div>
-              <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Сумма пополнения, ₽</div>
-              <input type="number" value={topupAmount} onChange={e=>setTopupAmount(+e.target.value)}
-                style={{...inp({fontFamily:"monospace",fontWeight:600,fontSize:13})}}/>
-            </div>
-            <div style={{gridColumn:"span 2",fontSize:10,color:autoTopup&&isLow?T.red:T.green,
-              background:autoTopup&&isLow?"rgba(248,113,113,0.08)":"rgba(74,222,128,0.06)",
-              border:`1px solid ${autoTopup&&isLow?"rgba(248,113,113,0.2)":"rgba(74,222,128,0.2)"}`,
-              borderRadius:8,padding:"6px 10px"}}>
-              {autoTopup&&isLow
-                ? `🚨 Баланс ниже ${minBalance.toLocaleString()} ₽ — пополнение на ${topupAmount.toLocaleString()} ₽ будет отправлено`
-                : `✅ При снижении до ${minBalance.toLocaleString()} ₽ — автоматически пополнить на ${topupAmount.toLocaleString()} ₽`}
+              <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Не чаще раз в день</div>
+              <input type="number" value={timesPerDay} min={1} max={10} onChange={e=>setTimesPerDay(Math.max(1,Math.min(10,+e.target.value)))}
+                style={{width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",fontFamily:"monospace",fontWeight:600}}/>
             </div>
           </div>
-        )}
+          <div style={{fontSize:11,color:T.green,background:"rgba(74,222,128,0.06)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:8,padding:"7px 10px"}}>
+            ✅ Пополнять на {topupAmount.toLocaleString("ru-RU")} ₽ — не чаще {timesPerDay} {timesPerDay===1?"раза":"раз"} в день
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BidsCabinetBalance({platform}){
+  const DEMO_BALANCE={wb:258969,ozon:12700};
+  const balance=DEMO_BALANCE[platform]||0;
+  const isLow=balance<5000;
+  return(
+    <div style={{...S.card,borderColor:isLow?"rgba(248,113,113,0.3)":T.border,
+      background:isLow?"rgba(248,113,113,0.03)":T.card}}>
+      <div style={{fontSize:11,color:T.sub,marginBottom:6}}>
+        {platform==="wb"?"🟣 WB":"🔵 Ozon"} · Единый счёт рекламного кабинета
+      </div>
+      <div style={{display:"flex",alignItems:"baseline",gap:10}}>
+        <span style={{fontSize:30,fontWeight:700,fontFamily:"monospace",color:isLow?T.red:T.text}}>
+          {balance.toLocaleString("ru-RU")} ₽
+        </span>
+        {isLow&&<span style={{fontSize:12,color:T.red,fontWeight:600}}>⚠️ Низкий баланс</span>}
+      </div>
+      <div style={{height:4,background:"rgba(255,255,255,0.06)",borderRadius:2,marginTop:10,overflow:"hidden"}}>
+        <div style={{height:"100%",width:`${Math.min(balance/300000*100,100)}%`,
+          background:isLow?"#f87171":balance<50000?"#fbbf24":"#4ade80",borderRadius:2}}/>
       </div>
     </div>
   );
@@ -2901,91 +3059,90 @@ function BidsCabinetBalance({platform,inp}){
 
 // ─── АВТО-СТРАТЕГИЯ ──────────────────────────────────────────────────────────
 function AutoStrategyTab({data,targetDrr,inp}){
-  const [goal,setGoal]=useState("balance");   // growth | balance | economy
-  const [selCamp,setSelCamp]=useState("all"); // per-campaign mode
+  const [goal,setGoal]=useState("balance");
+  const [selCamp,setSelCamp]=useState("all");
   const [autoApply,setAutoApply]=useState(false);
   const [running,setRunning]=useState(false);
   const [ran,setRan]=useState(false);
   const [log,setLog]=useState([]);
+  const [topups,setTopups]=useState(
+    data.campaigns.reduce((acc,c)=>({...acc,[c.id]:{enabled:false,amount:1000,timesPerDay:1}}),{})
+  );
+  function updTopup(id,key,val){setTopups(p=>({...p,[id]:{...p[id],[key]:val}}));}
 
   const GOALS=[
-    {id:"growth",  icon:"🚀", label:"Рост продаж",   desc:"Максимум заказов, ДРР может чуть вырасти"},
+    {id:"growth",  icon:"🚀", label:"Рост продаж",   desc:"Максимум заказов, ДРР может вырасти"},
     {id:"balance", icon:"⚖️", label:"Баланс",         desc:"Больше продаж при соблюдении ДРР"},
     {id:"economy", icon:"💰", label:"Экономия",       desc:"Жёсткий контроль ДРР, снижение расходов"},
   ];
 
-  // ── Алгоритм анализа на демо-данных ────────────────────────────────────────
+  const tDrr=targetDrr||20;
+  const targetCamps=selCamp==="all"?data.campaigns:data.campaigns.filter(c=>String(c.id)===String(selCamp));
+
+  // Расчёт рекомендованной ставки для стратегии
+  function calcStratBid(camp){
+    const kws=data.keywords.filter(k=>String(k.campaignId)===String(camp.id));
+    const avgBid=kws.length>0?Math.round(kws.reduce((s,k)=>s+k.bidSearch,0)/kws.length):200;
+    const drrFactor=camp.drr>tDrr?0.85:camp.drr<tDrr*0.7?1.2:1.0;
+    const goalFactor=goal==="growth"?1.25:goal==="economy"?0.8:1.0;
+    const recommended=Math.round(avgBid*drrFactor*goalFactor);
+    const reasons=[];
+    if(goal==="growth") reasons.push("цель — рост, ставка повышена на 25%");
+    if(goal==="economy") reasons.push("цель — экономия, ставка снижена на 20%");
+    if(camp.drr>tDrr) reasons.push(`ДРР ${camp.drr}% выше цели → ставка снижена на 15%`);
+    if(camp.drr<tDrr*0.7) reasons.push(`ДРР ${camp.drr}% значительно ниже цели → есть потенциал, ставка повышена`);
+    reasons.push(`средняя ставка ключей ${avgBid} ₽`);
+    return {recommended, reasons};
+  }
+
   function runAnalysis(){
-    setRunning(true);
-    setRan(false);
-    setLog([]);
-    const tDrr=targetDrr||20;
+    setRunning(true); setRan(false); setLog([]);
     const allSpend=data.campaigns.reduce((s,c)=>s+c.spend,0)||1;
     const steps=[];
-    const targetCamps=selCamp==="all"?data.campaigns:data.campaigns.filter(c=>String(c.id)===String(selCamp));
 
-    // 1. Оцениваем каждую кампанию
     targetCamps.forEach(c=>{
       const campKws=data.keywords.filter(k=>String(k.campaignId)===String(c.id));
       const goodKws=campKws.filter(k=>k.drr<=tDrr&&k.orders>0);
       const badKws=campKws.filter(k=>k.drr>tDrr*1.2||k.orders===0&&k.spend>200);
       const spendShare=(c.spend/allSpend*100).toFixed(0);
+      const {recommended,reasons}=calcStratBid(c);
 
       if(c.drr<=tDrr*0.7){
-        // Кампания очень эффективна — увеличить бюджет
         const boost=goal==="growth"?"+25%":goal==="balance"?"+15%":"+5%";
         steps.push({type:"up",camp:c.name,action:`Увеличить бюджет ${boost}`,
-          reason:`ДРР ${c.drr}% — значительно ниже цели ${tDrr}%. Доля бюджета ${spendShare}% — есть потенциал.`,
+          reason:`ДРР ${c.drr}% — значительно ниже цели ${tDrr}%. Доля бюджета ${spendShare}%.`,
           detail:goodKws.length>0?`Эффективные ключи: ${goodKws.map(k=>k.keyword).join(", ")}`:null,
-          priority:1});
+          bid:recommended, bidReasons:reasons, priority:1});
       } else if(c.drr>tDrr*1.15){
-        // Перерасход — снизить
         const cut=goal==="economy"?"-30%":goal==="balance"?"-20%":"-10%";
         steps.push({type:"down",camp:c.name,action:`Снизить бюджет ${cut}`,
           reason:`ДРР ${c.drr}% — превышает цель ${tDrr}% на ${(c.drr-tDrr).toFixed(1)}%.`,
-          detail:badKws.length>0?`Проблемные ключи: ${badKws.map(k=>k.keyword).join(", ")}`:null,
-          priority:1});
+          detail:badKws.length>0?`Ключи с перерасходом: ${badKws.map(k=>k.keyword).join(", ")}`:null,
+          bid:recommended, bidReasons:reasons, priority:1});
       } else {
         steps.push({type:"ok",camp:c.name,action:"Параметры оптимальны",
-          reason:`ДРР ${c.drr}% — в норме. Плавная корректировка ставок.`,
-          detail:null,priority:3});
+          reason:`ДРР ${c.drr}% — в норме. Плавная корректировка.`,detail:null,
+          bid:recommended, bidReasons:reasons, priority:3});
       }
     });
 
-    // 2. Рекомендации по ключам
-    const filteredKws=selCamp==="all"?data.keywords:data.keywords.filter(k=>String(k.campaignId)===String(selCamp));
-    const fallingKws=filteredKws.filter(k=>k.posPrev-k.pos<-3&&k.ctr>=0.8);
-    if(fallingKws.length>0)
-      steps.push({type:"bid_up",camp:"Все кампании",action:`Повысить ставки: ${fallingKws.length} ключей`,
-        reason:"Позиции падают при хорошем CTR — конкуренты подняли ставки.",
-        detail:fallingKws.map(k=>`«${k.keyword}» ${k.posPrev}→${k.pos} · CTR ${k.ctr}%`).join("; "),
-        priority:2});
+    const filtKws=selCamp==="all"?data.keywords:data.keywords.filter(k=>String(k.campaignId)===String(selCamp));
+    const fallingKws=filtKws.filter(k=>k.posPrev-k.pos<-3&&k.ctr>=0.8);
+    if(fallingKws.length>0) steps.push({type:"bid_up",camp:"Все кампании",
+      action:`Повысить ставки: ${fallingKws.length} ключей`,
+      reason:"Позиции падают при хорошем CTR — конкуренты подняли ставки.",
+      detail:fallingKws.map(k=>`«${k.keyword}» ${k.posPrev}→${k.pos}`).join("; "),
+      bid:null,bidReasons:null,priority:2});
 
-    const zeroKws=filteredKws.filter(k=>k.orders===0&&k.spend>300);
-    if(zeroKws.length>0)
-      steps.push({type:"minus",camp:"Все кампании",action:`В минус-слова: ${zeroKws.length} ключей`,
-        reason:"Расход без заказов — нецелевой трафик.",
-        detail:zeroKws.map(k=>`«${k.keyword}» −${k.spend}₽`).join("; "),
-        priority:2});
-
-    const highCpoKws=filteredKws.filter(k=>targetDrr&&k.drr>targetDrr*1.5&&k.orders>0);
-    if(highCpoKws.length>0)
-      steps.push({type:"bid_down",camp:"Все кампании",action:`Снизить ставки: ${highCpoKws.length} ключей`,
-        reason:`CPO слишком высокий при цели ДРР ${tDrr}%.`,
-        detail:highCpoKws.map(k=>`«${k.keyword}» ДРР ${k.drr}%`).join("; "),
-        priority:2});
-
-    // 3. Прогноз
-    const projOrders=Math.round(targetCamps.reduce((s,c)=>s+c.orders,0)*(goal==="growth"?1.22:goal==="balance"?1.12:1.03));
-    const projDrr=(goal==="growth"?Math.min(tDrr*1.08,tDrr+2):goal==="balance"?tDrr*0.96:tDrr*0.85).toFixed(1);
+    const zeroKws=filtKws.filter(k=>k.orders===0&&k.spend>300);
+    if(zeroKws.length>0) steps.push({type:"minus",camp:"Все кампании",
+      action:`В минус-слова: ${zeroKws.length} ключей`,
+      reason:"Расход без заказов — нецелевой трафик.",
+      detail:zeroKws.map(k=>`«${k.keyword}» −${k.spend}₽`).join("; "),
+      bid:null,bidReasons:null,priority:2});
 
     steps.sort((a,b)=>a.priority-b.priority);
-
-    setTimeout(()=>{
-      setLog(steps);
-      setRunning(false);
-      setRan(true);
-    },1400);
+    setTimeout(()=>{setLog(steps);setRunning(false);setRan(true);},1400);
   }
 
   const TYPE_STYLE={
@@ -2997,162 +3154,257 @@ function AutoStrategyTab({data,targetDrr,inp}){
     minus:   {icon:"🚫",color:T.red,    bg:"rgba(248,113,113,0.06)",border:"rgba(248,113,113,0.15)"},
   };
 
-  const campBase=(selCamp==="all"?data.campaigns:data.campaigns.filter(c=>String(c.id)===String(selCamp))).reduce((s,c)=>s+c.orders,0);
+  const campBase=targetCamps.reduce((s,c)=>s+c.orders,0);
   const projOrders=ran?Math.round(campBase*(goal==="growth"?1.22:goal==="balance"?1.12:1.03)):null;
-  const projDrr=ran?((targetDrr||20)*(goal==="growth"?1.06:goal==="balance"?0.96:0.85)).toFixed(1):null;
-  const tDrr=targetDrr||20;
+  const projDrr=ran?(tDrr*(goal==="growth"?1.06:goal==="balance"?0.96:0.85)).toFixed(1):null;
+  const projRevGrow=goal==="growth"?"+22%":goal==="balance"?"+12%":"+3%";
+
+  // Демо-статистика за 7 дней (авто-план)
+  const DAYS7=["03.03","04.03","05.03","06.03","07.03","08.03","09.03"];
+  function genStats(){
+    return DAYS7.map(d=>{
+      const noise=()=>0.85+Math.random()*0.3;
+      const imp=Math.round(targetCamps.reduce((s,c)=>s+(c.impressions||8000)/7*noise(),0));
+      const cpm=Math.round(targetCamps.reduce((s,c)=>s+(c.cpm||180)*noise(),0)/Math.max(1,targetCamps.length));
+      const clicks=Math.round(imp*0.008*noise());
+      const spend=Math.round(imp/1000*cpm);
+      const orders=Math.round(clicks*0.04*noise());
+      const baskets=Math.round(orders/0.35);
+      const drr=+(spend/Math.max(1,orders*2500)*100).toFixed(1);
+      const pos=Math.round(5*noise());
+      return{d,imp,cpm,clicks,ctr:+(clicks/Math.max(1,imp)*100).toFixed(2),spend,cpc:+(spend/Math.max(1,clicks)).toFixed(0),baskets,cpl:+(spend/Math.max(1,baskets)).toFixed(0),orders,drr,pos};
+    });
+  }
+  const [planStats]=useState(()=>genStats());
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
-      {/* Заголовок */}
       <div style={{...S.card,background:"rgba(16,185,129,0.05)",borderColor:"rgba(16,185,129,0.2)"}}>
         <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
           <span style={{fontSize:24}}>🎯</span>
           <div>
-            <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:4}}>Авто-план роста продаж</div>
-            <div style={{fontSize:11,color:T.sub,lineHeight:1.7}}>
-              Анализирует все кампании и ключи, предлагает конкретные действия для роста заказов при соблюдении целевого ДРР.
-            </div>
-            {!targetDrr&&(
-              <div style={{marginTop:6,fontSize:11,color:T.yellow}}>
-                ⚠️ Целевой ДРР не установлен — расчёт будет приблизительным
-              </div>
-            )}
+            <div style={{fontSize:13,fontWeight:700,color:T.text,marginBottom:3}}>Авто-план роста продаж</div>
+            <div style={{fontSize:11,color:T.sub,lineHeight:1.6}}>Анализирует кампании и ключи, рассчитывает оптимальные ставки и предлагает конкретные действия.</div>
+            {!targetDrr&&<div style={{marginTop:5,fontSize:11,color:T.yellow}}>⚠️ Целевой ДРР не установлен — расчёт приблизительный</div>}
           </div>
         </div>
       </div>
 
       {/* Выбор кампании */}
-      <div style={S.card}>
-        <div style={{fontSize:11,color:T.sub,marginBottom:8,fontWeight:600,letterSpacing:"0.05em"}}>КАМПАНИЯ</div>
-        <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={v=>{setSelCamp(v);setRan(false);setLog([]);}}/>
-      </div>
+      <CampaignSelect campaigns={data.campaigns} value={selCamp} onChange={v=>{setSelCamp(v);setRan(false);setLog([]);}}/>
 
-      {/* Выбор цели */}
+      {/* Приоритет */}
       <div style={S.card}>
-        <div style={{fontSize:11,color:T.sub,marginBottom:10,fontWeight:600,letterSpacing:"0.05em"}}>ПРИОРИТЕТ СТРАТЕГИИ</div>
+        <div style={{fontSize:11,color:T.sub,marginBottom:8,fontWeight:600,letterSpacing:"0.05em"}}>ПРИОРИТЕТ СТРАТЕГИИ</div>
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           {GOALS.map(g=>(
             <div key={g.id} onClick={()=>setGoal(g.id)}
-              style={{...S.card2,cursor:"pointer",
-                borderColor:goal===g.id?"rgba(16,185,129,0.4)":T.border,
-                background:goal===g.id?"rgba(16,185,129,0.07)":T.card2,
-                display:"flex",alignItems:"center",gap:12,padding:"10px 12px"}}>
+              style={{...S.card2,cursor:"pointer",borderColor:goal===g.id?"rgba(16,185,129,0.4)":T.border,
+                background:goal===g.id?"rgba(16,185,129,0.07)":T.card2,display:"flex",alignItems:"center",gap:12,padding:"10px 12px"}}>
               <span style={{fontSize:20,flexShrink:0}}>{g.icon}</span>
               <div style={{flex:1}}>
                 <div style={{fontSize:12,fontWeight:700,color:goal===g.id?"#6ee7b7":T.text}}>{g.label}</div>
-                <div style={{fontSize:10,color:T.sub,marginTop:2}}>{g.desc}</div>
+                <div style={{fontSize:10,color:T.sub,marginTop:1}}>{g.desc}</div>
               </div>
-              <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${goal===g.id?"#6ee7b7":T.border}`,
-                background:goal===g.id?"#6ee7b7":"transparent",flexShrink:0}}/>
+              <div style={{width:16,height:16,borderRadius:"50%",border:`2px solid ${goal===g.id?"#6ee7b7":T.border}`,background:goal===g.id?"#6ee7b7":"transparent",flexShrink:0}}/>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Автоприменение */}
+      {/* Авто-применение */}
       <div style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
           <div style={{fontSize:12,fontWeight:600,color:T.text}}>Авто-применение</div>
-          <div style={{fontSize:10,color:T.sub,marginTop:2}}>Применять рекомендации автоматически каждые 6 ч</div>
+          <div style={{fontSize:10,color:T.sub,marginTop:1}}>Применять рекомендации каждые 6 ч</div>
         </div>
         <div onClick={()=>setAutoApply(p=>!p)} style={{cursor:"pointer"}}>
-          <div style={{width:42,height:24,borderRadius:12,
-            background:autoApply?"rgba(16,185,129,0.3)":"rgba(255,255,255,0.08)",
-            border:`1px solid ${autoApply?"rgba(16,185,129,0.5)":T.border}`,position:"relative"}}>
-            <div style={{position:"absolute",top:3,left:autoApply?21:3,width:16,height:16,
-              borderRadius:"50%",background:autoApply?"#6ee7b7":T.sub,transition:"left 0.2s"}}/>
+          <div style={{width:42,height:24,borderRadius:12,background:autoApply?"rgba(16,185,129,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${autoApply?"rgba(16,185,129,0.5)":T.border}`,position:"relative"}}>
+            <div style={{position:"absolute",top:3,left:autoApply?21:3,width:16,height:16,borderRadius:"50%",background:autoApply?"#6ee7b7":T.sub,transition:"left 0.2s"}}/>
           </div>
         </div>
       </div>
 
       {/* Кнопка запуска */}
-      <button onClick={()=>{if(!running)runAnalysis()}}
-        disabled={running}
-        style={{width:"100%",padding:"14px",borderRadius:12,border:"none",cursor:running?"wait":"pointer",
-          background:running?"rgba(16,185,129,0.2)":"rgba(16,185,129,0.9)",
-          color:"#fff",fontSize:14,fontWeight:700,letterSpacing:"0.02em",
-          opacity:running?0.7:1,transition:"all 0.2s"}}>
-        {running?"⏳ Анализирую данные...":"🎯 Запустить анализ"}
+      <button onClick={runAnalysis} disabled={running}
+        style={{padding:"14px",borderRadius:12,border:"none",cursor:running?"default":"pointer",
+          background:running?"rgba(255,255,255,0.05)":"rgba(16,185,129,0.2)",
+          color:running?T.sub:"#6ee7b7",fontSize:14,fontWeight:700,
+          display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        {running?<><span style={{display:"inline-block",animation:"spin 1s linear infinite"}}>⏳</span> Анализируем...</>:"🚀 Запустить анализ"}
       </button>
 
-      {/* Прогноз */}
+      {/* ── РЕЗУЛЬТАТЫ ── */}
       {ran&&(
-        <div style={{...S.card,background:"rgba(16,185,129,0.05)",borderColor:"rgba(16,185,129,0.2)"}}>
-          <div style={{fontSize:11,color:T.sub,marginBottom:8,fontWeight:600,letterSpacing:"0.05em"}}>ПРОГНОЗ ПОСЛЕ ПРИМЕНЕНИЯ</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            {[
-              {l:"Заказы",  v:campBase>0?`+${((projOrders/campBase-1)*100).toFixed(0)}%`:"—", sub:`~${projOrders} шт`,  c:"#6ee7b7"},
-              {l:"ДРР",     v:`${projDrr}%`,                                                                       sub:`цель ${tDrr}%`,       c:parseFloat(projDrr)<=tDrr?T.green:T.yellow},
-              {l:"Статус",  v:parseFloat(projDrr)<=tDrr?"✅ ОК":"⚠️",                                              sub:parseFloat(projDrr)<=tDrr?"ДРР в норме":"Выше цели",c:parseFloat(projDrr)<=tDrr?T.green:T.yellow},
-            ].map(m=>(
-              <div key={m.l} style={{...S.card2,textAlign:"center",padding:"10px 6px"}}>
-                <div style={{fontSize:9,color:T.sub,marginBottom:3}}>{m.l}</div>
-                <div style={{fontSize:16,fontWeight:700,fontFamily:"monospace",color:m.c}}>{m.v}</div>
-                <div style={{fontSize:9,color:T.sub,marginTop:2}}>{m.sub}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        <>
+          {/* Прогноз подробный */}
+          <div style={{...S.card,borderColor:"rgba(16,185,129,0.3)",background:"rgba(16,185,129,0.04)"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#6ee7b7",marginBottom:10}}>📈 ПРОГНОЗ ПОСЛЕ ПРИМЕНЕНИЯ</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+              {[
+                {l:"Заказы",v:`+${projOrders-campBase}`,sub:`${campBase}→${projOrders}`,c:T.green},
+                {l:"Рост выручки",v:projRevGrow,sub:"прогноз",c:T.green},
+                {l:"Ожидаемый ДРР",v:`${projDrr}%`,sub:`цель ${tDrr}%`,c:+projDrr<=tDrr?T.green:T.yellow},
+              ].map(m=>(
+                <div key={m.l} style={{textAlign:"center",background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"10px 6px",border:`1px solid rgba(255,255,255,0.06)`}}>
+                  <div style={{fontSize:9,color:T.sub,marginBottom:4}}>{m.l}</div>
+                  <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:m.c}}>{m.v}</div>
+                  <div style={{fontSize:9,color:T.sub,marginTop:2}}>{m.sub}</div>
+                </div>
+              ))}
+            </div>
 
-      {/* Лог рекомендаций */}
-      {ran&&log.length>0&&(
-        <div style={S.card}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:11,color:T.sub,fontWeight:600,letterSpacing:"0.05em"}}>ПЛАН ДЕЙСТВИЙ</div>
-            <div style={{fontSize:10,color:T.sub}}>{log.length} рекомендаций</div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {log.map((item,i)=>{
-              const st=TYPE_STYLE[item.type]||TYPE_STYLE.ok;
+            {/* Ставки по кампаниям в прогнозе */}
+            <div style={{fontSize:11,fontWeight:600,color:T.text,marginBottom:8}}>Ставки для достижения цели:</div>
+            {targetCamps.map(c=>{
+              const {recommended,reasons}=calcStratBid(c);
               return(
-                <div key={i} style={{...S.card2,background:st.bg,borderColor:st.border,padding:"10px 12px"}}>
-                  <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-                    <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{st.icon}</span>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
-                        <div style={{fontSize:10,color:T.sub,marginBottom:3}}>{item.camp}</div>
-                        {autoApply&&item.type!=="ok"&&(
-                          <span style={{fontSize:9,color:"#6ee7b7",background:"rgba(16,185,129,0.15)",
-                            padding:"1px 6px",borderRadius:6,flexShrink:0}}>авто ✓</span>
-                        )}
-                      </div>
-                      <div style={{fontSize:12,fontWeight:700,color:st.color,marginBottom:4}}>{item.action}</div>
-                      <div style={{fontSize:11,color:T.sub,lineHeight:1.5}}>{item.reason}</div>
-                      {item.detail&&(
-                        <div style={{marginTop:5,fontSize:10,color:T.sub,
-                          background:"rgba(255,255,255,0.03)",borderRadius:6,padding:"5px 8px",
-                          borderLeft:`2px solid ${st.border}`}}>
-                          {item.detail}
-                        </div>
-                      )}
+                <div key={c.id} style={{...S.card2,marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{fontSize:12,fontWeight:700,color:T.text}}>{c.name}</div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:9,color:T.sub}}>CPM</div>
+                      <div style={{fontSize:18,fontWeight:700,fontFamily:"monospace",color:T.yellow}}>{recommended} ₽</div>
                     </div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {reasons.map((r,i)=>(
+                      <div key={i} style={{fontSize:10,color:T.sub,display:"flex",gap:6}}>
+                        <span style={{color:T.yellow,flexShrink:0}}>→</span><span>{r}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {autoApply&&(
-            <div style={{marginTop:10,padding:"8px 12px",background:"rgba(16,185,129,0.08)",
-              borderRadius:10,border:"1px solid rgba(16,185,129,0.2)",
-              fontSize:11,color:"#6ee7b7",textAlign:"center"}}>
-              ✅ Все рекомендации применены автоматически · Следующий анализ через 6 ч
+          {/* Список действий */}
+          <div style={{...S.card}}>
+            <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:10,letterSpacing:"0.05em"}}>ПЛАН ДЕЙСТВИЙ</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {log.map((item,i)=>{
+                const st=TYPE_STYLE[item.type]||TYPE_STYLE.ok;
+                return(
+                  <div key={i} style={{borderRadius:10,padding:"10px 12px",background:st.bg,border:`1px solid ${st.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:item.reason?6:0}}>
+                      <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
+                        <span style={{fontSize:16,flexShrink:0}}>{st.icon}</span>
+                        <div>
+                          <div style={{fontSize:11,color:T.sub,marginBottom:1}}>{item.camp}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:st.color}}>{item.action}</div>
+                        </div>
+                      </div>
+                      {item.bid&&(
+                        <div style={{textAlign:"center",flexShrink:0,marginLeft:10,background:"rgba(251,191,36,0.1)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:8,padding:"4px 10px"}}>
+                          <div style={{fontSize:8,color:T.sub}}>ставка</div>
+                          <div style={{fontSize:14,fontWeight:700,color:T.yellow,fontFamily:"monospace"}}>{item.bid} ₽</div>
+                        </div>
+                      )}
+                    </div>
+                    {item.reason&&<div style={{fontSize:10,color:T.sub,marginLeft:24}}>{item.reason}</div>}
+                    {item.detail&&<div style={{fontSize:10,color:T.sub,marginLeft:24,marginTop:3,fontStyle:"italic"}}>{item.detail}</div>}
+                    {item.bidReasons&&(
+                      <div style={{marginLeft:24,marginTop:4}}>
+                        {item.bidReasons.map((r,j)=>(
+                          <div key={j} style={{fontSize:9,color:T.sub,display:"flex",gap:4}}>
+                            <span style={{color:T.yellow}}>·</span><span>{r}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          )}
-          {!autoApply&&(
-            <button style={{marginTop:10,width:"100%",padding:"10px",borderRadius:10,border:"1px solid rgba(16,185,129,0.3)",
-              background:"rgba(16,185,129,0.1)",color:"#6ee7b7",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-              ✅ Применить все рекомендации
-            </button>
-          )}
-        </div>
+          </div>
+
+          {/* Статистика авто-плана за 7 дней */}
+          <div style={S.card}>
+            <div style={{fontSize:11,fontWeight:700,color:"#93c5fd",marginBottom:10}}>📊 Прогноз по дням (7 дней)</div>
+            <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+              <table style={{width:"100%",minWidth:700,borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:"rgba(255,255,255,0.03)"}}>
+                    {["Дата","Показы","CPM","Перех.","CTR","CPC","Затраты","Корз.","CPL","Заказы","ДРР","Поз."].map(h=>(
+                      <th key={h} style={{padding:"6px 8px",textAlign:"center",fontSize:9,color:T.sub,fontWeight:600,whiteSpace:"nowrap",borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {planStats.map((row,i)=>(
+                    <tr key={i} style={{borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                      <td style={{padding:"6px 8px",fontSize:10,color:T.text,fontWeight:600,whiteSpace:"nowrap"}}>{row.d}</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(row.imp)}</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{row.cpm}</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{fmt.num(row.clicks)}</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.ctr>=0.8?T.green:T.yellow}}>{row.ctr}%</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{row.cpc}₽</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.yellow}}>{fmt.rub(row.spend)}</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.text}}>{row.baskets}</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:T.sub}}>{row.cpl}₽</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.orders>0?T.green:T.red,fontWeight:700}}>{row.orders}</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"right",color:row.drr>25?T.red:row.drr>18?T.yellow:T.green}}>{row.drr}%</td>
+                      <td style={{padding:"6px 8px",fontSize:10,fontFamily:"monospace",textAlign:"center",color:row.pos<=5?"#4ade80":row.pos<=10?"#fbbf24":"#fb923c",fontWeight:700}}>#{row.pos}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Автопополнение к каждой кампании */}
+          <div style={S.card}>
+            <div style={{fontSize:11,fontWeight:700,color:"#6ee7b7",marginBottom:10}}>💳 Автопополнение кампаний</div>
+            {targetCamps.map(c=>{
+              const t=topups[c.id];
+              return(
+                <div key={c.id} style={{...S.card2,marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:t.enabled?12:0}}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:700,color:T.text}}>{c.name}</div>
+                      <div style={{fontSize:10,color:T.sub,marginTop:1}}>ДРР {c.drr}% · {c.orders} заказов</div>
+                    </div>
+                    <div onClick={()=>updTopup(c.id,"enabled",!t.enabled)} style={{cursor:"pointer"}}>
+                      <div style={{width:42,height:24,borderRadius:12,background:t.enabled?"rgba(74,222,128,0.3)":"rgba(255,255,255,0.08)",border:`1px solid ${t.enabled?"rgba(74,222,128,0.5)":T.border}`,position:"relative"}}>
+                        <div style={{position:"absolute",top:3,left:t.enabled?21:3,width:16,height:16,borderRadius:"50%",background:t.enabled?"#4ade80":T.sub,transition:"left 0.2s"}}/>
+                      </div>
+                    </div>
+                  </div>
+                  {t.enabled&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        <div>
+                          <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Пополнять на, ₽</div>
+                          <input type="number" value={t.amount}
+                            onChange={e=>updTopup(c.id,"amount",+e.target.value)}
+                            onBlur={e=>updTopup(c.id,"amount",Math.max(1000,+e.target.value))}
+                            style={{width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",fontFamily:"monospace",fontWeight:600}}/>
+                          <div style={{fontSize:9,color:T.sub,marginTop:2}}>Мин. 1 000 ₽</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:T.sub,marginBottom:4}}>Не чаще раз в день</div>
+                          <input type="number" value={t.timesPerDay} min={1} max={10}
+                            onChange={e=>updTopup(c.id,"timesPerDay",Math.max(1,Math.min(10,+e.target.value)))}
+                            style={{width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"8px 10px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",fontFamily:"monospace",fontWeight:600}}/>
+                        </div>
+                      </div>
+                      <div style={{fontSize:11,color:T.green,background:"rgba(74,222,128,0.06)",border:"1px solid rgba(74,222,128,0.2)",borderRadius:8,padding:"7px 10px"}}>
+                        ✅ {t.amount.toLocaleString("ru-RU")} ₽ — не чаще {t.timesPerDay} {t.timesPerDay===1?"раза":"раз"} в день
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
 }
+
 
 export default function App(){
   const MOCK_TG_USERS=[
@@ -3271,7 +3523,6 @@ export default function App(){
         {/* platform passed from parent App via TabBids */}
         {mainTab==="bids"&&<BidsCabinetBalance platform={platform} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
         {subTab==="bids_smart"        &&<SmartBidsTab      data={data} targetDrr={targetDrr} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
-        {subTab==="bids_manual"       &&<ManualBidsTab      data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
         {subTab==="bids_strategy"     &&<StrategyTab        data={data} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
         {subTab==="bids_autostrategy" &&<AutoStrategyTab    data={data} targetDrr={targetDrr} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
         {subTab==="bids_balance"      &&<BidsCabinetBalance platform={platform} inp={(e={})=>({width:"100%",background:T.card2,border:`1px solid ${T.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box",...e})}/>}
